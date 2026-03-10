@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme_colors.dart';
+import '../../../data/models/company_model.dart';
+import '../../../data/models/user_model.dart';
 import '../../providers/sale_provider.dart';
 import '../../providers/company_provider.dart';
 import '../../providers/user_provider.dart';
@@ -8,6 +10,7 @@ import '../../widgets/crm_card.dart';
 import '../../widgets/status_badge.dart';
 import '../../widgets/loading_widget.dart';
 import '../../widgets/error_widget.dart' as app_widgets;
+import '../../widgets/searchable_dropdown.dart';
 import 'sale_detail_page.dart';
 
 class SalesListPage extends ConsumerStatefulWidget {
@@ -670,44 +673,33 @@ class _SalesListPageState extends ConsumerState<SalesListPage>
                         ),
                       ),
                       const SizedBox(height: 8),
-                      DropdownButtonFormField<String>(
-                        value: localSelectedCompanyId,
-                        isExpanded: true,
-                        decoration: InputDecoration(
-                          hintText: 'All Companies',
-                          hintStyle: TextStyle(color: textSecondary),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide(color: borderColor),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide(color: borderColor),
-                          ),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: surfaceColor,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: borderColor),
                         ),
-                        dropdownColor: surfaceColor,
-                        items: [
-                          const DropdownMenuItem(
-                            value: null,
-                            child: Text('All'),
-                          ),
-                          ...companiesState.companies.map(
-                            (company) => DropdownMenuItem(
-                              value: company.id,
-                              child: Text(
-                                company.name,
-                                style: TextStyle(color: textPrimary),
-                              ),
-                            ),
-                          ),
-                        ],
-                        onChanged: (value) {
-                          setModalState(() => localSelectedCompanyId = value);
-                        },
+                        child: SearchableDropdown<Company>(
+                          items: companiesState.companies,
+                          value: localSelectedCompanyId != null
+                              ? companiesState.companies
+                                    .where(
+                                      (c) => c.id == localSelectedCompanyId,
+                                    )
+                                    .firstOrNull
+                              : null,
+                          hintText: 'All Companies',
+                          labelText: 'Company',
+                          dropdownColor: surfaceColor,
+                          textColor: textPrimary,
+                          hintColor: textSecondary,
+                          itemLabelBuilder: (company) => company.name,
+                          onChanged: (company) {
+                            setModalState(
+                              () => localSelectedCompanyId = company?.id,
+                            );
+                          },
+                        ),
                       ),
                       const SizedBox(height: 16),
 
@@ -778,44 +770,34 @@ class _SalesListPageState extends ConsumerState<SalesListPage>
                         ),
                       ),
                       const SizedBox(height: 8),
-                      DropdownButtonFormField<String>(
-                        value: localSelectedKamUserId,
-                        isExpanded: true,
-                        decoration: InputDecoration(
-                          hintText: 'All KAMs',
-                          hintStyle: TextStyle(color: textSecondary),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide(color: borderColor),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide(color: borderColor),
-                          ),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: surfaceColor,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: borderColor),
                         ),
-                        dropdownColor: surfaceColor,
-                        items: [
-                          const DropdownMenuItem(
-                            value: null,
-                            child: Text('All'),
-                          ),
-                          ...usersState.users.map(
-                            (user) => DropdownMenuItem(
-                              value: user.id,
-                              child: Text(
-                                user.name,
-                                style: TextStyle(color: textPrimary),
-                              ),
-                            ),
-                          ),
-                        ],
-                        onChanged: (value) {
-                          setModalState(() => localSelectedKamUserId = value);
-                        },
+                        child: SearchableDropdown<User>(
+                          items: usersState.users,
+                          value: localSelectedKamUserId != null
+                              ? usersState.users
+                                    .where(
+                                      (u) => u.id == localSelectedKamUserId,
+                                    )
+                                    .firstOrNull
+                              : null,
+                          hintText: 'All KAMs',
+                          labelText: 'Key Account Manager (KAM)',
+                          dropdownColor: surfaceColor,
+                          textColor: textPrimary,
+                          hintColor: textSecondary,
+                          itemLabelBuilder: (user) =>
+                              '${user.name} (${user.email})',
+                          onChanged: (user) {
+                            setModalState(
+                              () => localSelectedKamUserId = user?.id,
+                            );
+                          },
+                        ),
                       ),
                       const SizedBox(height: 16),
 

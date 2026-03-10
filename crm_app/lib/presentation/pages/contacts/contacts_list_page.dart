@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/theme/app_theme_colors.dart';
+import '../../../data/models/company_model.dart';
 import '../../providers/contact_provider.dart';
 import '../../providers/company_provider.dart';
 import '../../widgets/crm_card.dart';
 import '../../widgets/avatar_widget.dart';
 import '../../widgets/loading_widget.dart';
 import '../../widgets/error_widget.dart' as app_widgets;
+import '../../widgets/searchable_dropdown.dart';
 import 'contact_detail_page.dart';
 
 class ContactsListPage extends ConsumerStatefulWidget {
@@ -273,47 +275,29 @@ class _ContactsListPageState extends ConsumerState<ContactsListPage> {
                 ),
               ),
               const SizedBox(height: 8),
-              DropdownButtonFormField<String>(
-                value: selectedCompanyId,
-                decoration: InputDecoration(
-                  hintText: 'All Companies',
-                  hintStyle: TextStyle(color: textSecondary),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(
-                      color: textSecondary.withOpacity(0.3),
-                    ),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(
-                      color: textSecondary.withOpacity(0.3),
-                    ),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
-                  ),
+              Container(
+                decoration: BoxDecoration(
+                  color: surfaceColor,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: textSecondary.withOpacity(0.3)),
                 ),
-                dropdownColor: surfaceColor,
-                items: [
-                  const DropdownMenuItem(
-                    value: null,
-                    child: Text('All Companies'),
-                  ),
-                  ...companiesState.companies.map(
-                    (company) => DropdownMenuItem(
-                      value: company.id,
-                      child: Text(
-                        company.name,
-                        style: TextStyle(color: textPrimary),
-                      ),
-                    ),
-                  ),
-                ],
-                onChanged: (value) {
-                  setModalState(() => selectedCompanyId = value);
-                },
+                child: SearchableDropdown<Company>(
+                  items: companiesState.companies,
+                  value: selectedCompanyId != null
+                      ? companiesState.companies
+                            .where((c) => c.id == selectedCompanyId)
+                            .firstOrNull
+                      : null,
+                  hintText: 'All Companies',
+                  labelText: 'Company',
+                  dropdownColor: surfaceColor,
+                  textColor: textPrimary,
+                  hintColor: textSecondary,
+                  itemLabelBuilder: (company) => company.name,
+                  onChanged: (company) {
+                    setModalState(() => selectedCompanyId = company?.id);
+                  },
+                ),
               ),
               const SizedBox(height: 24),
               SizedBox(
