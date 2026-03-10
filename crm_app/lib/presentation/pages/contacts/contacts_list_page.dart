@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../core/theme/app_theme_colors.dart';
 import '../../providers/contact_provider.dart';
 import '../../providers/company_provider.dart';
@@ -169,6 +170,7 @@ class _ContactsListPageState extends ConsumerState<ContactsListPage> {
                                     ],
                                   ),
                                 ),
+
                                 Column(
                                   children: [
                                     if (contact.mobile != null)
@@ -176,14 +178,16 @@ class _ContactsListPageState extends ConsumerState<ContactsListPage> {
                                         icon: const Icon(Icons.phone_outlined),
                                         color: primaryColor,
                                         iconSize: 20,
-                                        onPressed: () {},
+                                        onPressed: () =>
+                                            _makeCall(contact.mobile!),
                                       ),
                                     if (contact.email != null)
                                       IconButton(
                                         icon: const Icon(Icons.email_outlined),
                                         color: secondaryColor,
                                         iconSize: 20,
-                                        onPressed: () {},
+                                        onPressed: () =>
+                                            _sendEmail(contact.email!),
                                       ),
                                   ],
                                 ),
@@ -216,6 +220,7 @@ class _ContactsListPageState extends ConsumerState<ContactsListPage> {
     final textPrimary = AppThemeColors.textPrimaryColor(context);
     final textSecondary = AppThemeColors.textSecondaryColor(context);
     final primaryColor = const Color(0xFF2563EB);
+    final surfaceColor = AppThemeColors.surfaceColor(context);
 
     String? selectedCompanyId = contactsState.companyIdFilter;
 
@@ -236,12 +241,14 @@ class _ContactsListPageState extends ConsumerState<ContactsListPage> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    'Filter Contacts',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: textPrimary,
+                  Expanded(
+                    child: Text(
+                      'Filter Contacts',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: textPrimary,
+                      ),
                     ),
                   ),
                   TextButton(
@@ -266,35 +273,47 @@ class _ContactsListPageState extends ConsumerState<ContactsListPage> {
                 ),
               ),
               const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  FilterChip(
-                    label: const Text('All'),
-                    selected:
-                        selectedCompanyId == null || selectedCompanyId!.isEmpty,
-                    onSelected: (selected) {
-                      setModalState(() => selectedCompanyId = null);
-                    },
-                    selectedColor: primaryColor.withOpacity(0.2),
-                    checkmarkColor: primaryColor,
+              DropdownButtonFormField<String>(
+                value: selectedCompanyId,
+                decoration: InputDecoration(
+                  hintText: 'All Companies',
+                  hintStyle: TextStyle(color: textSecondary),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(
+                      color: textSecondary.withOpacity(0.3),
+                    ),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(
+                      color: textSecondary.withOpacity(0.3),
+                    ),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                ),
+                dropdownColor: surfaceColor,
+                items: [
+                  const DropdownMenuItem(
+                    value: null,
+                    child: Text('All Companies'),
                   ),
                   ...companiesState.companies.map(
-                    (company) => FilterChip(
-                      label: Text(company.name),
-                      selected: selectedCompanyId == company.id,
-                      onSelected: (selected) {
-                        setModalState(
-                          () =>
-                              selectedCompanyId = selected ? company.id : null,
-                        );
-                      },
-                      selectedColor: primaryColor.withOpacity(0.2),
-                      checkmarkColor: primaryColor,
+                    (company) => DropdownMenuItem(
+                      value: company.id,
+                      child: Text(
+                        company.name,
+                        style: TextStyle(color: textPrimary),
+                      ),
                     ),
                   ),
                 ],
+                onChanged: (value) {
+                  setModalState(() => selectedCompanyId = value);
+                },
               ),
               const SizedBox(height: 24),
               SizedBox(
@@ -323,5 +342,19 @@ class _ContactsListPageState extends ConsumerState<ContactsListPage> {
         ),
       ),
     );
+  }
+
+  Future<void> _makeCall(String phone) async {
+    final uri = Uri(scheme: 'tel', path: phone);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+    }
+  }
+
+  Future<void> _sendEmail(String email) async {
+    final uri = Uri(scheme: 'mailto', path: email);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+    }
   }
 }

@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme_colors.dart';
+import '../../../data/models/user_model.dart';
 import '../../providers/task_provider.dart';
 import '../../providers/user_provider.dart';
 import '../../widgets/crm_card.dart';
 import '../../widgets/status_badge.dart';
 import '../../widgets/loading_widget.dart';
 import '../../widgets/error_widget.dart' as app_widgets;
+import '../../widgets/searchable_dropdown.dart';
 import 'task_detail_page.dart';
 
 class TasksListPage extends ConsumerStatefulWidget {
@@ -82,6 +84,9 @@ class _TasksListPageState extends ConsumerState<TasksListPage>
                             icon: Icon(Icons.clear, color: textSecondary),
                             onPressed: () {
                               _searchController.clear();
+                              ref
+                                  .read(tasksProvider.notifier)
+                                  .setSearchQuery(null);
                             },
                           )
                         : null,
@@ -100,6 +105,9 @@ class _TasksListPageState extends ConsumerState<TasksListPage>
                       borderSide: BorderSide(color: borderColor),
                     ),
                   ),
+                  onChanged: (value) {
+                    ref.read(tasksProvider.notifier).setSearchQuery(value);
+                  },
                 ),
               ),
               TabBar(
@@ -165,9 +173,12 @@ class _TasksListPageState extends ConsumerState<TasksListPage>
       return const LoadingWidget();
     }
 
+    // Use filteredTasks which includes search and date range filtering
+    // then filter by status if needed
+    final filteredBySearchAndDate = state.filteredTasks;
     final tasks = status == null
-        ? state.tasks
-        : state.tasks.where((t) => t.status == status).toList();
+        ? filteredBySearchAndDate
+        : filteredBySearchAndDate.where((t) => t.status == status).toList();
 
     if (tasks.isEmpty) {
       return app_widgets.EmptyStateWidget(
@@ -288,87 +299,165 @@ class _TasksListPageState extends ConsumerState<TasksListPage>
     final textPrimary = AppThemeColors.textPrimaryColor(context);
     final textSecondary = AppThemeColors.textSecondaryColor(context);
     final primaryColor = const Color(0xFF2563EB);
+    final surfaceColor = AppThemeColors.surfaceColor(context);
+    final borderColor = AppThemeColors.borderColor(context);
 
     String? selectedAssigneeId = tasksState.assignToUserIdFilter;
+    DateTime? selectedStartDate = tasksState.startDate;
+    DateTime? selectedEndDate = tasksState.endDate;
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: AppThemeColors.surfaceColor(context),
+      backgroundColor: surfaceColor,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (context) => StatefulBuilder(
-        builder: (context, setModalState) => Padding(
-          padding: const EdgeInsets.all(20),
+        builder: (context, setModalState) => Container(
+          padding: EdgeInsets.only(
+            left: 24,
+            right: 24,
+            top: 24,
+            bottom: 24 + MediaQuery.of(context).viewInsets.bottom,
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Header
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    'Filter Tasks',
+                    'Filters',
                     style: TextStyle(
-                      fontSize: 20,
+                      fontSize: 22,
                       fontWeight: FontWeight.bold,
                       color: textPrimary,
                     ),
                   ),
-                  TextButton(
-                    onPressed: () {
+                  GestureDetector(
+                    onTap: () {
                       ref.read(tasksProvider.notifier).clearFilters();
+                      _searchController.clear();
                       Navigator.pop(context);
                     },
                     child: Text(
                       'Clear All',
-                      style: TextStyle(color: primaryColor),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-              Text(
-                'Assignee',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: textSecondary,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  FilterChip(
-                    label: const Text('All'),
-                    selected:
-                        selectedAssigneeId == null ||
-                        selectedAssigneeId!.isEmpty,
-                    onSelected: (selected) {
-                      setModalState(() => selectedAssigneeId = null);
-                    },
-                    selectedColor: primaryColor.withOpacity(0.2),
-                    checkmarkColor: primaryColor,
-                  ),
-                  ...usersState.users.map(
-                    (user) => FilterChip(
-                      label: Text(user.name),
-                      selected: selectedAssigneeId == user.id,
-                      onSelected: (selected) {
-                        setModalState(
-                          () => selectedAssigneeId = selected ? user.id : null,
-                        );
-                      },
-                      selectedColor: primaryColor.withOpacity(0.2),
-                      checkmarkColor: primaryColor,
+                      style: TextStyle(
+                        color: primaryColor,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                      ),
                     ),
                   ),
                 ],
               ),
               const SizedBox(height: 24),
+
+              // Assignee Dropdown with Search
+              Text(
+                'Assigned To',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: textSecondary,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                decoration: BoxDecoration(
+                  color: surfaceColor,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: borderColor),
+                ),
+                child: SearchableDropdown<User>(
+                  items: usersState.users,
+                  value: selectedAssigneeId != null
+                      ? usersState.users
+                            .where((u) => u.id == selectedAssigneeId)
+                            .firstOrNull
+                      : null,
+                  hintText: 'Search by name or email...',
+                  labelText: '',
+                  dropdownColor: surfaceColor,
+                  textColor: textPrimary,
+                  hintColor: textSecondary,
+                  itemLabelBuilder: (user) => '${user.name} (${user.email})',
+                  onChanged: (user) {
+                    setModalState(() => selectedAssigneeId = user?.id);
+                  },
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // Date Range
+              Text(
+                'Due Date',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: textSecondary,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildDateButton(
+                      context: context,
+                      label: 'Start Date',
+                      date: selectedStartDate,
+                      textPrimary: textPrimary,
+                      textSecondary: textSecondary,
+                      borderColor: borderColor,
+                      surfaceColor: surfaceColor,
+                      onTap: () async {
+                        final date = await showDatePicker(
+                          context: context,
+                          initialDate: selectedStartDate ?? DateTime.now(),
+                          firstDate: DateTime(2020),
+                          lastDate: DateTime(2030),
+                        );
+                        if (date != null) {
+                          setModalState(() => selectedStartDate = date);
+                        }
+                      },
+                      onClear: () =>
+                          setModalState(() => selectedStartDate = null),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _buildDateButton(
+                      context: context,
+                      label: 'End Date',
+                      date: selectedEndDate,
+                      textPrimary: textPrimary,
+                      textSecondary: textSecondary,
+                      borderColor: borderColor,
+                      surfaceColor: surfaceColor,
+                      onTap: () async {
+                        final date = await showDatePicker(
+                          context: context,
+                          initialDate: selectedEndDate ?? DateTime.now(),
+                          firstDate: DateTime(2020),
+                          lastDate: DateTime(2030),
+                        );
+                        if (date != null) {
+                          setModalState(() => selectedEndDate = date);
+                        }
+                      },
+                      onClear: () =>
+                          setModalState(() => selectedEndDate = null),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 32),
+
+              // Apply Button
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
@@ -376,6 +465,9 @@ class _TasksListPageState extends ConsumerState<TasksListPage>
                     ref
                         .read(tasksProvider.notifier)
                         .setAssigneeFilter(selectedAssigneeId);
+                    ref
+                        .read(tasksProvider.notifier)
+                        .setDateRange(selectedStartDate, selectedEndDate);
                     Navigator.pop(context);
                   },
                   style: ElevatedButton.styleFrom(
@@ -385,13 +477,63 @@ class _TasksListPageState extends ConsumerState<TasksListPage>
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
+                    elevation: 0,
                   ),
-                  child: const Text('Apply Filters'),
+                  child: const Text(
+                    'Apply Filters',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
                 ),
               ),
-              SizedBox(height: MediaQuery.of(context).viewInsets.bottom),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDateButton({
+    required BuildContext context,
+    required String label,
+    required DateTime? date,
+    required Color textPrimary,
+    required Color textSecondary,
+    required Color borderColor,
+    required Color surfaceColor,
+    required VoidCallback onTap,
+    required VoidCallback onClear,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        decoration: BoxDecoration(
+          color: surfaceColor,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: borderColor),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.calendar_today, size: 18, color: textSecondary),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                date != null ? '${date.day}/${date.month}/${date.year}' : label,
+                style: TextStyle(
+                  color: date != null ? textPrimary : textSecondary,
+                  fontSize: 14,
+                ),
+              ),
+            ),
+            if (date != null)
+              GestureDetector(
+                onTap: onClear,
+                child: Icon(Icons.close, size: 18, color: textSecondary),
+              )
+            else
+              Icon(Icons.arrow_drop_down, color: textSecondary),
+          ],
         ),
       ),
     );

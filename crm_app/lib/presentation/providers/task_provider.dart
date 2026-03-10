@@ -10,6 +10,9 @@ class TasksState {
   final String? error;
   final String? statusFilter;
   final String? assignToUserIdFilter;
+  final String? searchQuery;
+  final DateTime? startDate;
+  final DateTime? endDate;
 
   const TasksState({
     this.tasks = const [],
@@ -17,6 +20,9 @@ class TasksState {
     this.error,
     this.statusFilter,
     this.assignToUserIdFilter,
+    this.searchQuery,
+    this.startDate,
+    this.endDate,
   });
 
   TasksState copyWith({
@@ -25,6 +31,12 @@ class TasksState {
     String? error,
     String? statusFilter,
     String? assignToUserIdFilter,
+    String? searchQuery,
+    DateTime? startDate,
+    DateTime? endDate,
+    bool clearStartDate = false,
+    bool clearEndDate = false,
+    bool clearSearchQuery = false,
   }) {
     return TasksState(
       tasks: tasks ?? this.tasks,
@@ -32,6 +44,9 @@ class TasksState {
       error: error,
       statusFilter: statusFilter ?? this.statusFilter,
       assignToUserIdFilter: assignToUserIdFilter ?? this.assignToUserIdFilter,
+      searchQuery: clearSearchQuery ? null : (searchQuery ?? this.searchQuery),
+      startDate: clearStartDate ? null : (startDate ?? this.startDate),
+      endDate: clearEndDate ? null : (endDate ?? this.endDate),
     );
   }
 
@@ -41,6 +56,37 @@ class TasksState {
       if (assignToUserIdFilter != null &&
           task.assignToUserId != assignToUserIdFilter) {
         return false;
+      }
+      // Search filter - task name and company name
+      if (searchQuery != null && searchQuery!.isNotEmpty) {
+        final query = searchQuery!.toLowerCase();
+        final taskNameMatch = task.title.toLowerCase().contains(query);
+        final companyNameMatch =
+            task.company?.name.toLowerCase().contains(query) ?? false;
+        if (!taskNameMatch && !companyNameMatch) return false;
+      }
+      // Date range filter
+      if (startDate != null && task.dueDatetime != null) {
+        final taskDate = DateTime(
+          task.dueDatetime!.year,
+          task.dueDatetime!.month,
+          task.dueDatetime!.day,
+        );
+        final start = DateTime(
+          startDate!.year,
+          startDate!.month,
+          startDate!.day,
+        );
+        if (taskDate.isBefore(start)) return false;
+      }
+      if (endDate != null && task.dueDatetime != null) {
+        final taskDate = DateTime(
+          task.dueDatetime!.year,
+          task.dueDatetime!.month,
+          task.dueDatetime!.day,
+        );
+        final end = DateTime(endDate!.year, endDate!.month, endDate!.day);
+        if (taskDate.isAfter(end)) return false;
       }
       return true;
     }).toList();
@@ -114,8 +160,30 @@ class TasksNotifier extends StateNotifier<TasksState> {
     state = state.copyWith(assignToUserIdFilter: userId);
   }
 
+  void setSearchQuery(String? query) {
+    state = state.copyWith(
+      searchQuery: query,
+      clearSearchQuery: query == null || query.isEmpty,
+    );
+  }
+
+  void setDateRange(DateTime? start, DateTime? end) {
+    state = state.copyWith(
+      startDate: start,
+      endDate: end,
+      clearStartDate: start == null,
+      clearEndDate: end == null,
+    );
+  }
+
   void clearFilters() {
-    state = state.copyWith(statusFilter: null, assignToUserIdFilter: null);
+    state = state.copyWith(
+      statusFilter: null,
+      assignToUserIdFilter: null,
+      clearSearchQuery: true,
+      clearStartDate: true,
+      clearEndDate: true,
+    );
   }
 
   Future<void> createTask({

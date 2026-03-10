@@ -1,19 +1,30 @@
-# Add Company Button Implementation
+# Task Filter Enhancement TODO
 
-## Task
-Add "Add Company" button beside the company select dropdown in:
-1. Add New Deal page (SaleFormPage)
-2. Add New Task page (TaskFormPage)
+## Objective
+Add task filter with:
+- Assigned to filter (already exists)
+- Date range filter
+- Search functionality on task name and company name
 
-Note: Add New Contact page already has this feature implemented.
+## Implementation Steps
 
-## Steps
-- [x] 1. Update SaleFormPage in sale_detail_page.dart - Add "Add Company" button next to company dropdown
-- [x] 2. Update TaskFormPage in task_detail_page.dart - Add "Add Company" button next to company dropdown
+### Step 1: Update task_provider.dart
+- [x] Add searchQuery, startDate, endDate to TasksState
+- [x] Update copyWith method
+- [x] Update filteredTasks getter
+- [x] Add setSearchQuery, setDateRange methods to TasksNotifier
+- [x] Update clearFilters to clear new filters
 
-## Implementation Details
-- Use the same pattern as ContactFormPage
-- Add IconButton with add_circle_outline icon
-- Navigate to CompaniesListPage with openCreateDialog: true
-- Return the newly created company ID and auto-select it
+### Step 2: Update tasks_list_page.dart
+- [x] Connect search field to setSearchQuery method
+- [x] Add date range picker UI in filter dialog
+- [x] Update filter dialog to include date range selection
+- [x] Update _buildTasksList to use filteredTasks getter
+- [x] Update clearFilters to clear search and date range
+
+## Status: COMPLETED
+All features have been implemented:
+1. Search functionality on task name (title) and company name
+2. Assigned to filter (already existed, now enhanced)
+3. Date range filter for dueDatetime
 

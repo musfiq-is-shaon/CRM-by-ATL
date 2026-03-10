@@ -263,6 +263,7 @@ class _TaskFormPageState extends ConsumerState<TaskFormPage> {
   late TextEditingController _dueDateController;
   String? _selectedCompanyId;
   String? _selectedAssignToUserId;
+  String? _selectedAssignByUserId;
   bool _isLoading = false;
   DateTime? _selectedDueDate;
 
@@ -273,18 +274,28 @@ class _TaskFormPageState extends ConsumerState<TaskFormPage> {
     _noteController = TextEditingController(text: widget.task?.note ?? '');
     _dueDateController = TextEditingController(
       text: widget.task?.dueDatetime != null
-          ? '${widget.task!.dueDatetime!.year}-${widget.task!.dueDatetime!.month.toString().padLeft(2, '0')}-${widget.task!.dueDatetime!.day.toString().padLeft(2, '0')}'
+          ? _formatDateTime(widget.task!.dueDatetime!)
           : '',
     );
     _selectedDueDate = widget.task?.dueDatetime;
     _selectedCompanyId = widget.task?.companyId;
     _selectedAssignToUserId = widget.task?.assignToUserId;
+    _selectedAssignByUserId = widget.task?.assignByUserId;
 
     // Load companies and users if not loaded
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(companiesProvider.notifier).loadCompanies();
-      ref.read(taskUsersProvider);
+      ref.read(usersProvider.notifier).loadUsers();
     });
+  }
+
+  String _formatDateTime(DateTime dateTime) {
+    final hour = dateTime.hour > 12
+        ? dateTime.hour - 12
+        : (dateTime.hour == 0 ? 12 : dateTime.hour);
+    final amPm = dateTime.hour >= 12 ? 'PM' : 'AM';
+    final minute = dateTime.minute.toString().padLeft(2, '0');
+    return '${dateTime.year}-${dateTime.month.toString().padLeft(2, '0')}-${dateTime.day.toString().padLeft(2, '0')} $hour:$minute $amPm';
   }
 
   @override
@@ -319,8 +330,7 @@ class _TaskFormPageState extends ConsumerState<TaskFormPage> {
               )
             : DateTime(picked.year, picked.month, picked.day);
         _selectedDueDate = dateTime;
-        _dueDateController.text =
-            '${dateTime.year}-${dateTime.month.toString().padLeft(2, '0')}-${dateTime.day.toString().padLeft(2, '0')}';
+        _dueDateController.text = _formatDateTime(dateTime);
       });
     }
   }
@@ -476,9 +486,12 @@ class _TaskFormPageState extends ConsumerState<TaskFormPage> {
     setState(() => _isLoading = true);
 
     try {
-      // Get current user ID for assignByUserId
+      // Get current user ID for assignByUserId if not manually selected
       final authState = ref.read(authProvider);
       final currentUserId = authState.user?.id;
+
+      // Use selected Assign By user, or fall back to current user
+      final assignByUserId = _selectedAssignByUserId ?? currentUserId;
 
       if (widget.task == null) {
         // Create new task - need companyId and dueDatetime
@@ -505,7 +518,7 @@ class _TaskFormPageState extends ConsumerState<TaskFormPage> {
               companyId: _selectedCompanyId!,
               dueDatetime: _selectedDueDate!,
               note: _noteController.text.isEmpty ? null : _noteController.text,
-              assignByUserId: currentUserId,
+              assignByUserId: assignByUserId,
               assignToUserId: _selectedAssignToUserId,
             );
       } else {
@@ -518,6 +531,7 @@ class _TaskFormPageState extends ConsumerState<TaskFormPage> {
               note: _noteController.text.isEmpty ? null : _noteController.text,
               dueDatetime: _selectedDueDate,
               assignToUserId: _selectedAssignToUserId,
+              assignByUserId: assignByUserId,
             );
       }
 
@@ -664,66 +678,55 @@ class _TaskFormPageState extends ConsumerState<TaskFormPage> {
               // Assign To User Dropdown (Optional)
               Consumer(
                 builder: (context, ref, child) {
-                  final usersAsync = ref.watch(taskUsersProvider);
-                  return usersAsync.when(
-                    loading: () => DropdownButtonFormField<String>(
-                      decoration: InputDecoration(
-                        labelText: 'Assign To',
-                        labelStyle: TextStyle(color: textSecondary),
-                        hintText: 'Loading users...',
-                        hintStyle: TextStyle(
-                          color: textSecondary.withOpacity(0.6),
-                        ),
-                      ),
-                      items: const [],
-                      onChanged: null,
-                    ),
-                    error: (_, _) => DropdownButtonFormField<String>(
-                      initialValue: _selectedAssignToUserId,
-                      decoration: InputDecoration(
-                        labelText: 'Assign To',
-                        labelStyle: TextStyle(color: textSecondary),
-                        hintText: 'Select assignee',
-                        hintStyle: TextStyle(
-                          color: textSecondary.withOpacity(0.6),
-                        ),
-                      ),
-                      dropdownColor: surfaceColor,
-                      items: const [],
-                      onChanged: (value) {
-                        setState(() {
-                          _selectedAssignToUserId = value;
-                        });
-                      },
-                    ),
-                    data: (users) {
-                      final userList = users.cast<User>();
-                      return DropdownButtonFormField<String>(
-                        initialValue: _selectedAssignToUserId,
-                        decoration: InputDecoration(
-                          labelText: 'Assign To',
-                          labelStyle: TextStyle(color: textSecondary),
-                          hintText: 'Select assignee',
-                          hintStyle: TextStyle(
-                            color: textSecondary.withOpacity(0.6),
-                          ),
-                        ),
-                        dropdownColor: surfaceColor,
-                        items: userList.map((user) {
-                          return DropdownMenuItem(
-                            value: user.id,
-                            child: Text(
-                              user.name,
-                              style: TextStyle(color: textPrimary),
-                            ),
-                          );
-                        }).toList(),
-                        onChanged: (value) {
-                          setState(() {
-                            _selectedAssignToUserId = value;
-                          });
-                        },
-                      );
+                  final usersState = ref.watch(usersProvider);
+                  final selectedUser = _selectedAssignToUserId != null
+                      ? usersState.users
+                            .where((u) => u.id == _selectedAssignToUserId)
+                            .firstOrNull
+                      : null;
+
+                  return SearchableDropdown<User>(
+                    items: usersState.users,
+                    value: selectedUser,
+                    hintText: 'Search by name or email...',
+                    labelText: 'Assign To',
+                    itemLabelBuilder: (user) => '${user.name} (${user.email})',
+                    dropdownColor: surfaceColor,
+                    textColor: textPrimary,
+                    hintColor: textSecondary,
+                    onChanged: (user) {
+                      setState(() {
+                        _selectedAssignToUserId = user?.id;
+                      });
+                    },
+                  );
+                },
+              ),
+              const SizedBox(height: 16),
+
+              // Assign By User Dropdown (Optional)
+              Consumer(
+                builder: (context, ref, child) {
+                  final usersState = ref.watch(usersProvider);
+                  final selectedUser = _selectedAssignByUserId != null
+                      ? usersState.users
+                            .where((u) => u.id == _selectedAssignByUserId)
+                            .firstOrNull
+                      : null;
+
+                  return SearchableDropdown<User>(
+                    items: usersState.users,
+                    value: selectedUser,
+                    hintText: 'Search by name or email...',
+                    labelText: 'Assigned By',
+                    itemLabelBuilder: (user) => '${user.name} (${user.email})',
+                    dropdownColor: surfaceColor,
+                    textColor: textPrimary,
+                    hintColor: textSecondary,
+                    onChanged: (user) {
+                      setState(() {
+                        _selectedAssignByUserId = user?.id;
+                      });
                     },
                   );
                 },
