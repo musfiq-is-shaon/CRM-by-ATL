@@ -9,6 +9,7 @@ import '../../../data/repositories/sale_repository.dart';
 import '../../widgets/crm_card.dart';
 import '../../widgets/status_badge.dart';
 import '../../widgets/loading_widget.dart';
+import '../../widgets/searchable_dropdown.dart';
 import '../companies/companies_list_page.dart';
 
 class SaleDetailPage extends ConsumerWidget {
@@ -866,81 +867,50 @@ class _SaleFormPageState extends ConsumerState<SaleFormPage> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: DropdownButtonFormField<String>(
-                        value: _selectedCompanyId,
-                        isExpanded: true,
-                        decoration: InputDecoration(
-                          hintText: 'Select company',
-                          hintStyle: TextStyle(
-                            color: textSecondary.withOpacity(0.6),
+                Consumer(
+                  builder: (context, ref, child) {
+                    final companiesState = ref.watch(companiesProvider);
+                    return SearchableDropdown<String>(
+                      items: companiesState.companies.map((c) => c.id).toList(),
+                      value: _selectedCompanyId,
+                      hintText: 'Select company',
+                      labelText: 'Company *',
+                      itemLabelBuilder: (id) {
+                        final company = companiesState.companies
+                            .where((c) => c.id == id)
+                            .firstOrNull;
+                        return company?.name ?? '';
+                      },
+                      dropdownColor: surfaceColor,
+                      textColor: textPrimary,
+                      hintColor: textSecondary,
+                      required: true,
+                      onChanged: (value) {
+                        setState(() => _selectedCompanyId = value);
+                      },
+                      validator: (value) {
+                        if (value == null) {
+                          return 'Please select a company';
+                        }
+                        return null;
+                      },
+                      onAddNew: () async {
+                        ref.read(usersProvider.notifier).loadUsers();
+                        final result = await Navigator.push<String>(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) =>
+                                const CompaniesListPage(openCreateDialog: true),
                           ),
-                          filled: true,
-                          fillColor: surfaceColor,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: borderColor),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: borderColor),
-                          ),
-                        ),
-                        dropdownColor: surfaceColor,
-                        items: companiesState.companies.map((company) {
-                          return DropdownMenuItem(
-                            value: company.id,
-                            child: Text(
-                              company.name,
-                              style: TextStyle(color: textPrimary),
-                            ),
-                          );
-                        }).toList(),
-                        onChanged: (value) {
-                          setState(() => _selectedCompanyId = value);
-                        },
-                        validator: (value) {
-                          if (value == null) {
-                            return 'Please select a company';
-                          }
-                          return null;
-                        },
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8),
-                      child: IconButton(
-                        onPressed: () async {
-                          // Load users first for the company form
-                          ref.read(usersProvider.notifier).loadUsers();
-                          // Navigate to create company
-                          final result = await Navigator.push<String>(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const CompaniesListPage(
-                                openCreateDialog: true,
-                              ),
-                            ),
-                          );
-                          // If a company was created, select it
-                          if (result != null && mounted) {
-                            setState(() {
-                              _selectedCompanyId = result;
-                            });
-                          }
-                        },
-                        icon: Icon(
-                          Icons.add_circle_outline,
-                          color: primaryColor,
-                        ),
-                        tooltip: 'Add New Company',
-                      ),
-                    ),
-                  ],
+                        );
+                        if (result != null && mounted) {
+                          setState(() {
+                            _selectedCompanyId = result;
+                          });
+                        }
+                      },
+                    );
+                  },
                 ),
                 const SizedBox(height: 20),
 

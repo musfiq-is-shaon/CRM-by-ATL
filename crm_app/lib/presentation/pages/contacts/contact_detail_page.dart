@@ -8,6 +8,7 @@ import '../../providers/company_provider.dart';
 import '../../providers/user_provider.dart';
 import '../../widgets/crm_card.dart';
 import '../../widgets/loading_widget.dart';
+import '../../widgets/searchable_dropdown.dart';
 import '../companies/companies_list_page.dart';
 
 class ContactDetailPage extends ConsumerWidget {
@@ -62,6 +63,8 @@ class ContactDetailPage extends ConsumerWidget {
                   // Contact Header
                   CRMCard(
                     child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         CircleAvatar(
                           radius: 40,
@@ -80,33 +83,63 @@ class ContactDetailPage extends ConsumerWidget {
                         const SizedBox(height: 16),
                         Text(
                           contact.name,
+                          textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: 24,
                             fontWeight: FontWeight.bold,
                             color: textPrimary,
                           ),
                         ),
-                        if (contact.designation != null) ...[
-                          const SizedBox(height: 4),
-                          Text(
-                            contact.designation!,
-                            style: TextStyle(
-                              fontSize: 16,
-                              color: textSecondary,
-                            ),
+                        const SizedBox(height: 8),
+                        // Designation with consistent display
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
                           ),
-                        ],
-                        if (contact.company != null) ...[
-                          const SizedBox(height: 4),
-                          Text(
-                            contact.company!.name,
+                          decoration: BoxDecoration(
+                            color: primaryColor.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            contact.designation ?? 'No Designation',
+                            textAlign: TextAlign.center,
                             style: TextStyle(
                               fontSize: 14,
-                              color: primaryColor,
+                              color: contact.designation != null
+                                  ? primaryColor
+                                  : textSecondary,
                               fontWeight: FontWeight.w500,
                             ),
                           ),
-                        ],
+                        ),
+                        const SizedBox(height: 8),
+                        // Company with icon
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.business,
+                              size: 16,
+                              color: textSecondary,
+                            ),
+                            const SizedBox(width: 4),
+                            Flexible(
+                              child: Text(
+                                contact.company?.name ?? 'No Company',
+                                textAlign: TextAlign.center,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: contact.company != null
+                                      ? primaryColor
+                                      : textSecondary,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ],
                     ),
                   ),
@@ -145,6 +178,7 @@ class ContactDetailPage extends ConsumerWidget {
                   // Contact Info
                   Text(
                     'Contact Information',
+                    textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w600,
@@ -181,6 +215,20 @@ class ContactDetailPage extends ConsumerWidget {
                             primaryColor,
                             textPrimary,
                             textSecondary,
+                          ),
+                        // Show placeholder if no contact info
+                        if (contact.email == null &&
+                            contact.mobile == null &&
+                            contact.company == null)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            child: Text(
+                              'No contact information available',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: textSecondary,
+                              ),
+                            ),
                           ),
                       ],
                     ),
@@ -473,74 +521,47 @@ class _ContactFormPageState extends ConsumerState<ContactFormPage> {
                 Consumer(
                   builder: (context, ref, child) {
                     final companiesState = ref.watch(companiesProvider);
-                    return Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: DropdownButtonFormField<String>(
-                            value: _selectedCompanyId,
-                            decoration: InputDecoration(
-                              labelText: 'Company *',
-                              labelStyle: TextStyle(color: textSecondary),
-                              hintText: 'Select a company',
-                              hintStyle: TextStyle(
-                                color: textSecondary.withOpacity(0.6),
-                              ),
-                            ),
-                            dropdownColor: surfaceColor,
-                            items: companiesState.companies.map((company) {
-                              return DropdownMenuItem(
-                                value: company.id,
-                                child: Text(
-                                  company.name,
-                                  style: TextStyle(color: textPrimary),
-                                ),
-                              );
-                            }).toList(),
-                            onChanged: (value) {
-                              setState(() {
-                                _selectedCompanyId = value;
-                              });
-                            },
-                            validator: (value) {
-                              if (value == null || value.isEmpty) {
-                                return 'Company is required';
-                              }
-                              return null;
-                            },
+                    return SearchableDropdown<String>(
+                      items: companiesState.companies.map((c) => c.id).toList(),
+                      value: _selectedCompanyId,
+                      hintText: 'Select a company',
+                      labelText: 'Company *',
+                      itemLabelBuilder: (id) {
+                        final company = companiesState.companies
+                            .where((c) => c.id == id)
+                            .firstOrNull;
+                        return company?.name ?? '';
+                      },
+                      dropdownColor: surfaceColor,
+                      textColor: textPrimary,
+                      hintColor: textSecondary,
+                      required: true,
+                      onChanged: (value) {
+                        setState(() {
+                          _selectedCompanyId = value;
+                        });
+                      },
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Company is required';
+                        }
+                        return null;
+                      },
+                      onAddNew: () async {
+                        ref.read(usersProvider.notifier).loadUsers();
+                        final result = await Navigator.push<String>(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) =>
+                                const CompaniesListPage(openCreateDialog: true),
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        Padding(
-                          padding: const EdgeInsets.only(top: 8),
-                          child: IconButton(
-                            onPressed: () async {
-                              // Load users first for the company form
-                              ref.read(usersProvider.notifier).loadUsers();
-                              // Navigate to create company
-                              final result = await Navigator.push<String>(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => const CompaniesListPage(
-                                    openCreateDialog: true,
-                                  ),
-                                ),
-                              );
-                              // If a company was created, select it
-                              if (result != null && mounted) {
-                                setState(() {
-                                  _selectedCompanyId = result;
-                                });
-                              }
-                            },
-                            icon: Icon(
-                              Icons.add_circle_outline,
-                              color: primaryColor,
-                            ),
-                            tooltip: 'Add New Company',
-                          ),
-                        ),
-                      ],
+                        );
+                        if (result != null && mounted) {
+                          setState(() {
+                            _selectedCompanyId = result;
+                          });
+                        }
+                      },
                     );
                   },
                 ),

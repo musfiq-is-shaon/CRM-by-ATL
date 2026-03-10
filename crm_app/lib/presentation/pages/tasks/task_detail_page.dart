@@ -11,6 +11,7 @@ import '../../providers/user_provider.dart';
 import '../../widgets/crm_card.dart';
 import '../../widgets/status_badge.dart';
 import '../../widgets/loading_widget.dart';
+import '../../widgets/searchable_dropdown.dart';
 import '../companies/companies_list_page.dart';
 
 // Provider for users
@@ -456,74 +457,47 @@ class _TaskFormPageState extends ConsumerState<TaskFormPage> {
               Consumer(
                 builder: (context, ref, child) {
                   final companiesState = ref.watch(companiesProvider);
-                  return Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: DropdownButtonFormField<String>(
-                          initialValue: _selectedCompanyId,
-                          decoration: InputDecoration(
-                            labelText: 'Company *',
-                            labelStyle: TextStyle(color: textSecondary),
-                            hintText: 'Select a company',
-                            hintStyle: TextStyle(
-                              color: textSecondary.withOpacity(0.6),
-                            ),
-                          ),
-                          dropdownColor: surfaceColor,
-                          items: companiesState.companies.map((company) {
-                            return DropdownMenuItem(
-                              value: company.id,
-                              child: Text(
-                                company.name,
-                                style: TextStyle(color: textPrimary),
-                              ),
-                            );
-                          }).toList(),
-                          onChanged: (value) {
-                            setState(() {
-                              _selectedCompanyId = value;
-                            });
-                          },
-                          validator: (value) {
-                            if (value == null || value.isEmpty) {
-                              return 'Company is required';
-                            }
-                            return null;
-                          },
+                  return SearchableDropdown<String>(
+                    items: companiesState.companies.map((c) => c.id).toList(),
+                    value: _selectedCompanyId,
+                    hintText: 'Select a company',
+                    labelText: 'Company *',
+                    itemLabelBuilder: (id) {
+                      final company = companiesState.companies
+                          .where((c) => c.id == id)
+                          .firstOrNull;
+                      return company?.name ?? '';
+                    },
+                    dropdownColor: surfaceColor,
+                    textColor: textPrimary,
+                    hintColor: textSecondary,
+                    required: true,
+                    onChanged: (value) {
+                      setState(() {
+                        _selectedCompanyId = value;
+                      });
+                    },
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Company is required';
+                      }
+                      return null;
+                    },
+                    onAddNew: () async {
+                      ref.read(usersProvider.notifier).loadUsers();
+                      final result = await Navigator.push<String>(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) =>
+                              const CompaniesListPage(openCreateDialog: true),
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8),
-                        child: IconButton(
-                          onPressed: () async {
-                            // Load users first for the company form
-                            ref.read(usersProvider.notifier).loadUsers();
-                            // Navigate to create company
-                            final result = await Navigator.push<String>(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => const CompaniesListPage(
-                                  openCreateDialog: true,
-                                ),
-                              ),
-                            );
-                            // If a company was created, select it
-                            if (result != null && mounted) {
-                              setState(() {
-                                _selectedCompanyId = result;
-                              });
-                            }
-                          },
-                          icon: Icon(
-                            Icons.add_circle_outline,
-                            color: primaryColor,
-                          ),
-                          tooltip: 'Add New Company',
-                        ),
-                      ),
-                    ],
+                      );
+                      if (result != null && mounted) {
+                        setState(() {
+                          _selectedCompanyId = result;
+                        });
+                      }
+                    },
                   );
                 },
               ),

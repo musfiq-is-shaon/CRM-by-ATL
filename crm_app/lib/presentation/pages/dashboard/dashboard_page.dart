@@ -4,7 +4,6 @@ import '../../../core/theme/app_theme_colors.dart';
 import '../../providers/sale_provider.dart';
 import '../../providers/task_provider.dart';
 import '../../providers/contact_provider.dart';
-import '../../providers/company_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../widgets/kpi_card.dart';
 import '../../widgets/crm_card.dart';
@@ -14,7 +13,6 @@ import '../sales/sale_detail_page.dart';
 import '../contacts/contact_detail_page.dart';
 import '../tasks/task_detail_page.dart';
 import '../tasks/tasks_list_page.dart';
-import '../companies/companies_list_page.dart';
 
 class DashboardPage extends ConsumerStatefulWidget {
   const DashboardPage({super.key});
@@ -35,7 +33,6 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
       ref.read(salesProvider.notifier).loadSales(),
       ref.read(tasksProvider.notifier).loadTasks(),
       ref.read(contactsProvider.notifier).loadContacts(),
-      ref.read(companiesProvider.notifier).loadCompanies(),
     ]);
   }
 
@@ -44,7 +41,6 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     final salesState = ref.watch(salesProvider);
     final tasksState = ref.watch(tasksProvider);
     final contactsState = ref.watch(contactsProvider);
-    final companiesState = ref.watch(companiesProvider);
     final themeMode = ref.watch(themeProvider);
     final isDarkMode = themeMode == ThemeMode.dark;
 
@@ -402,141 +398,6 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                     childCount: tasksState.tasks.length > 5
                         ? 5
                         : tasksState.tasks.length,
-                  ),
-                ),
-
-              const SliverToBoxAdapter(child: SizedBox(height: 24)),
-
-              // Recent Companies
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'Recent Companies',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w600,
-                              color: textPrimary,
-                            ),
-                          ),
-                          TextButton(
-                            onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) =>
-                                      const CompaniesListPage(),
-                                ),
-                              );
-                            },
-                            child: const Text('View All'),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                    ],
-                  ),
-                ),
-              ),
-
-              // Companies List
-              if (companiesState.isLoading)
-                const SliverToBoxAdapter(
-                  child: Padding(
-                    padding: EdgeInsets.all(20),
-                    child: LoadingWidget(),
-                  ),
-                )
-              else if (companiesState.companies.isEmpty)
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: app_widgets.EmptyStateWidget(
-                      title: 'No companies yet',
-                      subtitle: 'Add your first company',
-                      icon: Icons.business_outlined,
-                    ),
-                  ),
-                )
-              else
-                SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (context, index) {
-                      if (index >= 3) return null;
-                      final company = companiesState.companies[index];
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 20,
-                          vertical: 6,
-                        ),
-                        child: CRMCard(
-                          onTap: () {},
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 48,
-                                height: 48,
-                                decoration: BoxDecoration(
-                                  color: const Color(
-                                    0xFF2563EB,
-                                  ).withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Center(
-                                  child: Text(
-                                    company.name.isNotEmpty
-                                        ? company.name[0].toUpperCase()
-                                        : '?',
-                                    style: const TextStyle(
-                                      color: Color(0xFF2563EB),
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      company.name,
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        color: textPrimary,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      [company.location, company.country]
-                                          .where(
-                                            (e) => e != null && e.isNotEmpty,
-                                          )
-                                          .join(', '),
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: textSecondary,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              Icon(Icons.chevron_right, color: textTertiary),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                    childCount: companiesState.companies.length > 3
-                        ? 3
-                        : companiesState.companies.length,
                   ),
                 ),
 

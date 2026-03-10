@@ -5,7 +5,6 @@ import '../../providers/auth_provider.dart';
 import '../../widgets/crm_card.dart';
 import '../settings/settings_page.dart';
 import '../admin/users_page.dart';
-import '../companies/companies_list_page.dart';
 
 class MorePage extends ConsumerWidget {
   const MorePage({super.key});
@@ -110,23 +109,6 @@ class MorePage extends ConsumerWidget {
             textTertiary: textTertiary,
             primaryColor: primaryColor,
             children: [
-              _buildMenuItem(
-                icon: Icons.business_outlined,
-                title: 'Companies',
-                subtitle: 'Manage companies',
-                textPrimary: textPrimary,
-                textSecondary: textSecondary,
-                textTertiary: textTertiary,
-                primaryColor: primaryColor,
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const CompaniesListPage(),
-                    ),
-                  );
-                },
-              ),
               _buildMenuItem(
                 icon: Icons.people_outline,
                 title: 'Users',
