@@ -55,53 +55,65 @@ class _ContactsListPageState extends ConsumerState<ContactsListPage> {
       appBar: AppBar(
         backgroundColor: surfaceColor,
         title: Text('Contacts', style: TextStyle(color: textPrimary)),
-        actions: [
-          IconButton(
-            icon: Icon(Icons.filter_list, color: textPrimary),
-            onPressed: () => _showFilterDialog(context),
-          ),
-        ],
       ),
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.all(16),
-            child: TextField(
-              controller: _searchController,
-              style: TextStyle(color: textPrimary),
-              onChanged: (value) {
-                ref.read(contactsProvider.notifier).setSearchQuery(value);
-              },
-              decoration: InputDecoration(
-                hintText: 'Search contacts...',
-                hintStyle: TextStyle(color: textTertiary),
-                prefixIcon: Icon(Icons.search, color: textSecondary),
-                suffixIcon: _searchController.text.isNotEmpty
-                    ? IconButton(
-                        icon: Icon(Icons.clear, color: textSecondary),
-                        onPressed: () {
-                          _searchController.clear();
-                          ref
-                              .read(contactsProvider.notifier)
-                              .setSearchQuery(null);
-                        },
-                      )
-                    : null,
-                filled: true,
-                fillColor: surfaceColor,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _searchController,
+                    style: TextStyle(color: textPrimary),
+                    onChanged: (value) {
+                      ref.read(contactsProvider.notifier).setSearchQuery(value);
+                    },
+                    decoration: InputDecoration(
+                      hintText: 'Search contacts...',
+                      hintStyle: TextStyle(color: textTertiary),
+                      prefixIcon: Icon(Icons.search, color: textSecondary),
+                      suffixIcon: _searchController.text.isNotEmpty
+                          ? IconButton(
+                              icon: Icon(Icons.clear, color: textSecondary),
+                              onPressed: () {
+                                _searchController.clear();
+                                ref
+                                    .read(contactsProvider.notifier)
+                                    .setSearchQuery(null);
+                              },
+                            )
+                          : null,
+                      filled: true,
+                      fillColor: surfaceColor,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: borderColor),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: borderColor),
+                      ),
+                    ),
+                  ),
                 ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: borderColor),
+                const SizedBox(width: 8),
+                Container(
+                  decoration: BoxDecoration(
+                    color: surfaceColor,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: borderColor),
+                  ),
+                  child: IconButton(
+                    icon: Icon(Icons.filter_list, color: textPrimary),
+                    onPressed: () => _showFilterDialog(context),
+                  ),
                 ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: borderColor),
-                ),
-              ),
+              ],
             ),
           ),
           Expanded(
@@ -235,93 +247,104 @@ class _ContactsListPageState extends ConsumerState<ContactsListPage> {
       ),
       builder: (context) => StatefulBuilder(
         builder: (context, setModalState) => Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          padding: EdgeInsets.only(
+            left: 20,
+            right: 20,
+            top: 20,
+            bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+          ),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.7,
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: Text(
-                      'Filter Contacts',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: textPrimary,
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Filter Contacts',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: textPrimary,
+                          ),
+                        ),
                       ),
+                      TextButton(
+                        onPressed: () {
+                          ref.read(contactsProvider.notifier).clearFilters();
+                          Navigator.pop(context);
+                        },
+                        child: Text(
+                          'Clear All',
+                          style: TextStyle(color: primaryColor),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    'Company',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: textSecondary,
                     ),
                   ),
-                  TextButton(
-                    onPressed: () {
-                      ref.read(contactsProvider.notifier).clearFilters();
-                      Navigator.pop(context);
-                    },
-                    child: Text(
-                      'Clear All',
-                      style: TextStyle(color: primaryColor),
+                  const SizedBox(height: 8),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: surfaceColor,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: textSecondary.withOpacity(0.3)),
+                    ),
+                    child: SearchableDropdown<Company>(
+                      items: companiesState.companies,
+                      value: selectedCompanyId != null
+                          ? companiesState.companies
+                                .where((c) => c.id == selectedCompanyId)
+                                .firstOrNull
+                          : null,
+                      hintText: 'All Companies',
+                      labelText: 'Company',
+                      dropdownColor: surfaceColor,
+                      textColor: textPrimary,
+                      hintColor: textSecondary,
+                      itemLabelBuilder: (company) => company.name,
+                      onChanged: (company) {
+                        setModalState(() => selectedCompanyId = company?.id);
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () {
+                        ref
+                            .read(contactsProvider.notifier)
+                            .setCompanyFilter(selectedCompanyId);
+                        Navigator.pop(context);
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: primaryColor,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: const Text('Apply Filters'),
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 20),
-              Text(
-                'Company',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: textSecondary,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Container(
-                decoration: BoxDecoration(
-                  color: surfaceColor,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: textSecondary.withOpacity(0.3)),
-                ),
-                child: SearchableDropdown<Company>(
-                  items: companiesState.companies,
-                  value: selectedCompanyId != null
-                      ? companiesState.companies
-                            .where((c) => c.id == selectedCompanyId)
-                            .firstOrNull
-                      : null,
-                  hintText: 'All Companies',
-                  labelText: 'Company',
-                  dropdownColor: surfaceColor,
-                  textColor: textPrimary,
-                  hintColor: textSecondary,
-                  itemLabelBuilder: (company) => company.name,
-                  onChanged: (company) {
-                    setModalState(() => selectedCompanyId = company?.id);
-                  },
-                ),
-              ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () {
-                    ref
-                        .read(contactsProvider.notifier)
-                        .setCompanyFilter(selectedCompanyId);
-                    Navigator.pop(context);
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: primaryColor,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: const Text('Apply Filters'),
-                ),
-              ),
-              SizedBox(height: MediaQuery.of(context).viewInsets.bottom),
-            ],
+            ),
           ),
         ),
       ),

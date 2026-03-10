@@ -60,10 +60,6 @@ class _CompaniesListPageState extends ConsumerState<CompaniesListPage> {
         title: Text('Companies', style: TextStyle(color: textPrimary)),
         actions: [
           IconButton(
-            icon: Icon(Icons.filter_list, color: textPrimary),
-            onPressed: () => _showFilterDialog(context),
-          ),
-          IconButton(
             icon: Icon(Icons.add, color: textPrimary),
             onPressed: () => _showCreateCompanyDialog(context),
           ),
@@ -72,27 +68,47 @@ class _CompaniesListPageState extends ConsumerState<CompaniesListPage> {
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.all(16),
-            child: TextField(
-              controller: _searchController,
-              style: TextStyle(color: textPrimary),
-              decoration: InputDecoration(
-                hintText: 'Search companies...',
-                hintStyle: TextStyle(color: textTertiary),
-                prefixIcon: Icon(Icons.search, color: textSecondary),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _searchController,
+                    style: TextStyle(color: textPrimary),
+                    decoration: InputDecoration(
+                      hintText: 'Search companies...',
+                      hintStyle: TextStyle(color: textTertiary),
+                      prefixIcon: Icon(Icons.search, color: textSecondary),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: borderColor),
+                      ),
+                      filled: true,
+                      fillColor: surfaceColor,
+                    ),
+                    onChanged: (value) {
+                      ref
+                          .read(companiesProvider.notifier)
+                          .setSearchQuery(value);
+                    },
+                  ),
                 ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: borderColor),
+                const SizedBox(width: 8),
+                Container(
+                  decoration: BoxDecoration(
+                    color: surfaceColor,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: borderColor),
+                  ),
+                  child: IconButton(
+                    icon: Icon(Icons.filter_list, color: textPrimary),
+                    onPressed: () => _showFilterDialog(context),
+                  ),
                 ),
-                filled: true,
-                fillColor: surfaceColor,
-              ),
-              onChanged: (value) {
-                ref.read(companiesProvider.notifier).setSearchQuery(value);
-              },
+              ],
             ),
           ),
           Expanded(

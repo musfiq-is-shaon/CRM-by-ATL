@@ -4,7 +4,6 @@ import '../../../core/theme/app_theme_colors.dart';
 import '../../providers/auth_provider.dart';
 import '../../widgets/crm_card.dart';
 import '../settings/settings_page.dart';
-import '../admin/users_page.dart';
 
 class MorePage extends ConsumerWidget {
   const MorePage({super.key});
@@ -109,21 +108,6 @@ class MorePage extends ConsumerWidget {
             textTertiary: textTertiary,
             primaryColor: primaryColor,
             children: [
-              _buildMenuItem(
-                icon: Icons.people_outline,
-                title: 'Users',
-                subtitle: 'Manage team members',
-                textPrimary: textPrimary,
-                textSecondary: textSecondary,
-                textTertiary: textTertiary,
-                primaryColor: primaryColor,
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const UsersPage()),
-                  );
-                },
-              ),
               _buildMenuItem(
                 icon: Icons.settings_outlined,
                 title: 'Settings',

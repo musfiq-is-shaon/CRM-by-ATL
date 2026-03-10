@@ -96,6 +96,21 @@ class _SearchableDropdownState<T> extends State<SearchableDropdown<T>> {
     final renderBox = context.findRenderObject() as RenderBox;
     final size = renderBox.size;
 
+    // Calculate available space below and above the dropdown
+    final screenHeight = MediaQuery.of(context).size.height;
+    final globalPosition = renderBox.localToGlobal(Offset.zero);
+    final bottomSpace = screenHeight - globalPosition.dy - size.height;
+    final topSpace = globalPosition.dy;
+
+    // Check if there's enough space below (at least 200px) or if there's more space above
+    final showAbove = bottomSpace < 220 && topSpace > bottomSpace;
+
+    // Dropdown height is 200, add some buffer
+    final dropdownHeight = 200.0;
+    final offsetY = showAbove
+        ? -(dropdownHeight + size.height + 4)
+        : size.height + 4;
+
     _overlayEntry = OverlayEntry(
       builder: (context) => Stack(
         children: [
@@ -113,7 +128,7 @@ class _SearchableDropdownState<T> extends State<SearchableDropdown<T>> {
             child: CompositedTransformFollower(
               link: _layerLink,
               showWhenUnlinked: false,
-              offset: Offset(0, size.height + 4),
+              offset: Offset(0, offsetY),
               child: Material(
                 elevation: 8,
                 borderRadius: BorderRadius.circular(12),

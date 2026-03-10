@@ -57,57 +57,68 @@ class _TasksListPageState extends ConsumerState<TasksListPage>
       appBar: AppBar(
         backgroundColor: surfaceColor,
         title: Text('Tasks', style: TextStyle(color: textPrimary)),
-        actions: [
-          IconButton(
-            icon: Icon(Icons.filter_list, color: textPrimary),
-            onPressed: () => _showFilterDialog(context),
-          ),
-        ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(100),
           child: Column(
             children: [
               Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
-                ),
-                child: TextField(
-                  controller: _searchController,
-                  style: TextStyle(color: textPrimary),
-                  decoration: InputDecoration(
-                    hintText: 'Search tasks...',
-                    hintStyle: TextStyle(color: textTertiary),
-                    prefixIcon: Icon(Icons.search, color: textSecondary),
-                    suffixIcon: _searchController.text.isNotEmpty
-                        ? IconButton(
-                            icon: Icon(Icons.clear, color: textSecondary),
-                            onPressed: () {
-                              _searchController.clear();
-                              ref
-                                  .read(tasksProvider.notifier)
-                                  .setSearchQuery(null);
-                            },
-                          )
-                        : null,
-                    filled: true,
-                    fillColor: bgColor,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _searchController,
+                        style: TextStyle(color: textPrimary),
+                        decoration: InputDecoration(
+                          hintText: 'Search tasks...',
+                          hintStyle: TextStyle(color: textTertiary),
+                          prefixIcon: Icon(Icons.search, color: textSecondary),
+                          suffixIcon: _searchController.text.isNotEmpty
+                              ? IconButton(
+                                  icon: Icon(Icons.clear, color: textSecondary),
+                                  onPressed: () {
+                                    _searchController.clear();
+                                    ref
+                                        .read(tasksProvider.notifier)
+                                        .setSearchQuery(null);
+                                  },
+                                )
+                              : null,
+                          filled: true,
+                          fillColor: bgColor,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: borderColor),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: borderColor),
+                          ),
+                        ),
+                        onChanged: (value) {
+                          ref
+                              .read(tasksProvider.notifier)
+                              .setSearchQuery(value);
+                        },
+                      ),
                     ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: borderColor),
+                    const SizedBox(width: 8),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: bgColor,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: borderColor),
+                      ),
+                      child: IconButton(
+                        icon: Icon(Icons.filter_list, color: textPrimary),
+                        onPressed: () => _showFilterDialog(context),
+                      ),
                     ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: borderColor),
-                    ),
-                  ),
-                  onChanged: (value) {
-                    ref.read(tasksProvider.notifier).setSearchQuery(value);
-                  },
+                  ],
                 ),
               ),
               TabBar(
