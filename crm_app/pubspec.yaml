@@ -38,6 +38,10 @@ dependencies:
   # UI
   cached_network_image: ^3.4.1
   flutter_svg: ^2.0.17
+  
+  # Notifications
+  flutter_local_notifications: ^18.0.1
+  timezone: ^0.10.0
 
 dev_dependencies:
   flutter_test:

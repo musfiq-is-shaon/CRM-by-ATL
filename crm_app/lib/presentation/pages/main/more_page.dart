@@ -5,6 +5,8 @@ import '../../providers/auth_provider.dart';
 import '../../widgets/crm_card.dart';
 import '../settings/settings_page.dart';
 import '../admin/users_page.dart';
+import '../contacts/contacts_list_page.dart';
+import 'notification_settings_page.dart';
 
 class MorePage extends ConsumerWidget {
   const MorePage({super.key});
@@ -130,6 +132,23 @@ class MorePage extends ConsumerWidget {
                   },
                 ),
               _buildMenuItem(
+                icon: Icons.people_outline,
+                title: 'Contacts',
+                subtitle: 'Manage contacts',
+                textPrimary: textPrimary,
+                textSecondary: textSecondary,
+                textTertiary: textTertiary,
+                primaryColor: primaryColor,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const ContactsListPage(),
+                    ),
+                  );
+                },
+              ),
+              _buildMenuItem(
                 icon: Icons.settings_outlined,
                 title: 'Settings',
                 subtitle: 'App settings',
@@ -175,7 +194,14 @@ class MorePage extends ConsumerWidget {
                 textSecondary: textSecondary,
                 textTertiary: textTertiary,
                 primaryColor: primaryColor,
-                onTap: () {},
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const NotificationSettingsPage(),
+                    ),
+                  );
+                },
               ),
               _buildMenuItem(
                 icon: Icons.help_outline,

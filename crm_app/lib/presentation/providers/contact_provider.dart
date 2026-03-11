@@ -63,33 +63,42 @@ class ContactsNotifier extends StateNotifier<ContactsState> {
     try {
       final contacts = await _contactRepository.getContacts();
 
-      // Load company with KAM data for each contact
-      final contactsWithCompany = await Future.wait(
-        contacts.map((contact) async {
-          Company? company;
-          if (contact.companyId != null) {
-            try {
-              company = await _companyRepository.getCompanyById(
-                contact.companyId!,
-              );
-            } catch (e) {
-              // Ignore - use existing company data if available
-              company = contact.company;
-            }
-          }
-          return Contact(
-            id: contact.id,
-            name: contact.name,
-            companyId: contact.companyId,
-            company: company,
-            designation: contact.designation,
-            mobile: contact.mobile,
-            email: contact.email,
-            createdAt: contact.createdAt,
-            updatedAt: contact.updatedAt,
-          );
-        }),
-      );
+      // Collect all unique company IDs needed
+      final companyIds = <String>{};
+
+      for (final contact in contacts) {
+        if (contact.companyId != null) {
+          companyIds.add(contact.companyId!);
+        }
+      }
+
+      // Batch fetch all companies in parallel
+      final companiesMap = companyIds.isNotEmpty
+          ? await _companyRepository.getCompaniesByIds(companyIds.toList())
+          : <String, Company>{};
+
+      // Now map contacts with pre-fetched data
+      final contactsWithCompany = contacts.map((contact) {
+        Company? company;
+
+        // Get company from map
+        if (contact.companyId != null &&
+            companiesMap.containsKey(contact.companyId)) {
+          company = companiesMap[contact.companyId];
+        }
+
+        return Contact(
+          id: contact.id,
+          name: contact.name,
+          companyId: contact.companyId,
+          company: company,
+          designation: contact.designation,
+          mobile: contact.mobile,
+          email: contact.email,
+          createdAt: contact.createdAt,
+          updatedAt: contact.updatedAt,
+        );
+      }).toList();
 
       state = state.copyWith(contacts: contactsWithCompany, isLoading: false);
     } catch (e) {

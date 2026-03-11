@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme_colors.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/theme_provider.dart';
+import '../../providers/notification_provider.dart';
 import '../../widgets/crm_card.dart';
 
 class SettingsPage extends ConsumerWidget {
@@ -14,6 +15,7 @@ class SettingsPage extends ConsumerWidget {
     final user = authState.user;
     final themeMode = ref.watch(themeProvider);
     final isDarkMode = themeMode == ThemeMode.dark;
+    final notificationSettings = ref.watch(notificationSettingsProvider);
 
     final bgColor = AppThemeColors.backgroundColor(context);
     final surfaceColor = AppThemeColors.surfaceColor(context);
@@ -88,15 +90,20 @@ class SettingsPage extends ConsumerWidget {
                 const SizedBox(height: 16),
                 _buildSettingItem(
                   icon: Icons.notifications_outlined,
-                  title: 'Notifications',
+                  title: 'Task Deadline Alerts',
                   textPrimary: textPrimary,
                   textSecondary: textSecondary,
                   primaryColor: primaryColor,
                   trailing: Switch(
-                    value: true,
-                    onChanged: (value) {},
+                    value: notificationSettings.enabled,
+                    onChanged: (value) {
+                      ref
+                          .read(notificationSettingsProvider.notifier)
+                          .setEnabled(value);
+                    },
                     activeThumbColor: primaryColor,
                   ),
+                  onTap: () => _showNotificationSettingsSheet(context, ref),
                 ),
                 _buildSettingItem(
                   icon: Icons.dark_mode_outlined,
@@ -241,6 +248,146 @@ class SettingsPage extends ConsumerWidget {
               ),
             ),
             trailing,
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showNotificationSettingsSheet(BuildContext context, WidgetRef ref) {
+    final notificationSettings = ref.read(notificationSettingsProvider);
+    final bgColor = AppThemeColors.backgroundColor(context);
+    final surfaceColor = AppThemeColors.surfaceColor(context);
+    final textPrimary = AppThemeColors.textPrimaryColor(context);
+    final textSecondary = AppThemeColors.textSecondaryColor(context);
+    final primaryColor = const Color(0xFF2563EB);
+
+    int selectedDays = notificationSettings.daysBefore;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: surfaceColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) => Container(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Notification Settings',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: textPrimary,
+                ),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                'Get notified when a task deadline is approaching:',
+                style: TextStyle(fontSize: 14, color: textSecondary),
+              ),
+              const SizedBox(height: 16),
+              _buildDaysOption(
+                title: 'On due date',
+                value: 0,
+                selectedValue: selectedDays,
+                textPrimary: textPrimary,
+                primaryColor: primaryColor,
+                onChanged: (value) {
+                  setModalState(() => selectedDays = value);
+                },
+              ),
+              _buildDaysOption(
+                title: '1 day before',
+                value: 1,
+                selectedValue: selectedDays,
+                textPrimary: textPrimary,
+                primaryColor: primaryColor,
+                onChanged: (value) {
+                  setModalState(() => selectedDays = value);
+                },
+              ),
+              _buildDaysOption(
+                title: '3 days before',
+                value: 3,
+                selectedValue: selectedDays,
+                textPrimary: textPrimary,
+                primaryColor: primaryColor,
+                onChanged: (value) {
+                  setModalState(() => selectedDays = value);
+                },
+              ),
+              _buildDaysOption(
+                title: '7 days before',
+                value: 7,
+                selectedValue: selectedDays,
+                textPrimary: textPrimary,
+                primaryColor: primaryColor,
+                onChanged: (value) {
+                  setModalState(() => selectedDays = value);
+                },
+              ),
+              const SizedBox(height: 32),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () {
+                    ref
+                        .read(notificationSettingsProvider.notifier)
+                        .setDaysBefore(selectedDays);
+                    Navigator.pop(context);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: primaryColor,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    elevation: 0,
+                  ),
+                  child: const Text(
+                    'Save',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDaysOption({
+    required String title,
+    required int value,
+    required int selectedValue,
+    required Color textPrimary,
+    required Color primaryColor,
+    required Function(int) onChanged,
+  }) {
+    final isSelected = value == selectedValue;
+    return InkWell(
+      onTap: () => onChanged(value),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Row(
+          children: [
+            Icon(
+              isSelected
+                  ? Icons.radio_button_checked
+                  : Icons.radio_button_unchecked,
+              color: isSelected ? primaryColor : Colors.grey,
+              size: 22,
+            ),
+            const SizedBox(width: 12),
+            Text(title, style: TextStyle(fontSize: 15, color: textPrimary)),
           ],
         ),
       ),

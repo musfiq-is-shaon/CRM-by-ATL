@@ -3,7 +3,7 @@ import '../../core/theme/app_colors.dart';
 
 class StatusBadge extends StatelessWidget {
   final String status;
-  final String type; // 'task' or 'sale' or 'category'
+  final String type; // 'task', 'sale', 'category', or 'expense'
 
   const StatusBadge({super.key, required this.status, required this.type});
 
@@ -72,6 +72,15 @@ class StatusBadge extends StatelessWidget {
           default:
             return AppColors.textTertiary.withOpacity(0.1);
         }
+      case 'expense':
+        switch (status.toLowerCase()) {
+          case 'unpaid':
+            return Colors.orange.withOpacity(0.1);
+          case 'paid':
+            return Colors.green.withOpacity(0.1);
+          default:
+            return AppColors.textTertiary.withOpacity(0.1);
+        }
       default:
         return AppColors.textTertiary.withOpacity(0.1);
     }
@@ -120,6 +129,15 @@ class StatusBadge extends StatelessWidget {
             return AppColors.warm;
           case 'cold':
             return AppColors.cold;
+          default:
+            return AppColors.textTertiary;
+        }
+      case 'expense':
+        switch (status.toLowerCase()) {
+          case 'unpaid':
+            return Colors.orange;
+          case 'paid':
+            return Colors.green;
           default:
             return AppColors.textTertiary;
         }

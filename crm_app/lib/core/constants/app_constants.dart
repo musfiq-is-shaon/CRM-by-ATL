@@ -19,6 +19,8 @@ class AppConstants {
   static const String statusConfig = '/api/status-config';
   static const String companyProfile = '/api/company-profile';
   static const String currencies = '/api/currencies';
+  static const String expenses = '/api/expenses';
+  static const String expensePurposes = '/api/expense-purposes';
 
   // Storage Keys
   static const String tokenKey = 'auth_token';

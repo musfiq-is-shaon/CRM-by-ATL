@@ -137,89 +137,67 @@ class SalesNotifier extends StateNotifier<SalesState> {
     try {
       final sales = await _saleRepository.getSales();
 
-      // Fetch all users to get KAM data for companies
-      List<User> users = [];
-      try {
-        users = await _userRepository.getUsers();
-      } catch (e) {
-        // Ignore user fetch error
+      // Collect all unique company IDs and user IDs needed
+      final companyIds = <String>{};
+      final userIds = <String>{};
+
+      for (final sale in sales) {
+        if (sale.companyId != null) {
+          companyIds.add(sale.companyId!);
+        }
+        if (sale.createdByUserId != null) {
+          userIds.add(sale.createdByUserId!);
+        }
       }
-      final usersMap = {for (var u in users) u.id: u};
 
-      // Load company and user data for each sale
-      final salesWithData = await Future.wait(
-        sales.map((sale) async {
-          Company? company;
-          User? user;
+      // Batch fetch all companies and users in parallel
+      final companiesFuture = companyIds.isNotEmpty
+          ? _companyRepository.getCompaniesByIds(companyIds.toList())
+          : Future.value(<String, Company>{});
+      final usersFuture = userIds.isNotEmpty
+          ? _userRepository.getUsersByIds(userIds.toList())
+          : Future.value(<String, User>{});
 
-          // Load company if exists
-          if (sale.company != null) {
-            company = sale.company;
-            // Attach KAM user to company if kamUserId exists
-            if (company!.kamUserId != null &&
-                usersMap.containsKey(company.kamUserId)) {
-              company = Company(
-                id: company.id,
-                name: company.name,
-                location: company.location,
-                country: company.country,
-                kamUserId: company.kamUserId,
-                kamUser: usersMap[company.kamUserId],
-                createdAt: company.createdAt,
-                updatedAt: company.updatedAt,
-              );
-            }
-          } else if (sale.companyId != null) {
-            try {
-              company = await _companyRepository.getCompanyById(
-                sale.companyId!,
-              );
-              // Attach KAM user to company if kamUserId exists
-              if (company!.kamUserId != null &&
-                  usersMap.containsKey(company.kamUserId)) {
-                company = Company(
-                  id: company.id,
-                  name: company.name,
-                  location: company.location,
-                  country: company.country,
-                  kamUserId: company.kamUserId,
-                  kamUser: usersMap[company.kamUserId],
-                  createdAt: company.createdAt,
-                  updatedAt: company.updatedAt,
-                );
-              }
-            } catch (e) {
-              // Ignore
-            }
-          }
+      final List<dynamic> results = await Future.wait([
+        companiesFuture,
+        usersFuture,
+      ]);
 
-          // Load user if exists
-          if (sale.createdByUser != null) {
-            user = sale.createdByUser;
-          } else if (sale.createdByUserId != null) {
-            try {
-              user = await _userRepository.getUserById(sale.createdByUserId!);
-            } catch (e) {
-              // Ignore
-            }
-          }
+      final companiesMap = results[0] as Map<String, Company>;
+      final usersMap = results[1] as Map<String, User>;
 
-          return Sale(
-            id: sale.id,
-            companyId: sale.companyId,
-            company: company,
-            prospect: sale.prospect,
-            category: sale.category,
-            expectedClosingDate: sale.expectedClosingDate,
-            expectedRevenue: sale.expectedRevenue,
-            status: sale.status,
-            createdByUserId: sale.createdByUserId,
-            createdByUser: user,
-            createdAt: sale.createdAt,
-            updatedAt: sale.updatedAt,
-          );
-        }),
-      );
+      // Now map sales with pre-fetched data
+      final salesWithData = sales.map((sale) {
+        Company? company;
+        User? user;
+
+        // Get company from map
+        if (sale.companyId != null &&
+            companiesMap.containsKey(sale.companyId)) {
+          company = companiesMap[sale.companyId];
+        }
+
+        // Get user from map
+        if (sale.createdByUserId != null &&
+            usersMap.containsKey(sale.createdByUserId)) {
+          user = usersMap[sale.createdByUserId];
+        }
+
+        return Sale(
+          id: sale.id,
+          companyId: sale.companyId,
+          company: company,
+          prospect: sale.prospect,
+          category: sale.category,
+          expectedClosingDate: sale.expectedClosingDate,
+          expectedRevenue: sale.expectedRevenue,
+          status: sale.status,
+          createdByUserId: sale.createdByUserId,
+          createdByUser: user,
+          createdAt: sale.createdAt,
+          updatedAt: sale.updatedAt,
+        );
+      }).toList();
 
       state = state.copyWith(sales: salesWithData, isLoading: false);
     } catch (e) {
@@ -273,28 +251,33 @@ class SalesNotifier extends StateNotifier<SalesState> {
       // Get the company details with KAM
       Company? company;
       try {
-        company = await _companyRepository.getCompanyById(companyId);
-        // Fetch users to get KAM
-        List<User> users = [];
-        try {
-          users = await _userRepository.getUsers();
-        } catch (e) {
-          // Ignore
-        }
-        final usersMap = {for (var u in users) u.id: u};
-        // Attach KAM user to company
-        if (company.kamUserId != null &&
-            usersMap.containsKey(company.kamUserId)) {
-          company = Company(
-            id: company.id,
-            name: company.name,
-            location: company.location,
-            country: company.country,
-            kamUserId: company.kamUserId,
-            kamUser: usersMap[company.kamUserId],
-            createdAt: company.createdAt,
-            updatedAt: company.updatedAt,
-          );
+        final fetchedCompany = await _companyRepository.getCompanyById(
+          companyId,
+        );
+        if (fetchedCompany != null) {
+          company = fetchedCompany;
+          // Fetch users to get KAM
+          List<User> users = [];
+          try {
+            users = await _userRepository.getUsers();
+          } catch (e) {
+            // Ignore
+          }
+          final usersMap = {for (var u in users) u.id: u};
+          // Attach KAM user to company
+          if (company.kamUserId != null &&
+              usersMap.containsKey(company.kamUserId)) {
+            company = Company(
+              id: company.id,
+              name: company.name,
+              location: company.location,
+              country: company.country,
+              kamUserId: company.kamUserId,
+              kamUser: usersMap[company.kamUserId],
+              createdAt: company.createdAt,
+              updatedAt: company.updatedAt,
+            );
+          }
         }
       } catch (e) {
         // Ignore company fetch error
@@ -346,7 +329,12 @@ class SalesNotifier extends StateNotifier<SalesState> {
       // If companyId was changed, fetch new company
       if (companyId != null && companyId != existingSale?.companyId) {
         try {
-          company = await _companyRepository.getCompanyById(companyId);
+          final fetchedCompany = await _companyRepository.getCompanyById(
+            companyId,
+          );
+          if (fetchedCompany != null) {
+            company = fetchedCompany;
+          }
         } catch (e) {
           // Ignore
         }
@@ -442,43 +430,48 @@ final saleDetailProvider = FutureProvider.family<Sale, String>((ref, id) async {
   // Try to get company details with KAM
   if (sale.companyId != null && sale.company == null) {
     try {
-      var company = await companyRepository.getCompanyById(sale.companyId!);
-      // Fetch users to get KAM
-      List<User> users = [];
-      try {
-        users = await userRepository.getUsers();
-      } catch (e) {
-        // Ignore
-      }
-      final usersMap = {for (var u in users) u.id: u};
-      // Attach KAM user to company
-      if (company.kamUserId != null &&
-          usersMap.containsKey(company.kamUserId)) {
-        company = Company(
-          id: company.id,
-          name: company.name,
-          location: company.location,
-          country: company.country,
-          kamUserId: company.kamUserId,
-          kamUser: usersMap[company.kamUserId],
-          createdAt: company.createdAt,
-          updatedAt: company.updatedAt,
+      var fetchedCompany = await companyRepository.getCompanyById(
+        sale.companyId!,
+      );
+      if (fetchedCompany != null) {
+        var company = fetchedCompany;
+        // Fetch users to get KAM
+        List<User> users = [];
+        try {
+          users = await userRepository.getUsers();
+        } catch (e) {
+          // Ignore
+        }
+        final usersMap = {for (var u in users) u.id: u};
+        // Attach KAM user to company
+        if (company.kamUserId != null &&
+            usersMap.containsKey(company.kamUserId)) {
+          company = Company(
+            id: company.id,
+            name: company.name,
+            location: company.location,
+            country: company.country,
+            kamUserId: company.kamUserId,
+            kamUser: usersMap[company.kamUserId],
+            createdAt: company.createdAt,
+            updatedAt: company.updatedAt,
+          );
+        }
+        sale = Sale(
+          id: sale.id,
+          companyId: sale.companyId,
+          company: company,
+          prospect: sale.prospect,
+          category: sale.category,
+          expectedClosingDate: sale.expectedClosingDate,
+          expectedRevenue: sale.expectedRevenue,
+          status: sale.status,
+          createdByUserId: sale.createdByUserId,
+          createdByUser: sale.createdByUser,
+          createdAt: sale.createdAt,
+          updatedAt: sale.updatedAt,
         );
       }
-      sale = Sale(
-        id: sale.id,
-        companyId: sale.companyId,
-        company: company,
-        prospect: sale.prospect,
-        category: sale.category,
-        expectedClosingDate: sale.expectedClosingDate,
-        expectedRevenue: sale.expectedRevenue,
-        status: sale.status,
-        createdByUserId: sale.createdByUserId,
-        createdByUser: sale.createdByUser,
-        createdAt: sale.createdAt,
-        updatedAt: sale.updatedAt,
-      );
     } catch (e) {
       // Ignore
     }

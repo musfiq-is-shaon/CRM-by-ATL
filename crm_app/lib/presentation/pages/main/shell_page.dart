@@ -1,28 +1,84 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/theme_provider.dart';
+import '../../providers/sale_provider.dart';
+import '../../providers/task_provider.dart';
+import '../../providers/contact_provider.dart';
 import '../dashboard/dashboard_page.dart';
 import '../sales/sales_list_page.dart';
-import '../contacts/contacts_list_page.dart';
+import '../expenses/expenses_list_page.dart';
 import '../tasks/tasks_list_page.dart';
 import '../../../core/theme/app_theme_colors.dart';
 import 'more_page.dart';
 
 final selectedTabProvider = StateProvider<int>((ref) => 0);
 
-class ShellPage extends ConsumerWidget {
+// Track which tabs have been loaded
+final loadedTabsProvider = StateProvider<Set<int>>((ref) => {});
+
+class ShellPage extends ConsumerStatefulWidget {
   const ShellPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ShellPage> createState() => _ShellPageState();
+}
+
+class _ShellPageState extends ConsumerState<ShellPage> {
+  @override
+  void initState() {
+    super.initState();
+    // Load dashboard data immediately after login
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadTabData(0);
+    });
+  }
+
+  void _loadTabData(int index) {
+    final loadedTabs = ref.read(loadedTabsProvider);
+    if (!loadedTabs.contains(index)) {
+      // Mark tab as loaded
+      ref
+          .read(loadedTabsProvider.notifier)
+          .update((state) => {...state, index});
+
+      // Load data for the selected tab
+      switch (index) {
+        case 0: // Dashboard - load all data
+          ref.read(salesProvider.notifier).loadSales();
+          ref.read(tasksProvider.notifier).loadTasks();
+          ref.read(contactsProvider.notifier).loadContacts();
+          break;
+        case 1: // Sales
+          ref.read(salesProvider.notifier).loadSales();
+          break;
+        case 2: // Expenses
+          // Load expenses if needed
+          break;
+        case 3: // Tasks
+          ref.read(tasksProvider.notifier).loadTasks();
+          break;
+        case 4: // More - load contacts for other pages
+          ref.read(contactsProvider.notifier).loadContacts();
+          break;
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final selectedTab = ref.watch(selectedTabProvider);
     final themeMode = ref.watch(themeProvider);
     final isDarkMode = themeMode == ThemeMode.dark;
 
+    // Load data when tab changes
+    ref.listen<int>(selectedTabProvider, (previous, next) {
+      _loadTabData(next);
+    });
+
     final pages = [
       const DashboardPage(),
       const SalesListPage(),
-      const ContactsListPage(),
+      const ExpensesListPage(),
       const TasksListPage(),
       const MorePage(),
     ];
@@ -78,9 +134,9 @@ class ShellPage extends ConsumerWidget {
                   context,
                   ref,
                   index: 2,
-                  icon: Icons.people_outline,
-                  activeIcon: Icons.people,
-                  label: 'Contacts',
+                  icon: Icons.receipt_long_outlined,
+                  activeIcon: Icons.receipt_long,
+                  label: 'Expense',
                   selectedTab: selectedTab,
                   isDarkMode: isDarkMode,
                   primaryColor: primaryColor,

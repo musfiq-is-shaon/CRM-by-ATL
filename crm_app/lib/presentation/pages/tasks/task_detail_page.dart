@@ -60,6 +60,12 @@ class TaskDetailPage extends ConsumerWidget {
                 );
               },
             ),
+          IconButton(
+            icon: Icon(Icons.delete_outline, color: Colors.red),
+            onPressed: task != null
+                ? () => _showDeleteConfirmation(context, ref, task)
+                : null,
+          ),
         ],
       ),
       body: task == null
@@ -246,6 +252,44 @@ class TaskDetailPage extends ConsumerWidget {
                   .read(tasksProvider.notifier)
                   .changeTaskStatus(id: task.id, status: status);
             },
+    );
+  }
+
+  void _showDeleteConfirmation(BuildContext context, WidgetRef ref, Task task) {
+    final textPrimary = AppThemeColors.textPrimaryColor(context);
+    final textSecondary = AppThemeColors.textSecondaryColor(context);
+    final primaryColor = const Color(0xFF2563EB);
+    final errorColor = const Color(0xFFEF4444);
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Delete Task', style: TextStyle(color: textPrimary)),
+        content: Text(
+          'Are you sure you want to delete "${task.title}"? This action cannot be undone.',
+          style: TextStyle(color: textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Cancel', style: TextStyle(color: primaryColor)),
+          ),
+          TextButton(
+            onPressed: () {
+              ref.read(tasksProvider.notifier).deleteTask(task.id);
+              Navigator.pop(context); // Close dialog
+              Navigator.pop(context); // Go back to list
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: const Text('Task deleted successfully'),
+                  backgroundColor: primaryColor,
+                ),
+              );
+            },
+            child: Text('Delete', style: TextStyle(color: errorColor)),
+          ),
+        ],
+      ),
     );
   }
 }

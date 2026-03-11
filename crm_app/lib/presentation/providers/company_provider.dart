@@ -215,5 +215,9 @@ final companyDetailProvider = FutureProvider.family<Company, String>((
   id,
 ) async {
   final companyRepository = ref.watch(companyRepositoryProvider);
-  return companyRepository.getCompanyById(id);
+  final company = await companyRepository.getCompanyById(id);
+  if (company == null) {
+    throw Exception('Company not found');
+  }
+  return company;
 });

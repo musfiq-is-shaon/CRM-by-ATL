@@ -23,13 +23,10 @@ class DashboardPage extends ConsumerStatefulWidget {
 }
 
 class _DashboardPageState extends ConsumerState<DashboardPage> {
-  @override
-  void initState() {
-    super.initState();
-    _loadData();
-  }
+  // Data loading is now handled by ShellPage for better performance
+  // Individual tabs load their data on-demand
 
-  Future<void> _loadData() async {
+  Future<void> _refreshData() async {
     await Future.wait([
       ref.read(salesProvider.notifier).loadSales(),
       ref.read(tasksProvider.notifier).loadTasks(),
@@ -64,7 +61,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
       backgroundColor: bgColor,
       body: SafeArea(
         child: RefreshIndicator(
-          onRefresh: _loadData,
+          onRefresh: _refreshData,
           child: CustomScrollView(
             slivers: [
               // App Bar

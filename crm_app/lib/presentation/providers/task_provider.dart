@@ -5,7 +5,10 @@ import '../../data/models/user_model.dart';
 import '../../data/repositories/task_repository.dart';
 import '../../data/repositories/company_repository.dart';
 import '../../data/repositories/user_repository.dart';
+import '../../core/services/notification_service.dart';
+import '../../core/network/storage_service.dart';
 import 'auth_provider.dart';
+import 'notification_provider.dart';
 
 class TasksState {
   final List<Task> tasks;
@@ -155,69 +158,119 @@ class TasksNotifier extends StateNotifier<TasksState> {
     try {
       final tasks = await _taskRepository.getTasks();
 
-      // Load company, assignToUser, and assignByUser data for each task
-      final tasksWithDetails = await Future.wait(
-        tasks.map((task) async {
-          Company? company;
-          if (task.companyId != null) {
-            try {
-              company = await _companyRepository.getCompanyById(
-                task.companyId!,
-              );
-            } catch (e) {
-              // Ignore - use existing company data if available
-              company = task.company;
-            }
-          }
+      // Collect all unique company IDs and user IDs needed
+      final companyIds = <String>{};
+      final userIds = <String>{};
 
-          // Fetch assignToUser details
-          User? assignToUser;
-          if (task.assignToUserId != null) {
-            try {
-              assignToUser = await _userRepository.getUserById(
-                task.assignToUserId!,
-              );
-            } catch (e) {
-              // Ignore - use existing user data if available
-              assignToUser = task.assignToUser;
-            }
-          }
+      for (final task in tasks) {
+        if (task.companyId != null) {
+          companyIds.add(task.companyId!);
+        }
+        if (task.assignToUserId != null) {
+          userIds.add(task.assignToUserId!);
+        }
+        if (task.assignByUserId != null) {
+          userIds.add(task.assignByUserId!);
+        }
+      }
 
-          // Fetch assignByUser details
-          User? assignByUser;
-          if (task.assignByUserId != null) {
-            try {
-              assignByUser = await _userRepository.getUserById(
-                task.assignByUserId!,
-              );
-            } catch (e) {
-              // Ignore - use existing user data if available
-              assignByUser = task.assignByUser;
-            }
-          }
+      // Batch fetch all companies and users in parallel
+      final companiesFuture = companyIds.isNotEmpty
+          ? _companyRepository.getCompaniesByIds(companyIds.toList())
+          : Future.value(<String, Company>{});
+      final usersFuture = userIds.isNotEmpty
+          ? _userRepository.getUsersByIds(userIds.toList())
+          : Future.value(<String, User>{});
 
-          return Task(
-            id: task.id,
-            title: task.title,
-            note: task.note,
-            companyId: task.companyId,
-            company: company,
-            dueDatetime: task.dueDatetime,
-            assignByUserId: task.assignByUserId,
-            assignByUser: assignByUser,
-            assignToUserId: task.assignToUserId,
-            assignToUser: assignToUser,
-            status: task.status,
-            actorUserId: task.actorUserId,
-            createdAt: task.createdAt,
-            updatedAt: task.updatedAt,
-          );
-        }),
-      );
+      final List<dynamic> results = await Future.wait([
+        companiesFuture,
+        usersFuture,
+      ]);
+
+      final companiesMap = results[0] as Map<String, Company>;
+      final usersMap = results[1] as Map<String, User>;
+
+      // Now map tasks with pre-fetched data
+      final tasksWithDetails = tasks.map((task) {
+        Company? company;
+        User? assignToUser;
+        User? assignByUser;
+
+        // Get company from map
+        if (task.companyId != null &&
+            companiesMap.containsKey(task.companyId)) {
+          company = companiesMap[task.companyId];
+        }
+
+        // Get assignToUser from map
+        if (task.assignToUserId != null &&
+            usersMap.containsKey(task.assignToUserId)) {
+          assignToUser = usersMap[task.assignToUserId];
+        }
+
+        // Get assignByUser from map
+        if (task.assignByUserId != null &&
+            usersMap.containsKey(task.assignByUserId)) {
+          assignByUser = usersMap[task.assignByUserId];
+        }
+
+        return Task(
+          id: task.id,
+          title: task.title,
+          note: task.note,
+          companyId: task.companyId,
+          company: company,
+          dueDatetime: task.dueDatetime,
+          assignByUserId: task.assignByUserId,
+          assignByUser: assignByUser,
+          assignToUserId: task.assignToUserId,
+          assignToUser: assignToUser,
+          status: task.status,
+          actorUserId: task.actorUserId,
+          createdAt: task.createdAt,
+          updatedAt: task.updatedAt,
+        );
+      }).toList();
 
       state = state.copyWith(tasks: tasksWithDetails, isLoading: false);
+
+      // Schedule notifications for tasks with upcoming deadlines
+      _scheduleTaskNotifications(tasksWithDetails);
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());
+    }
+  }
+
+  Future<void> _scheduleTaskNotifications(List<Task> tasks) async {
+    try {
+      final notificationService = NotificationService();
+      final storageService = StorageService();
+      final notificationSettings = await storageService
+          .getNotificationSettings();
+
+      if (notificationSettings != null &&
+          notificationSettings['enabled'] == true) {
+        final daysBefore = notificationSettings['daysBefore'] ?? 1;
+
+        // Filter tasks that are not completed and have upcoming deadlines
+        final pendingTasks = tasks.where((task) {
+          if (task.status == 'completed') return false;
+          if (task.dueDatetime == null) return false;
+
+          final now = DateTime.now();
+          final daysUntilDue = task.dueDatetime!.difference(now).inDays;
+
+          // Only schedule if the task is due within the notification window
+          return daysUntilDue <= daysBefore && daysUntilDue >= -1;
+        }).toList();
+
+        await notificationService.scheduleNotificationsForTasks(
+          tasks: pendingTasks,
+          daysBefore: daysBefore,
+        );
+      }
+    } catch (e) {
+      print('Error scheduling notifications: $e');
     }
   }
 

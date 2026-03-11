@@ -343,7 +343,40 @@ class _TasksListPageState extends ConsumerState<TasksListPage>
                           ],
                         ),
                       ),
-                      StatusBadge(status: task.status, type: 'task'),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          StatusBadge(status: task.status, type: 'task'),
+                          const SizedBox(width: 4),
+                          PopupMenuButton<String>(
+                            icon: Icon(Icons.more_vert, color: textTertiary),
+                            onSelected: (value) {
+                              if (value == 'delete') {
+                                _showDeleteConfirmation(context, task);
+                              }
+                            },
+                            itemBuilder: (context) => [
+                              PopupMenuItem<String>(
+                                value: 'delete',
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.delete_outline,
+                                      color: Colors.red[700],
+                                      size: 20,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      'Delete',
+                                      style: TextStyle(color: Colors.red[700]),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ],
                   ),
                   if (task.dueDatetime != null) ...[
@@ -640,6 +673,43 @@ class _TasksListPageState extends ConsumerState<TasksListPage>
               Icon(Icons.arrow_drop_down, color: textSecondary),
           ],
         ),
+      ),
+    );
+  }
+
+  void _showDeleteConfirmation(BuildContext context, Task task) {
+    final textPrimary = AppThemeColors.textPrimaryColor(context);
+    final textSecondary = AppThemeColors.textSecondaryColor(context);
+    final primaryColor = const Color(0xFF2563EB);
+    final errorColor = const Color(0xFFEF4444);
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Delete Task', style: TextStyle(color: textPrimary)),
+        content: Text(
+          'Are you sure you want to delete "${task.title}"? This action cannot be undone.',
+          style: TextStyle(color: textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Cancel', style: TextStyle(color: primaryColor)),
+          ),
+          TextButton(
+            onPressed: () {
+              ref.read(tasksProvider.notifier).deleteTask(task.id);
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: const Text('Task deleted successfully'),
+                  backgroundColor: primaryColor,
+                ),
+              );
+            },
+            child: Text('Delete', style: TextStyle(color: errorColor)),
+          ),
+        ],
       ),
     );
   }

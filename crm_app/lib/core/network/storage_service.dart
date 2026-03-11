@@ -59,6 +59,22 @@ class StorageService {
     final token = await getToken();
     return token != null && token.isNotEmpty;
   }
+
+  // Notification Settings
+  Future<void> saveNotificationSettings(Map<String, dynamic> settings) async {
+    await _storage.write(
+      key: 'notification_settings',
+      value: jsonEncode(settings),
+    );
+  }
+
+  Future<Map<String, dynamic>?> getNotificationSettings() async {
+    final data = await _storage.read(key: 'notification_settings');
+    if (data != null) {
+      return jsonDecode(data) as Map<String, dynamic>;
+    }
+    return null;
+  }
 }
 
 final storageServiceProvider = Provider<StorageService>((ref) {

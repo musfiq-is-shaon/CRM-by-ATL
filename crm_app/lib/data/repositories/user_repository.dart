@@ -6,17 +6,81 @@ import '../models/user_model.dart';
 class UserRepository {
   final ApiClient _apiClient;
 
+  // In-memory cache for users
+  final Map<String, User> _userCache = {};
+  List<User>? _cachedUsers;
+
   UserRepository({required ApiClient apiClient}) : _apiClient = apiClient;
 
-  Future<List<User>> getUsers() async {
+  Future<List<User>> getUsers({bool forceRefresh = false}) async {
+    // Return cached users if available and not forcing refresh
+    if (!forceRefresh && _cachedUsers != null) {
+      return _cachedUsers!;
+    }
+
     final response = await _apiClient.get(AppConstants.users);
     final List<dynamic> data = response.data;
-    return data.map((json) => User.fromJson(json)).toList();
+    final users = data.map((json) => User.fromJson(json)).toList();
+
+    // Cache all users
+    _cachedUsers = users;
+    for (var user in users) {
+      _userCache[user.id] = user;
+    }
+
+    return users;
   }
 
-  Future<User> getUserById(String id) async {
+  Future<User?> getUserById(String id, {bool useCache = true}) async {
+    // Return cached user if available
+    if (useCache && _userCache.containsKey(id)) {
+      return _userCache[id];
+    }
+
     final response = await _apiClient.get('${AppConstants.users}/$id');
-    return User.fromJson(response.data);
+    final user = User.fromJson(response.data);
+    _userCache[user.id] = user;
+    return user;
+  }
+
+  /// Batch fetch multiple users by IDs - much more efficient than individual calls
+  Future<Map<String, User>> getUsersByIds(List<String> ids) async {
+    final result = <String, User>{};
+    final idsToFetch = <String>[];
+
+    // Check cache first
+    for (var id in ids) {
+      if (_userCache.containsKey(id)) {
+        result[id] = _userCache[id]!;
+      } else {
+        idsToFetch.add(id);
+      }
+    }
+
+    // If all are cached, return early
+    if (idsToFetch.isEmpty) {
+      return result;
+    }
+
+    // Fetch all users and filter (or could be optimized with batch API)
+    try {
+      final allUsers = await getUsers();
+      for (var user in allUsers) {
+        if (idsToFetch.contains(user.id)) {
+          result[user.id] = user;
+        }
+      }
+    } catch (e) {
+      // If batch fetch fails, individual fetches will be attempted by callers
+    }
+
+    return result;
+  }
+
+  /// Clear cache - call after login or when data changes
+  void clearCache() {
+    _userCache.clear();
+    _cachedUsers = null;
   }
 
   Future<User> updateMe({String? name, String? phone}) async {
