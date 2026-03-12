@@ -133,8 +133,8 @@ class _TasksListPageState extends ConsumerState<TasksListPage>
               ),
               TabBar(
                 controller: _tabController,
-                isScrollable: true,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
+                isScrollable: false,
+                padding: EdgeInsets.zero,
                 automaticIndicatorColorAdjustment: false,
                 labelColor: primaryColor,
                 unselectedLabelColor: textSecondary,

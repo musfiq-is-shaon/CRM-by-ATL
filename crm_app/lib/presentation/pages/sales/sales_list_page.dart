@@ -201,7 +201,6 @@ class _SalesListPageState extends ConsumerState<SalesListPage>
                 indicatorSize: TabBarIndicatorSize.label,
                 dividerColor: Colors.transparent,
                 tabs: const [
-                  Tab(text: 'All'),
                   Tab(text: 'Lead'),
                   Tab(text: 'Prospect'),
                   Tab(text: 'Proposal'),
@@ -209,10 +208,10 @@ class _SalesListPageState extends ConsumerState<SalesListPage>
                   Tab(text: 'Closed Won'),
                   Tab(text: 'Closed Lost'),
                   Tab(text: 'Disqualified'),
+                  Tab(text: 'All'),
                 ],
                 onTap: (index) {
                   final statuses = [
-                    null,
                     'lead',
                     'prospect',
                     'proposal',
@@ -220,6 +219,7 @@ class _SalesListPageState extends ConsumerState<SalesListPage>
                     'closed_won',
                     'closed_lost',
                     'disqualified',
+                    null,
                   ];
                   ref
                       .read(salesProvider.notifier)
@@ -236,7 +236,6 @@ class _SalesListPageState extends ConsumerState<SalesListPage>
       body: TabBarView(
         controller: _tabController,
         children: [
-          _buildSalesList(salesState, null, userFilteredSales, isAdmin),
           _buildSalesList(salesState, 'lead', userFilteredSales, isAdmin),
           _buildSalesList(salesState, 'prospect', userFilteredSales, isAdmin),
           _buildSalesList(salesState, 'proposal', userFilteredSales, isAdmin),
@@ -259,6 +258,7 @@ class _SalesListPageState extends ConsumerState<SalesListPage>
             userFilteredSales,
             isAdmin,
           ),
+          _buildSalesList(salesState, null, userFilteredSales, isAdmin),
         ],
       ),
       floatingActionButton: FloatingActionButton(
