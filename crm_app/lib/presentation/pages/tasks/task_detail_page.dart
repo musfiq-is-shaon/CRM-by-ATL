@@ -474,7 +474,7 @@ class _TaskFormPageState extends ConsumerState<TaskFormPage> {
                 const SizedBox(height: 16),
                 // Currency Dropdown
                 DropdownButtonFormField<String>(
-                  value: selectedCurrencyId,
+                  initialValue: selectedCurrencyId,
                   decoration: InputDecoration(
                     labelText: 'Currency *',
                     labelStyle: TextStyle(color: textSecondary),

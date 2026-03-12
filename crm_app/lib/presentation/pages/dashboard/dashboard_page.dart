@@ -14,6 +14,10 @@ import '../sales/sale_detail_page.dart';
 import '../contacts/contact_detail_page.dart';
 import '../tasks/task_detail_page.dart';
 import '../tasks/tasks_list_page.dart';
+import '../sales/sale_detail_page.dart';
+import '../contacts/contact_detail_page.dart';
+import '../tasks/task_detail_page.dart';
+import '../expenses/expense_form_page.dart';
 
 class DashboardPage extends ConsumerStatefulWidget {
   const DashboardPage({super.key});
@@ -50,6 +54,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     final userFilteredTasks = ref.watch(userFilteredTasksProvider);
     final userPendingTasks = ref.watch(userFilteredPendingTasksProvider);
     final userInProgressTasks = ref.watch(userFilteredInProgressTasksProvider);
+    final userPendingTasksSorted = ref.watch(userPendingTasksSortedProvider);
 
     final bgColor = AppThemeColors.backgroundColor(context);
     final surfaceColor = AppThemeColors.surfaceColor(context);
@@ -126,76 +131,218 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                 ),
               ),
 
-              // KPI Cards
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Overview',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w600,
-                          color: textPrimary,
+              if (isAdmin) ...[
+                // KPI Cards
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Overview',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                            color: textPrimary,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 16),
-                      SizedBox(
-                        height:
-                            (MediaQuery.of(context).size.width - 40) /
-                                2 /
-                                1.4 *
-                                2 +
-                            40,
-                        child: GridView.count(
-                          crossAxisCount: 2,
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          mainAxisSpacing: 12,
-                          crossAxisSpacing: 12,
-                          childAspectRatio: 1.4,
+                        const SizedBox(height: 16),
+                        SizedBox(
+                          height:
+                              (MediaQuery.of(context).size.width - 40) /
+                                  2 /
+                                  1.4 *
+                                  2 +
+                              40,
+                          child: GridView.count(
+                            crossAxisCount: 2,
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            mainAxisSpacing: 12,
+                            crossAxisSpacing: 12,
+                            childAspectRatio: 1.4,
+                            children: [
+                              KPICard(
+                                title: 'Total Deals',
+                                value: '${salesState.sales.length}',
+                                icon: Icons.trending_up,
+                                iconColor: const Color(0xFF2563EB),
+                              ),
+                              KPICard(
+                                title: 'Closed Deals',
+                                value: '${salesState.closed.length}',
+                                icon: Icons.check_circle_outline,
+                                iconColor: const Color(0xFF10B981),
+                              ),
+                              KPICard(
+                                title: 'Pending Tasks',
+                                value:
+                                    '${tasksState.pendingTasks.length + tasksState.inProgressTasks.length}',
+                                icon: Icons.pending_actions,
+                                iconColor: const Color(0xFFF59E0B),
+                              ),
+                              KPICard(
+                                title: 'Contacts',
+                                value: '${contactsState.contacts.length}',
+                                icon: Icons.people_outline,
+                                iconColor: const Color(0xFF8B5CF6),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SliverToBoxAdapter(child: SizedBox(height: 24)),
+              ],
+
+              // Pending Tasks for non-admin
+              if (!isAdmin) ...[
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            KPICard(
-                              title: 'Total Deals',
-                              value: isAdmin
-                                  ? '${salesState.sales.length}'
-                                  : '${userFilteredSales.length}',
-                              icon: Icons.trending_up,
-                              iconColor: const Color(0xFF2563EB),
+                            Text(
+                              'Pending Tasks',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w600,
+                                color: textPrimary,
+                              ),
                             ),
-                            KPICard(
-                              title: 'Closed Deals',
-                              value: isAdmin
-                                  ? '${salesState.closed.length}'
-                                  : '${userFilteredClosed.length}',
-                              icon: Icons.check_circle_outline,
-                              iconColor: const Color(0xFF10B981),
-                            ),
-                            KPICard(
-                              title: 'Pending Tasks',
-                              value: isAdmin
-                                  ? '${tasksState.pendingTasks.length + tasksState.inProgressTasks.length}'
-                                  : '${userPendingTasks.length + userInProgressTasks.length}',
-                              icon: Icons.pending_actions,
-                              iconColor: const Color(0xFFF59E0B),
-                            ),
-                            KPICard(
-                              title: 'Contacts',
-                              value: '${contactsState.contacts.length}',
-                              icon: Icons.people_outline,
-                              iconColor: const Color(0xFF8B5CF6),
+                            TextButton(
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => const TasksListPage(),
+                                  ),
+                                );
+                              },
+                              child: const Text('View All'),
                             ),
                           ],
                         ),
-                      ),
-                    ],
+                        const SizedBox(height: 12),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-
-              const SliverToBoxAdapter(child: SizedBox(height: 24)),
+                if (userPendingTasksSorted.isEmpty)
+                  const SliverToBoxAdapter(
+                    child: Padding(
+                      padding: EdgeInsets.all(20),
+                      child: SizedBox(height: 100), // Empty space
+                    ),
+                  )
+                else
+                  SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) {
+                        if (index >= 3) return null;
+                        final task = userPendingTasksSorted[index];
+                        final dueStr = task.dueDatetime != null
+                            ? 'Due: ${task.dueDatetime!.day}/${task.dueDatetime!.month}'
+                            : 'No due date';
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 6,
+                          ),
+                          child: CRMCard(
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                      TaskDetailPage(taskId: task.id),
+                                ),
+                              );
+                            },
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 4,
+                                  height: 40,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFF59E0B),
+                                    borderRadius: BorderRadius.circular(2),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        task.title,
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w500,
+                                          color: textPrimary,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        task.company?.name ?? 'No company',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: textSecondary,
+                                        ),
+                                      ),
+                                      if (task.dueDatetime != null) ...[
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          dueStr,
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: const Color(0xFFF59E0B),
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: const Color(
+                                      0xFFF59E0B,
+                                    ).withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: const Text(
+                                    'Pending',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w500,
+                                      color: Color(0xFFF59E0B),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                      childCount: userPendingTasksSorted.length > 3
+                          ? 3
+                          : userPendingTasksSorted.length,
+                    ),
+                  ),
+                const SliverToBoxAdapter(child: SizedBox(height: 24)),
+              ],
 
               // Quick Actions
               SliverToBoxAdapter(
@@ -215,54 +362,109 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                       const SizedBox(height: 12),
                       Row(
                         children: [
-                          Expanded(
-                            child: _QuickActionButton(
-                              icon: Icons.person_add_outlined,
-                              label: 'Add Lead',
-                              color: const Color(0xFF2563EB),
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => const SaleFormPage(),
-                                  ),
-                                );
-                              },
+                          if (!isAdmin) ...[
+                            Expanded(
+                              child: _QuickActionButton(
+                                icon: Icons.trending_up_outlined,
+                                label: 'Add Deal',
+                                color: const Color(0xFF2563EB),
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) =>
+                                          const SaleFormPage(),
+                                    ),
+                                  );
+                                },
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: _QuickActionButton(
-                              icon: Icons.people_outline,
-                              label: 'Add Contact',
-                              color: const Color(0xFF8B5CF6),
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) =>
-                                        const ContactFormPage(),
-                                  ),
-                                );
-                              },
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: _QuickActionButton(
+                                icon: Icons.receipt_outlined,
+                                label: 'Add Expense',
+                                color: const Color(0xFFF59E0B),
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) =>
+                                          const ExpenseFormPage(),
+                                    ),
+                                  );
+                                },
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: _QuickActionButton(
-                              icon: Icons.task_alt,
-                              label: 'Add Task',
-                              color: const Color(0xFFF59E0B),
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => const TaskFormPage(),
-                                  ),
-                                );
-                              },
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: _QuickActionButton(
+                                icon: Icons.group_add_outlined,
+                                label: 'Add Contacts',
+                                color: const Color(0xFF8B5CF6),
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) =>
+                                          const ContactFormPage(),
+                                    ),
+                                  );
+                                },
+                              ),
                             ),
-                          ),
+                          ] else ...[
+                            Expanded(
+                              child: _QuickActionButton(
+                                icon: Icons.person_add_outlined,
+                                label: 'Add Lead',
+                                color: const Color(0xFF2563EB),
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) =>
+                                          const SaleFormPage(),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: _QuickActionButton(
+                                icon: Icons.people_outline,
+                                label: 'Add Contact',
+                                color: const Color(0xFF8B5CF6),
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) =>
+                                          const ContactFormPage(),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: _QuickActionButton(
+                                icon: Icons.task_alt,
+                                label: 'Add Task',
+                                color: const Color(0xFFF59E0B),
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) =>
+                                          const TaskFormPage(),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ],
@@ -270,164 +472,169 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                 ),
               ),
 
-              const SliverToBoxAdapter(child: SizedBox(height: 24)),
+              if (isAdmin) ...[
+                const SliverToBoxAdapter(child: SizedBox(height: 24)),
 
-              // Recent Tasks
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'Recent Tasks',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w600,
-                              color: textPrimary,
+                // Recent Tasks
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Recent Tasks',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w600,
+                                color: textPrimary,
+                              ),
                             ),
+                            TextButton(
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => const TasksListPage(),
+                                  ),
+                                );
+                              },
+                              child: const Text('View All'),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // Tasks List - Use filtered tasks based on user role
+                if (tasksState.isLoading)
+                  const SliverToBoxAdapter(
+                    child: Padding(
+                      padding: EdgeInsets.all(20),
+                      child: LoadingWidget(),
+                    ),
+                  )
+                else if (userFilteredTasks.isEmpty)
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: app_widgets.EmptyStateWidget(
+                        title: 'No tasks yet',
+                        subtitle: 'Create your first task to get started',
+                        icon: Icons.task_alt,
+                      ),
+                    ),
+                  )
+                else
+                  SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) {
+                        if (index >= 5) return null;
+                        final task = userFilteredTasks[index];
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 6,
                           ),
-                          TextButton(
-                            onPressed: () {
+                          child: CRMCard(
+                            onTap: () {
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (context) => const TasksListPage(),
+                                  builder: (context) =>
+                                      TaskDetailPage(taskId: task.id),
                                 ),
                               );
                             },
-                            child: const Text('View All'),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                    ],
-                  ),
-                ),
-              ),
-
-              // Tasks List - Use filtered tasks based on user role
-              if (tasksState.isLoading)
-                const SliverToBoxAdapter(
-                  child: Padding(
-                    padding: EdgeInsets.all(20),
-                    child: LoadingWidget(),
-                  ),
-                )
-              else if (userFilteredTasks.isEmpty)
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: app_widgets.EmptyStateWidget(
-                      title: isAdmin
-                          ? 'No tasks yet'
-                          : 'No tasks assigned to you',
-                      subtitle: isAdmin
-                          ? 'Create your first task to get started'
-                          : 'Tasks assigned to you will appear here',
-                      icon: Icons.task_alt,
-                    ),
-                  ),
-                )
-              else
-                SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (context, index) {
-                      if (index >= 5) return null;
-                      final task = userFilteredTasks[index];
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 20,
-                          vertical: 6,
-                        ),
-                        child: CRMCard(
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) =>
-                                    TaskDetailPage(taskId: task.id),
-                              ),
-                            );
-                          },
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 4,
-                                height: 40,
-                                decoration: BoxDecoration(
-                                  color: task.status == 'completed'
-                                      ? const Color(0xFF10B981)
-                                      : task.status == 'in_progress'
-                                      ? const Color(0xFF2563EB)
-                                      : const Color(0xFFF59E0B),
-                                  borderRadius: BorderRadius.circular(2),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      task.title,
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w500,
-                                        color: textPrimary,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      task.company?.name ?? 'No company',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: textSecondary,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 4,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: task.status == 'completed'
-                                      ? const Color(0xFF10B981).withOpacity(0.1)
-                                      : task.status == 'in_progress'
-                                      ? const Color(0xFF2563EB).withOpacity(0.1)
-                                      : const Color(
-                                          0xFFF59E0B,
-                                        ).withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Text(
-                                  task.status.replaceAll('_', ' '),
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w500,
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 4,
+                                  height: 40,
+                                  decoration: BoxDecoration(
                                     color: task.status == 'completed'
                                         ? const Color(0xFF10B981)
                                         : task.status == 'in_progress'
                                         ? const Color(0xFF2563EB)
                                         : const Color(0xFFF59E0B),
+                                    borderRadius: BorderRadius.circular(2),
                                   ),
                                 ),
-                              ),
-                            ],
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        task.title,
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w500,
+                                          color: textPrimary,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        task.company?.name ?? 'No company',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: textSecondary,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: task.status == 'completed'
+                                        ? const Color(
+                                            0xFF10B981,
+                                          ).withOpacity(0.1)
+                                        : task.status == 'in_progress'
+                                        ? const Color(
+                                            0xFF2563EB,
+                                          ).withOpacity(0.1)
+                                        : const Color(
+                                            0xFFF59E0B,
+                                          ).withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Text(
+                                    task.status.replaceAll('_', ' '),
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w500,
+                                      color: task.status == 'completed'
+                                          ? const Color(0xFF10B981)
+                                          : task.status == 'in_progress'
+                                          ? const Color(0xFF2563EB)
+                                          : const Color(0xFFF59E0B),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                      );
-                    },
-                    childCount: userFilteredTasks.length > 5
-                        ? 5
-                        : userFilteredTasks.length,
+                        );
+                      },
+                      childCount: userFilteredTasks.length > 5
+                          ? 5
+                          : userFilteredTasks.length,
+                    ),
                   ),
-                ),
+
+                const SliverToBoxAdapter(child: SizedBox(height: 100)),
+              ],
 
               const SliverToBoxAdapter(child: SizedBox(height: 100)),
             ],

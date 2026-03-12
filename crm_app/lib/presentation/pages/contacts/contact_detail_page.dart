@@ -441,7 +441,7 @@ class _ContactFormPageState extends ConsumerState<ContactFormPage> {
                 const SizedBox(height: 16),
                 // Currency Dropdown
                 DropdownButtonFormField<String>(
-                  value: selectedCurrencyId,
+                  initialValue: selectedCurrencyId,
                   decoration: InputDecoration(
                     labelText: 'Currency *',
                     labelStyle: TextStyle(color: textSecondary),
@@ -496,7 +496,7 @@ class _ContactFormPageState extends ConsumerState<ContactFormPage> {
                 ),
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
-                  value: selectedKamUserId,
+                  initialValue: selectedKamUserId,
                   decoration: InputDecoration(
                     labelText: 'KAM (Key Account Manager)',
                     labelStyle: TextStyle(color: textSecondary),

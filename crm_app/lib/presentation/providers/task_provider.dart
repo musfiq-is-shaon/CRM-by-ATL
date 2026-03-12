@@ -8,7 +8,6 @@ import '../../data/repositories/user_repository.dart';
 import '../../core/services/notification_service.dart';
 import '../../core/network/storage_service.dart';
 import 'auth_provider.dart';
-import 'notification_provider.dart';
 
 class TasksState {
   final List<Task> tasks;
@@ -134,6 +133,19 @@ final userFilteredPendingTasksProvider = Provider<List<Task>>((ref) {
 final userFilteredInProgressTasksProvider = Provider<List<Task>>((ref) {
   final userTasks = ref.watch(userFilteredTasksProvider);
   return userTasks.where((t) => t.status == 'in_progress').toList();
+});
+
+// Provider for non-admin user pending tasks sorted by due date ascending (earliest first)
+final userPendingTasksSortedProvider = Provider<List<Task>>((ref) {
+  final pendingTasks = ref.watch(userFilteredPendingTasksProvider);
+  return pendingTasks..sort((a, b) {
+    // Null due dates last
+    if (a.dueDatetime == null && b.dueDatetime == null) return 0;
+    if (a.dueDatetime == null) return 1;
+    if (b.dueDatetime == null) return -1;
+    // Earliest first
+    return a.dueDatetime!.compareTo(b.dueDatetime!);
+  });
 });
 
 // Provider to get filtered completed tasks

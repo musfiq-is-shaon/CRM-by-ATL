@@ -567,7 +567,7 @@ class _SalesListPageState extends ConsumerState<SalesListPage>
                       ),
                       const SizedBox(height: 8),
                       DropdownButtonFormField<String>(
-                        value: localSortBy,
+                        initialValue: localSortBy,
                         isExpanded: true,
                         decoration: InputDecoration(
                           contentPadding: const EdgeInsets.symmetric(
@@ -610,7 +610,7 @@ class _SalesListPageState extends ConsumerState<SalesListPage>
                       ),
                       const SizedBox(height: 8),
                       DropdownButtonFormField<String>(
-                        value: localSelectedStatus,
+                        initialValue: localSelectedStatus,
                         isExpanded: true,
                         decoration: InputDecoration(
                           hintText: 'All Statuses',
@@ -674,7 +674,7 @@ class _SalesListPageState extends ConsumerState<SalesListPage>
                       ),
                       const SizedBox(height: 8),
                       DropdownButtonFormField<String>(
-                        value: localSelectedCategory,
+                        initialValue: localSelectedCategory,
                         isExpanded: true,
                         decoration: InputDecoration(
                           hintText: 'All Categories',
@@ -756,7 +756,7 @@ class _SalesListPageState extends ConsumerState<SalesListPage>
                       ),
                       const SizedBox(height: 8),
                       DropdownButtonFormField<String>(
-                        value: localSelectedRevenueRange,
+                        initialValue: localSelectedRevenueRange,
                         isExpanded: true,
                         decoration: InputDecoration(
                           hintText: 'All Ranges',

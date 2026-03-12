@@ -1,14 +1,7 @@
-# Add User Name to Dashboard Welcome [COMPLETED ✅]
+# Remove Big Space Before Deals Tab Bar - FIXED
 
-## Task
-Display current user's name beside or below "Welcome back!" text in dashboard.
+Updated TabBar to `padding: EdgeInsets.zero, labelPadding: const EdgeInsets.symmetric(horizontal: 12)` 
 
-## Steps
-- [x] 1. Add authState watch in DashboardPage build
-- [x] 2. Insert user name Text widget after "Welcome back!"
-- [x] 3. Update this TODO.md upon completion
-- [x] 4. Test with `flutter run` - check dashboard shows user name post-login (adjusted name font to 28pt > Dashboard's 24pt per feedback)
+This removes the leading edge gap while maintaining appropriate spacing between tab texts ('All', 'Lead', etc.).
 
-DashboardPage updated. User name now appears below "Welcome back!" using authProvider.user.name with null safety.
-
-Next tasks: Review other TODO.md files or new features.
+Hot reload and check Deals tab. TODO complete.

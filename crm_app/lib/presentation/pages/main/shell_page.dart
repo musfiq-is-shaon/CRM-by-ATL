@@ -34,6 +34,15 @@ class _ShellPageState extends ConsumerState<ShellPage> {
   }
 
   void _loadTabData(int index) {
+    // Always reload dashboard data when switching to dashboard tab
+    // Other tabs load once for performance
+    if (index == 0) {
+      ref.read(salesProvider.notifier).loadSales();
+      ref.read(tasksProvider.notifier).loadTasks();
+      ref.read(contactsProvider.notifier).loadContacts();
+      return;
+    }
+
     final loadedTabs = ref.read(loadedTabsProvider);
     if (!loadedTabs.contains(index)) {
       // Mark tab as loaded
@@ -43,11 +52,6 @@ class _ShellPageState extends ConsumerState<ShellPage> {
 
       // Load data for the selected tab
       switch (index) {
-        case 0: // Dashboard - load all data
-          ref.read(salesProvider.notifier).loadSales();
-          ref.read(tasksProvider.notifier).loadTasks();
-          ref.read(contactsProvider.notifier).loadContacts();
-          break;
         case 1: // Sales
           ref.read(salesProvider.notifier).loadSales();
           break;
@@ -102,7 +106,12 @@ class _ShellPageState extends ConsumerState<ShellPage> {
         ),
         child: SafeArea(
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+            padding: const EdgeInsets.only(
+              left: 0,
+              right: 8,
+              top: 8,
+              bottom: 8,
+            ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [

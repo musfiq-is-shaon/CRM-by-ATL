@@ -322,7 +322,7 @@ class CompanyDetailPage extends ConsumerWidget {
                 ),
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
-                  value: selectedKamUserId,
+                  initialValue: selectedKamUserId,
                   decoration: InputDecoration(
                     labelText: 'KAM (Key Account Manager)',
                     labelStyle: TextStyle(color: textSecondary),

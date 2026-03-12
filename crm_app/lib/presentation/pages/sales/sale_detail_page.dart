@@ -773,7 +773,7 @@ class _SaleFormPageState extends ConsumerState<SaleFormPage> {
                 const SizedBox(height: 16),
                 // Currency Dropdown
                 DropdownButtonFormField<String>(
-                  value: selectedCurrencyId,
+                  initialValue: selectedCurrencyId,
                   decoration: InputDecoration(
                     labelText: 'Currency *',
                     labelStyle: TextStyle(color: textSecondary),
@@ -1176,7 +1176,7 @@ class _SaleFormPageState extends ConsumerState<SaleFormPage> {
                 ),
                 const SizedBox(height: 8),
                 DropdownButtonFormField<String>(
-                  value: _category,
+                  initialValue: _category,
                   isExpanded: true,
                   decoration: InputDecoration(
                     filled: true,
@@ -1213,7 +1213,7 @@ class _SaleFormPageState extends ConsumerState<SaleFormPage> {
                   ),
                   const SizedBox(height: 8),
                   DropdownButtonFormField<String>(
-                    value: _status,
+                    initialValue: _status,
                     isExpanded: true,
                     decoration: InputDecoration(
                       filled: true,

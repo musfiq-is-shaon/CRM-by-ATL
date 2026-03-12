@@ -70,7 +70,7 @@ class _SearchableDropdownState<T> extends State<SearchableDropdown<T>> {
     super.initState();
     _filteredItems = widget.items;
     _controller.text = widget.value != null
-        ? widget.itemLabelBuilder(widget.value!)
+        ? widget.itemLabelBuilder(widget.value as T)
         : '';
     _controller.addListener(_onTextChanged);
   }
@@ -80,7 +80,7 @@ class _SearchableDropdownState<T> extends State<SearchableDropdown<T>> {
     super.didUpdateWidget(oldWidget);
     if (widget.value != oldWidget.value) {
       _controller.text = widget.value != null
-          ? widget.itemLabelBuilder(widget.value!)
+          ? widget.itemLabelBuilder(widget.value as T)
           : '';
     }
     if (widget.items != oldWidget.items) {

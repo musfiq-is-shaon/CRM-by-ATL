@@ -60,7 +60,7 @@ class _ExpenseFormPageState extends ConsumerState<ExpenseFormPage> {
     final expenseAsync = await ref.read(
       expenseDetailProvider(widget.expenseId!).future,
     );
-    if (mounted && expenseAsync != null) {
+    if (mounted) {
       setState(() {
         _existingExpense = expenseAsync;
         _amountController.text = expenseAsync.amount.toString();
@@ -136,7 +136,7 @@ class _ExpenseFormPageState extends ConsumerState<ExpenseFormPage> {
                 const SizedBox(height: 16),
                 // Currency Dropdown
                 DropdownButtonFormField<String>(
-                  value: selectedCurrencyId,
+                  initialValue: selectedCurrencyId,
                   decoration: InputDecoration(
                     labelText: 'Currency *',
                     labelStyle: TextStyle(color: textSecondary),

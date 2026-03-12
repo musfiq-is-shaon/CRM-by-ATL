@@ -1,14 +1,1 @@
-# Add New Company Option to Expense Form Dropdown
-
-✅ Plan approved by user
-
-## Steps to implement:
-
-1. [x] Add required imports to expense_form_page.dart (user_provider.dart, currency_provider.dart)
-2. [x] Update initState() to load usersProvider and currenciesProvider
-3. [x] Add _showCreateCompanyDialog() method to expense_form_page.dart (adapted from task_detail_page.dart)
-4. [x] Add onAddNew callback to SearchableDropdown in Company section
-5. [x] Test the implementation
-6. [x] Mark complete and attempt_completion
-
-**Implementation complete!** "Add New Company" now appears in expense form company dropdown, matching task/deal pages.
+# TODO: Remove big space at beginning of Deals tab bar\n\n## Steps:\n- [x] 1. Create TODO.md with steps\n- [x] 2. Edit shell_page.dart: Remove left padding from tab bar Padding\n- [ ] 3. Test with hot reload\n- [ ] 4. Mark complete and attempt_completion\n\nCurrent progress: Steps 1-2 complete.
