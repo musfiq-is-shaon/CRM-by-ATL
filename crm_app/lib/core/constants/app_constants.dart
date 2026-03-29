@@ -23,6 +23,12 @@ class AppConstants {
   static const String expenses = '/api/expenses';
   static const String expensePurposes = '/api/expense-purposes';
 
+  // Attendance endpoints
+  static const String attendanceToday = '/api/attendance/today';
+  static const String attendanceCheckIn = '/api/attendance/check-in';
+  static const String attendanceCheckOut = '/api/attendance/check-out';
+  static const String attendanceRecords = '/api/attendance/records';
+
   // Storage Keys
   static const String tokenKey = 'auth_token';
   static const String userKey = 'user_data';

@@ -4,6 +4,8 @@ import '../../providers/theme_provider.dart';
 import '../../providers/sale_provider.dart';
 import '../../providers/task_provider.dart';
 import '../../providers/contact_provider.dart';
+import '../../providers/attendance_provider.dart';
+import '../attendance/attendance_page.dart';
 import '../dashboard/dashboard_page.dart';
 import '../sales/sales_list_page.dart';
 import '../expenses/expenses_list_page.dart';
@@ -61,7 +63,10 @@ class _ShellPageState extends ConsumerState<ShellPage> {
         case 3: // Tasks
           ref.read(tasksProvider.notifier).loadTasks();
           break;
-        case 4: // More - load contacts for other pages
+        case 4: // Attendance
+          ref.read(attendanceProvider.notifier).loadToday();
+          break;
+        case 5: // More - load contacts for other pages
           ref.read(contactsProvider.notifier).loadContacts();
           break;
       }
@@ -84,6 +89,7 @@ class _ShellPageState extends ConsumerState<ShellPage> {
       const SalesListPage(),
       const ExpensesListPage(),
       const TasksListPage(),
+      const AttendancePage(),
       const MorePage(),
     ];
 
@@ -167,6 +173,18 @@ class _ShellPageState extends ConsumerState<ShellPage> {
                   context,
                   ref,
                   index: 4,
+                  icon: Icons.access_time_outlined,
+                  activeIcon: Icons.access_time_filled,
+                  label: 'Attendance',
+                  selectedTab: selectedTab,
+                  isDarkMode: isDarkMode,
+                  primaryColor: primaryColor,
+                  textTertiary: textTertiary,
+                ),
+                _buildNavItem(
+                  context,
+                  ref,
+                  index: 5,
                   icon: Icons.menu_outlined,
                   activeIcon: Icons.menu,
                   label: 'More',
