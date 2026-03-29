@@ -42,9 +42,29 @@ class AttendanceRepository {
       AppConstants.attendanceRecords,
       queryParameters: {'userId': userId, 'period': period},
     );
-    final List<dynamic> data = response.data;
-    return data.map((json) => AttendanceRecord.fromJson(json)).toList();
+    final rows = _recordsListFromResponse(response.data);
+    return rows.map(AttendanceRecord.fromJson).toList();
   }
+}
+
+List<Map<String, dynamic>> _recordsListFromResponse(dynamic body) {
+  if (body is List) {
+    return body
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
+  }
+  if (body is Map) {
+    final m = Map<String, dynamic>.from(body);
+    final list = m['data'] ?? m['records'] ?? m['results'] ?? m['items'];
+    if (list is List) {
+      return list
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+    }
+  }
+  return [];
 }
 
 final attendanceRepositoryProvider = Provider<AttendanceRepository>((ref) {

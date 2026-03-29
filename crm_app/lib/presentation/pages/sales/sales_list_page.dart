@@ -192,7 +192,13 @@ class _SalesListPageState extends ConsumerState<SalesListPage>
               TabBar(
                 controller: _tabController,
                 isScrollable: true,
+                // Material 3 default is startOffset, which indents tabs; align flush left.
+                tabAlignment: TabAlignment.start,
                 padding: EdgeInsets.zero,
+                labelPadding: const EdgeInsetsDirectional.only(
+                  start: 12,
+                  end: 16,
+                ),
                 automaticIndicatorColorAdjustment: false,
                 labelColor: primaryColor,
                 unselectedLabelColor: textSecondary,

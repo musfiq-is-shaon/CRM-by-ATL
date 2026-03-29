@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_theme_colors.dart';
 import '../../../providers/attendance_provider.dart';
 import '../../../../data/models/attendance_model.dart';
+import 'attendance_location_row.dart';
 
 class RecordsList extends ConsumerWidget {
   final AttendanceState state;
@@ -139,6 +140,11 @@ class RecordTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final surfaceColor = AppThemeColors.surfaceColor(context);
     final statusColor = getStatusColor();
+    final textPrimary = AppThemeColors.textPrimaryColor(context);
+    final textSecondary = AppThemeColors.textSecondaryColor(context);
+    final locIn = record.locationIn?.trim() ?? '';
+    final locOut = record.locationOut?.trim() ?? '';
+    final hasLocations = locIn.isNotEmpty || locOut.isNotEmpty;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -149,8 +155,8 @@ class RecordTile extends StatelessWidget {
         border: Border(left: BorderSide(color: statusColor, width: 4)),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Status Icon
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
@@ -160,16 +166,16 @@ class RecordTile extends StatelessWidget {
             child: Icon(getStatusIcon(), color: statusColor, size: 24),
           ),
           const SizedBox(width: 16),
-          // Date & Times
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   record.date,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
+                    color: textPrimary,
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -187,34 +193,35 @@ class RecordTile extends StatelessWidget {
                       '${(record.durationHours! * 100).round() / 100}h',
                       style: TextStyle(
                         fontSize: 14,
-                        color: Colors.grey[600],
+                        color: textSecondary,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
                   ),
+                if (hasLocations) ...[
+                  const SizedBox(height: 12),
+                  if (locIn.isNotEmpty)
+                    AttendanceLocationRow(
+                      icon: Icons.login_rounded,
+                      caption: 'Check-in location',
+                      value: locIn,
+                      textPrimary: textPrimary,
+                      textSecondary: textSecondary,
+                    ),
+                  if (locIn.isNotEmpty && locOut.isNotEmpty)
+                    const SizedBox(height: 8),
+                  if (locOut.isNotEmpty)
+                    AttendanceLocationRow(
+                      icon: Icons.logout_rounded,
+                      caption: 'Check-out location',
+                      value: locOut,
+                      textPrimary: textPrimary,
+                      textSecondary: textSecondary,
+                    ),
+                ],
               ],
             ),
           ),
-          if (record.locationIn != null || record.locationOut != null)
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                if (record.locationIn != null)
-                  Text(
-                    record.locationIn!,
-                    style: TextStyle(fontSize: 12, color: Colors.grey[500]),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                if (record.locationOut != null)
-                  Text(
-                    record.locationOut!,
-                    style: TextStyle(fontSize: 12, color: Colors.grey[500]),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-              ],
-            ),
         ],
       ),
     );
@@ -241,7 +248,10 @@ Widget _TimeChip(String label, DateTime? time) {
 }
 
 String _formatTime(DateTime time) {
-  final hour = time.hour.toString().padLeft(2, '0');
-  final minute = time.minute.toString().padLeft(2, '0');
-  return '$hour:$minute';
+  final local = time.toLocal();
+  final minute = local.minute.toString().padLeft(2, '0');
+  final period = local.hour >= 12 ? 'PM' : 'AM';
+  var hour12 = local.hour > 12 ? local.hour - 12 : local.hour;
+  if (hour12 == 0) hour12 = 12;
+  return '$hour12:$minute $period';
 }

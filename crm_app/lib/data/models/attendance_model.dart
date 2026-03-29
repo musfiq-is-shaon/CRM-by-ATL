@@ -1,5 +1,13 @@
 import 'user_model.dart';
 
+/// API sends ISO-8601; UTC (`Z` / offset) must become local for display.
+DateTime? _parseAttendanceDateTime(dynamic raw) {
+  if (raw == null) return null;
+  final parsed = DateTime.tryParse(raw.toString());
+  if (parsed == null) return null;
+  return parsed.isUtc ? parsed.toLocal() : parsed;
+}
+
 class TodayAttendance {
   final String userId;
   final String status; // 'pending', 'checked_in', 'checked_out', 'completed'
@@ -25,35 +33,88 @@ class TodayAttendance {
     this.locationOut,
   });
 
-  factory TodayAttendance.fromJson(Map<String, dynamic> json) {
-    DateTime? checkInTime;
-    if (json['checkInTime'] != null) {
-      checkInTime = DateTime.tryParse(json['checkInTime'].toString());
-      if (checkInTime != null) {
-        // Fix timezone offset (UTC to local)
-        checkInTime = checkInTime.add(const Duration(hours: 6));
-      }
-    }
-    DateTime? checkOutTime;
-    if (json['checkOutTime'] != null) {
-      checkOutTime = DateTime.tryParse(json['checkOutTime'].toString());
-      if (checkOutTime != null) {
-        // Fix timezone offset (UTC to local)
-        checkOutTime = checkOutTime.add(const Duration(hours: 6));
-      }
-    }
+  factory TodayAttendance.fromJson(dynamic raw) {
+    final json = _unwrapTodayJson(raw);
+    final checkInTime = _parseAttendanceDateTime(
+      json['checkInTime'] ?? json['check_in_time'],
+    );
+    final checkOutTime = _parseAttendanceDateTime(
+      json['checkOutTime'] ?? json['check_out_time'],
+    );
     return TodayAttendance(
-      userId: json['userId'] ?? '',
+      userId: (json['userId'] ?? json['user_id'] ?? '').toString(),
       status: json['status'] ?? 'pending',
-      date: json['date'] ?? '',
+      date: (json['date'] ?? '').toString(),
       checkInTime: checkInTime,
       checkOutTime: checkOutTime,
-      isLate: json['isLate'] ?? false,
-      lateMinutes: json['lateMinutes'],
-      totalHours: json['totalHours']?.toDouble(),
-      locationIn: json['locationIn'],
-      locationOut: json['locationOut'],
+      isLate: json['isLate'] ?? json['is_late'] ?? false,
+      lateMinutes: _optionalInt(json['lateMinutes'] ?? json['late_minutes']),
+      totalHours: _optionalDouble(json['totalHours'] ?? json['total_hours']),
+      locationIn: _pickLocationString(
+        json,
+        const [
+          'locationIn',
+          'location_in',
+          'checkInLocation',
+          'check_in_location',
+          'inLocation',
+          'in_location',
+        ],
+      ),
+      locationOut: _pickLocationString(
+        json,
+        const [
+          'locationOut',
+          'location_out',
+          'checkOutLocation',
+          'check_out_location',
+          'outLocation',
+          'out_location',
+        ],
+      ),
     );
+  }
+
+  /// API may return `{ "data": { ... } }` or snake_case keys.
+  static Map<String, dynamic> _unwrapTodayJson(dynamic raw) {
+    if (raw is! Map) return {};
+    var m = Map<String, dynamic>.from(raw);
+    for (final key in ['data', 'attendance', 'record', 'today', 'result']) {
+      final v = m[key];
+      if (v is Map) {
+        m = Map<String, dynamic>.from(v);
+        break;
+      }
+    }
+    return m;
+  }
+
+  static String? _pickLocationString(
+    Map<String, dynamic> json,
+    List<String> keys,
+  ) {
+    for (final key in keys) {
+      final v = json[key];
+      if (v == null) continue;
+      final s = v is String ? v : v.toString();
+      final t = s.trim();
+      if (t.isNotEmpty) return t;
+    }
+    return null;
+  }
+
+  static int? _optionalInt(dynamic v) {
+    if (v == null) return null;
+    if (v is int) return v;
+    if (v is double) return v.round();
+    return int.tryParse(v.toString());
+  }
+
+  static double? _optionalDouble(dynamic v) {
+    if (v == null) return null;
+    if (v is double) return v;
+    if (v is int) return v.toDouble();
+    return double.tryParse(v.toString());
   }
 
   bool get isPending => status == 'pending';
@@ -143,24 +204,80 @@ class AttendanceRecord {
     this.user,
   });
 
-  factory AttendanceRecord.fromJson(Map<String, dynamic> json) {
+  factory AttendanceRecord.fromJson(Map<String, dynamic> raw) {
+    final json = _unwrapAttendanceRecordJson(raw);
     return AttendanceRecord(
-      userId: json['userId'] ?? '',
-      id: json['id']?.toString() ?? '',
-      date: json['date'] ?? '',
-      checkInTime: json['checkInTime'] != null
-          ? DateTime.tryParse(json['checkInTime'].toString())
+      userId: (json['userId'] ?? json['user_id'] ?? '').toString(),
+      id: (json['id'] ?? json['_id'])?.toString() ?? '',
+      date: (json['date'] ?? '').toString(),
+      checkInTime: _parseAttendanceDateTime(
+        json['checkInTime'] ?? json['check_in_time'],
+      ),
+      checkOutTime: _parseAttendanceDateTime(
+        json['checkOutTime'] ?? json['check_out_time'],
+      ),
+      durationHours: _optionalRecordDouble(
+        json['durationHours'] ?? json['duration_hours'],
+      ),
+      status: (json['status'] ?? 'absent').toString(),
+      locationIn: _pickLocationFromJson(
+        json,
+        const [
+          'locationIn',
+          'location_in',
+          'checkInLocation',
+          'check_in_location',
+          'inLocation',
+          'in_location',
+        ],
+      ),
+      locationOut: _pickLocationFromJson(
+        json,
+        const [
+          'locationOut',
+          'location_out',
+          'checkOutLocation',
+          'check_out_location',
+          'outLocation',
+          'out_location',
+        ],
+      ),
+      createdAt: _parseAttendanceDateTime(
+            json['createdAt'] ?? json['created_at'],
+          ) ??
+          DateTime.now(),
+      user: json['user'] != null && json['user'] is Map
+          ? User.fromJson(Map<String, dynamic>.from(json['user'] as Map))
           : null,
-      checkOutTime: json['checkOutTime'] != null
-          ? DateTime.tryParse(json['checkOutTime'].toString())
-          : null,
-      durationHours: json['durationHours']?.toDouble(),
-      status: json['status'] ?? 'absent',
-      locationIn: json['locationIn'],
-      locationOut: json['locationOut'],
-      createdAt:
-          DateTime.tryParse(json['createdAt'].toString()) ?? DateTime.now(),
-      user: json['user'] != null ? User.fromJson(json['user']) : null,
     );
   }
+}
+
+Map<String, dynamic> _unwrapAttendanceRecordJson(Map<String, dynamic> raw) {
+  final inner = raw['data'] ?? raw['record'] ?? raw['attendance'];
+  if (inner is Map) {
+    return Map<String, dynamic>.from(inner);
+  }
+  return raw;
+}
+
+String? _pickLocationFromJson(
+  Map<String, dynamic> json,
+  List<String> keys,
+) {
+  for (final key in keys) {
+    final v = json[key];
+    if (v == null) continue;
+    final s = v is String ? v : v.toString();
+    final t = s.trim();
+    if (t.isNotEmpty) return t;
+  }
+  return null;
+}
+
+double? _optionalRecordDouble(dynamic v) {
+  if (v == null) return null;
+  if (v is double) return v;
+  if (v is int) return v.toDouble();
+  return double.tryParse(v.toString());
 }

@@ -1,10 +1,23 @@
 import 'package:flutter/material.dart';
+import '../../../../core/services/app_haptics.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_theme_colors.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../providers/attendance_provider.dart';
 import '../../../../core/services/location_service.dart';
 import '../../../../../data/models/attendance_model.dart';
+import 'attendance_location_row.dart';
+
+/// Prefer a human-readable server value; otherwise session [localFallback]; else [server] (may be coords).
+String _displaySource(String? server, String? localFallback) {
+  final s = server?.trim() ?? '';
+  final l = localFallback?.trim() ?? '';
+  if (s.isNotEmpty && !LocationService.looksLikeCoordinatesString(s)) {
+    return s;
+  }
+  if (l.isNotEmpty) return l;
+  return s;
+}
 
 class TodayAttendanceCardWidget extends ConsumerWidget {
   const TodayAttendanceCardWidget({super.key});
@@ -54,6 +67,15 @@ class TodayAttendanceCardWidget extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(attendanceProvider);
     final todayAttendance = state.todayAttendance;
+    final locIn = _displaySource(
+      todayAttendance?.locationIn,
+      state.localCheckInLocation,
+    );
+    final locOut = _displaySource(
+      todayAttendance?.locationOut,
+      state.localCheckOutLocation,
+    );
+    final hasLocationLines = locIn.isNotEmpty || locOut.isNotEmpty;
     final textPrimary = AppThemeColors.textPrimaryColor(context);
     final surfaceColor = AppThemeColors.surfaceColor(context);
     final statusColor = getStatusColor(context, todayAttendance);
@@ -172,6 +194,27 @@ class TodayAttendanceCardWidget extends ConsumerWidget {
               ),
             ],
           ),
+          if (hasLocationLines) ...[
+            const SizedBox(height: 12),
+            if (locIn.isNotEmpty)
+              AttendanceLocationRow(
+                icon: Icons.login_rounded,
+                caption: 'Check-in location',
+                value: locIn,
+                textPrimary: textPrimary,
+                textSecondary: AppThemeColors.textSecondaryColor(context),
+              ),
+            if (locIn.isNotEmpty && locOut.isNotEmpty)
+              const SizedBox(height: 8),
+            if (locOut.isNotEmpty)
+              AttendanceLocationRow(
+                icon: Icons.logout_rounded,
+                caption: 'Check-out location',
+                value: locOut,
+                textPrimary: textPrimary,
+                textSecondary: AppThemeColors.textSecondaryColor(context),
+              ),
+          ],
           if (todayAttendance?.totalHours != null) ...[
             const SizedBox(height: 12),
             Text(
@@ -213,71 +256,44 @@ class TodayAttendanceCardWidget extends ConsumerWidget {
               ),
             ),
           ],
-          // Action buttons: pending → Check In only; checked_in → Check Out only; completed → none
+          // Hold to check in / check out
           if (todayAttendance?.safeStatus != 'completed') ...[
             const SizedBox(height: 8),
             Builder(
               builder: (context) {
                 final flow = todayAttendance?.safeStatus ?? 'pending';
-                final rowChildren = <Widget>[];
+                final busy = state.isLoading;
                 if (flow == 'pending') {
-                  rowChildren.add(
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        icon: const Icon(Icons.login, size: 20),
-                        label: const Text('Check In'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          elevation: 2,
-                        ),
-                        onPressed: () => _showGpsLocationDialog(
-                          context,
-                          ref,
-                          'Check In',
-                          (location) => ref
-                              .read(attendanceProvider.notifier)
-                              .checkIn(location),
-                        ),
-                      ),
+                  return HoldToAttendanceAction(
+                    enabled: !busy,
+                    label: 'Hold to check in',
+                    accentColor: Colors.green.shade600,
+                    icon: Icons.login_rounded,
+                    onHoldComplete: () => _fetchLocationAndSubmit(
+                      context,
+                      ref,
+                      (coordinates, placeLabel) => ref
+                          .read(attendanceProvider.notifier)
+                          .checkIn(coordinates, placeLabel),
                     ),
                   );
                 }
                 if (flow == 'checked_in') {
-                  if (rowChildren.isNotEmpty) {
-                    rowChildren.add(const SizedBox(width: 12));
-                  }
-                  rowChildren.add(
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        icon: const Icon(Icons.logout, size: 20),
-                        label: const Text('Check Out'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.red.shade600,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          elevation: 2,
-                        ),
-                        onPressed: () => _showGpsLocationDialog(
-                          context,
-                          ref,
-                          'Check Out',
-                          (location) => ref
-                              .read(attendanceProvider.notifier)
-                              .checkOut(location),
-                        ),
-                      ),
+                  return HoldToAttendanceAction(
+                    enabled: !busy,
+                    label: 'Hold to check out',
+                    accentColor: Colors.red.shade600,
+                    icon: Icons.logout_rounded,
+                    onHoldComplete: () => _fetchLocationAndSubmit(
+                      context,
+                      ref,
+                      (coordinates, placeLabel) => ref
+                          .read(attendanceProvider.notifier)
+                          .checkOut(coordinates, placeLabel),
                     ),
                   );
                 }
-                return Row(children: rowChildren);
+                return const SizedBox.shrink();
               },
             ),
           ],
@@ -286,83 +302,49 @@ class TodayAttendanceCardWidget extends ConsumerWidget {
     );
   }
 
-  Future<void> _showGpsLocationDialog(
+  /// Gets GPS + place label, submits without a second confirmation popup.
+  Future<void> _fetchLocationAndSubmit(
     BuildContext context,
     WidgetRef ref,
-    String title,
-    Future<void> Function(String) onSubmit,
+    Future<void> Function(String coordinatesPayload, String placeLabel) submit,
   ) async {
     final locationService = ref.read(locationServiceProvider);
 
-    // Show loading dialog
-    showDialog(
+    showDialog<void>(
       context: context,
       barrierDismissible: false,
-      builder: (context) => const AlertDialog(
-        title: Text('GPS Location'),
+      builder: (ctx) => const AlertDialog(
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             CircularProgressIndicator(),
             SizedBox(height: 16),
-            Text('Fetching your current location...'),
+            Text('Getting your location...'),
           ],
         ),
       ),
     );
 
-    final location = await locationService.getCurrentLocation();
-    Navigator.pop(context); // Close loading
+    final captured = await locationService.getCurrentLocationForAttendance();
+    if (!context.mounted) return;
+    Navigator.of(context).pop();
 
-    if (location != null) {
-      // Confirm dialog
-      final confirmed = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: Text(title),
-          content: SelectableText(
-            location,
-            style: const TextStyle(fontSize: 16, fontFamily: 'monospace'),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Retry'),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: Text(title),
-            ),
-          ],
-        ),
-      );
-
-      if (confirmed == true) {
-        await onSubmit(location);
-      }
-    } else {
-      // Error dialog
+    if (captured == null) {
       if (context.mounted) {
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('GPS Unavailable'),
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
             content: const Text(
-              'Please enable location services and grant permissions.\\n\\n'
-              '1. Enable GPS in settings\\n'
-              '2. Grant location permission\\n'
-              '3. Try again',
+              'Could not get location. Enable GPS and permissions, then try again.',
             ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('OK'),
-              ),
-            ],
+            backgroundColor: AppColors.error,
+            duration: const Duration(seconds: 4),
           ),
         );
       }
+      return;
     }
+
+    await submit(captured.coordinatesString, captured.placeLabel);
   }
 }
 
@@ -393,9 +375,220 @@ Widget _TimeChip(String label, DateTime? time) {
 }
 
 String _formatTime(DateTime time) {
-  final minute = time.minute.toString().padLeft(2, '0');
-  final period = time.hour >= 12 ? 'PM' : 'AM';
-  var hour12 = time.hour > 12 ? time.hour - 12 : time.hour;
+  final local = time.toLocal();
+  final minute = local.minute.toString().padLeft(2, '0');
+  final period = local.hour >= 12 ? 'PM' : 'AM';
+  var hour12 = local.hour > 12 ? local.hour - 12 : local.hour;
   if (hour12 == 0) hour12 = 12;
   return '$hour12:$minute $period';
+}
+
+/// Press and hold until the bar fills; then runs [onHoldComplete] (e.g. GPS flow).
+/// Release early to cancel.
+class HoldToAttendanceAction extends StatefulWidget {
+  final bool enabled;
+  final String label;
+  final Color accentColor;
+  final IconData icon;
+  final Future<void> Function() onHoldComplete;
+
+  const HoldToAttendanceAction({
+    super.key,
+    required this.enabled,
+    required this.label,
+    required this.accentColor,
+    required this.icon,
+    required this.onHoldComplete,
+  });
+
+  @override
+  State<HoldToAttendanceAction> createState() => _HoldToAttendanceActionState();
+}
+
+class _HoldToAttendanceActionState extends State<HoldToAttendanceAction>
+    with SingleTickerProviderStateMixin {
+  static const double _height = 52;
+  static const Duration _holdDuration = Duration(milliseconds: 1600);
+
+  late AnimationController _controller;
+  bool _fingerDown = false;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this, duration: _holdDuration);
+    _controller.addStatusListener(_onAnimStatus);
+  }
+
+  void _onAnimStatus(AnimationStatus status) {
+    if (status == AnimationStatus.completed &&
+        _fingerDown &&
+        !_busy &&
+        widget.enabled) {
+      _runComplete();
+    }
+  }
+
+  Future<void> _runComplete() async {
+    if (_busy || !mounted) return;
+    setState(() => _busy = true);
+    AppHaptics.holdComplete();
+    try {
+      await widget.onHoldComplete();
+    } finally {
+      if (mounted) {
+        _controller.reset();
+        setState(() {
+          _busy = false;
+          _fingerDown = false;
+        });
+      }
+    }
+  }
+
+  void _onTapDown(TapDownDetails _) {
+    if (!widget.enabled || _busy) return;
+    setState(() => _fingerDown = true);
+    _controller.forward(from: 0);
+  }
+
+  void _onTapEnd() {
+    if (!widget.enabled || _busy) return;
+    _fingerDown = false;
+    if (!_controller.isCompleted) {
+      _controller.reset();
+    }
+    setState(() {});
+  }
+
+  @override
+  void dispose() {
+    _controller.removeStatusListener(_onAnimStatus);
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final textPrimary = AppThemeColors.textPrimaryColor(context);
+    final disabled = !widget.enabled || _busy;
+
+    return Opacity(
+      opacity: disabled && !_busy ? 0.55 : 1,
+      child: AbsorbPointer(
+        absorbing: disabled,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTapDown: _onTapDown,
+          onTapUp: (_) => _onTapEnd(),
+          onTapCancel: _onTapEnd,
+          child: AnimatedBuilder(
+            animation: _controller,
+            builder: (context, _) {
+              final p = _controller.value.clamp(0.0, 1.0);
+              final accent = widget.accentColor;
+              final borderCol = Color.lerp(
+                accent.withOpacity(0.38),
+                accent.withOpacity(0.78),
+                p,
+              )!;
+              final iconCol = Color.lerp(
+                accent,
+                Color.lerp(accent, Colors.white, 0.38)!,
+                p,
+              )!;
+              return Container(
+                height: _height,
+                decoration: BoxDecoration(
+                  color: accent.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: borderCol, width: 1 + p * 0.45),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    // Full-width L→R gradient; clip reveals from left to right with p.
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final fw = constraints.maxWidth;
+                        return Stack(
+                          clipBehavior: Clip.hardEdge,
+                          fit: StackFit.expand,
+                          children: [
+                            if (fw > 0 && p > 0)
+                              Positioned(
+                                left: 0,
+                                top: 0,
+                                bottom: 0,
+                                width: fw * p,
+                                child: ClipRect(
+                                  child: Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: SizedBox(
+                                      width: fw,
+                                      height: _height,
+                                      child: DecoratedBox(
+                                        decoration: BoxDecoration(
+                                          gradient: LinearGradient(
+                                            begin: Alignment.centerLeft,
+                                            end: Alignment.centerRight,
+                                            colors: [
+                                              accent.withOpacity(0.32),
+                                              accent.withOpacity(0.78),
+                                              Color.lerp(
+                                                    accent,
+                                                    Colors.white,
+                                                    0.28,
+                                                  ) ??
+                                                  accent,
+                                            ],
+                                            stops: const [0.0, 0.58, 1.0],
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        );
+                      },
+                    ),
+                    Center(
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            widget.icon,
+                            size: 22,
+                            color: iconCol,
+                          ),
+                          const SizedBox(width: 10),
+                          Text(
+                            widget.label,
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: Color.lerp(
+                                textPrimary.withOpacity(0.82),
+                                textPrimary,
+                                p,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
 }

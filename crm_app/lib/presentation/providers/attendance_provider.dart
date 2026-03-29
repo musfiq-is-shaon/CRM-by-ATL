@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/services/location_service.dart';
 import '../../data/models/attendance_model.dart';
 import '../../data/repositories/attendance_repository.dart';
 import '../providers/auth_provider.dart';
@@ -11,12 +12,20 @@ class AttendanceState {
   final String? error;
   final String period; // 'today', 'week', 'month', etc.
 
+  /// Shown when API omits [TodayAttendance.locationIn] after check-in.
+  final String? localCheckInLocation;
+
+  /// Shown when API omits [TodayAttendance.locationOut] after check-out.
+  final String? localCheckOutLocation;
+
   const AttendanceState({
     this.todayAttendance,
     this.records = const [],
     this.isLoading = false,
     this.error,
     this.period = 'month',
+    this.localCheckInLocation,
+    this.localCheckOutLocation,
   });
 
   AttendanceState copyWith({
@@ -25,6 +34,8 @@ class AttendanceState {
     bool? isLoading,
     String? error,
     String? period,
+    String? localCheckInLocation,
+    String? localCheckOutLocation,
   }) {
     return AttendanceState(
       todayAttendance: todayAttendance ?? this.todayAttendance,
@@ -32,6 +43,10 @@ class AttendanceState {
       isLoading: isLoading ?? this.isLoading,
       error: error,
       period: period ?? this.period,
+      localCheckInLocation:
+          localCheckInLocation ?? this.localCheckInLocation,
+      localCheckOutLocation:
+          localCheckOutLocation ?? this.localCheckOutLocation,
     );
   }
 }
@@ -74,7 +89,42 @@ class AttendanceNotifier extends StateNotifier<AttendanceState> {
       if (!today.isToday) {
         print('⚠️  Warning: Attendance date ${today.date} != today');
       }
-      state = state.copyWith(todayAttendance: today, isLoading: false);
+
+      final prevDate = state.todayAttendance?.date ?? '';
+      final newDate = today.date;
+      final dateChanged =
+          prevDate.isNotEmpty && newDate.isNotEmpty && prevDate != newDate;
+
+      final serverIn = today.locationIn?.trim() ?? '';
+      final serverOut = today.locationOut?.trim() ?? '';
+
+      String? mergedLocalIn;
+      String? mergedLocalOut;
+      if (dateChanged) {
+        mergedLocalIn = null;
+        mergedLocalOut = null;
+      } else {
+        mergedLocalIn = serverIn.isEmpty
+            ? state.localCheckInLocation
+            : (LocationService.looksLikeCoordinatesString(serverIn)
+                  ? state.localCheckInLocation
+                  : null);
+        mergedLocalOut = serverOut.isEmpty
+            ? state.localCheckOutLocation
+            : (LocationService.looksLikeCoordinatesString(serverOut)
+                  ? state.localCheckOutLocation
+                  : null);
+      }
+
+      state = AttendanceState(
+        todayAttendance: today,
+        records: state.records,
+        isLoading: false,
+        error: null,
+        period: state.period,
+        localCheckInLocation: mergedLocalIn,
+        localCheckOutLocation: mergedLocalOut,
+      );
     } catch (e) {
       print('❌ Attendance load error: $e');
       state = state.copyWith(isLoading: false, error: e.toString());
@@ -109,16 +159,23 @@ class AttendanceNotifier extends StateNotifier<AttendanceState> {
     }
   }
 
-  /// Perform check-in
-  Future<void> checkIn(String location) async {
+  /// [coordinatesPayload] is sent to the API (e.g. `lat, lng`).
+  /// [placeLabel] is shown on the dashboard when the API omits a human address.
+  Future<void> checkIn(String coordinatesPayload, String placeLabel) async {
     final currentUserId = ref.read(currentUserIdProvider);
     if (currentUserId == null) {
       state = state.copyWith(error: 'User not authenticated');
       return;
     }
     try {
-      print('🟢 Check-in API call: userId=$currentUserId location=$location');
-      await _repository.checkIn(currentUserId, location);
+      print(
+        '🟢 Check-in API call: userId=$currentUserId location=$coordinatesPayload',
+      );
+      await _repository.checkIn(currentUserId, coordinatesPayload);
+      final label = placeLabel.trim();
+      state = state.copyWith(
+        localCheckInLocation: label.isNotEmpty ? label : null,
+      );
       print('🔄 Reloading after check-in...');
       // Multiple refreshes to ensure backend sync
       await Future.delayed(const Duration(seconds: 1));
@@ -142,16 +199,23 @@ class AttendanceNotifier extends StateNotifier<AttendanceState> {
     }
   }
 
-  /// Perform check-out
-  Future<void> checkOut(String location) async {
+  /// [coordinatesPayload] is sent to the API (e.g. `lat, lng`).
+  /// [placeLabel] is shown on the dashboard when the API omits a human address.
+  Future<void> checkOut(String coordinatesPayload, String placeLabel) async {
     final currentUserId = ref.read(currentUserIdProvider);
     if (currentUserId == null) {
       state = state.copyWith(error: 'User not authenticated');
       return;
     }
     try {
-      print('🔴 Check-out API call: userId=$currentUserId location=$location');
-      await _repository.checkOut(currentUserId, location);
+      print(
+        '🔴 Check-out API call: userId=$currentUserId location=$coordinatesPayload',
+      );
+      await _repository.checkOut(currentUserId, coordinatesPayload);
+      final label = placeLabel.trim();
+      state = state.copyWith(
+        localCheckOutLocation: label.isNotEmpty ? label : null,
+      );
       print('🔄 Reloading after check-out...');
       // Multiple refreshes to ensure backend sync
       await Future.delayed(const Duration(seconds: 1));
