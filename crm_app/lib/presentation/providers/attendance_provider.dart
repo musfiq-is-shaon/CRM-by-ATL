@@ -71,9 +71,22 @@ class AttendanceNotifier extends StateNotifier<AttendanceState> {
       await _repository.checkIn(location);
       // Refresh today status
       await loadToday();
+      // Force UI refresh
+      Future.delayed(const Duration(milliseconds: 500), () {
+        state = state.copyWith();
+      });
     } catch (e) {
-      state = state.copyWith(error: e.toString());
-      rethrow;
+      String errorMsg = 'Something went wrong. Please try again.';
+      if (e.toString().contains('Already checked in')) {
+        errorMsg = 'Already checked in today';
+      } else if (e.toString().contains('Already checked out')) {
+        errorMsg = 'Already checked out today';
+      }
+      state = state.copyWith(error: errorMsg);
+      // Auto clear error after 5 seconds
+      Future.delayed(const Duration(seconds: 5), () {
+        state = state.copyWith(error: null);
+      });
     }
   }
 
@@ -83,9 +96,20 @@ class AttendanceNotifier extends StateNotifier<AttendanceState> {
       await _repository.checkOut(location);
       // Refresh today status
       await loadToday();
+      // Force UI refresh
+      Future.delayed(const Duration(milliseconds: 500), () {
+        state = state.copyWith();
+      });
     } catch (e) {
-      state = state.copyWith(error: e.toString());
-      rethrow;
+      String errorMsg = 'Something went wrong. Please try again.';
+      if (e.toString().contains('Already checked out')) {
+        errorMsg = 'Already checked out today';
+      }
+      state = state.copyWith(error: errorMsg);
+      // Auto clear error after 5 seconds
+      Future.delayed(const Duration(seconds: 5), () {
+        state = state.copyWith(error: null);
+      });
     }
   }
 

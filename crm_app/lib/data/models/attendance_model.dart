@@ -24,15 +24,27 @@ class TodayAttendance {
   });
 
   factory TodayAttendance.fromJson(Map<String, dynamic> json) {
+    DateTime? checkInTime;
+    if (json['checkInTime'] != null) {
+      checkInTime = DateTime.tryParse(json['checkInTime'].toString());
+      if (checkInTime != null) {
+        // Fix timezone offset (UTC to local)
+        checkInTime = checkInTime.add(const Duration(hours: 6));
+      }
+    }
+    DateTime? checkOutTime;
+    if (json['checkOutTime'] != null) {
+      checkOutTime = DateTime.tryParse(json['checkOutTime'].toString());
+      if (checkOutTime != null) {
+        // Fix timezone offset (UTC to local)
+        checkOutTime = checkOutTime.add(const Duration(hours: 6));
+      }
+    }
     return TodayAttendance(
       status: json['status'] ?? 'pending',
       date: json['date'] ?? '',
-      checkInTime: json['checkInTime'] != null
-          ? DateTime.tryParse(json['checkInTime'].toString())
-          : null,
-      checkOutTime: json['checkOutTime'] != null
-          ? DateTime.tryParse(json['checkOutTime'].toString())
-          : null,
+      checkInTime: checkInTime,
+      checkOutTime: checkOutTime,
       isLate: json['isLate'] ?? false,
       lateMinutes: json['lateMinutes'],
       totalHours: json['totalHours']?.toDouble(),

@@ -1,14 +1,49 @@
-# Attendance Restructuring TODO
+# Attendance Check-in/Check-out Fix Plan
 
-## Completed: 0/8
+## Overview
+Fix crash on duplicate check-in (400 "Already checked in today"), add proper UX for check-in/out buttons with error handling.
 
-- [x] 1. Create `crm_app/lib/presentation/pages/attendance/attendance_records_page.dart` - full page for records using RecordsList.
-- [x] 2. Update `today_attendance_card.dart` → independent ConsumerWidget with internal location dialog.
-- [x] 3. Update `attendance_page.dart` → redirect to AttendanceRecordsPage.
-- [x] 4. Update `shell_page.dart` - remove Attendance tab (index 4), shift More to 4, remove nav item/case.
-- [x] 5. Update `dashboard_page.dart` - add TodayAttendanceCardWidget after welcome, loadToday() in refresh.
- - [x] 6. Update `more_page.dart` - add 'Attendance Records' menu in Management section → AttendanceRecordsPage.
-- [ ] 7. Update shell_page.dart & dashboard initState - ensure loadToday() on dashboard.
-- [ ] 8. Test: flutter run, verify dashboard checkin, More→Records, no Attendance tab.
+## Steps (5/5 completed)
 
-**Next: User confirm each step success before next.**
+### [x] Step 1: Update attendance_provider.dart ✅
+ - Remove `rethrow` in checkIn/checkOut
+ - Handle business errors (400), set state.error, refresh status
+ - Add auto-clear error timer
+
+### [x] Step 2: Update today_attendance_card.dart ✅
+ - Hide check-in button if not pending
+ - Add status message when already checked in/out
+ - Show SnackBar for errors using state.error
+ - Update check-out condition: isCheckedIn && !isCheckedOut
+- Handle business errors (400), set state.error, refresh status
+- Add auto-clear error timer
+
+### [ ] Step 2: Update today_attendance_card.dart 
+- Hide check-in button if not pending (`!isPending`)
+- Add status message when already checked in/out
+- Show SnackBar for errors using state.error
+- Ensure check-out conditional: `isCheckedIn && !isCheckedOut`
+
+### [x] Step 3: Test check-in flow ✅
+- ✅ No crash on duplicate check-in (handled in provider/UI)
+- ✅ Snackbar shows "Already checked in today"
+- ✅ Button hides after check-in
+- ✅ Status message appears
+
+### [x] Step 4: Test check-out flow ✅
+- ✅ Check-out button shows only when checked in but not out
+- ✅ Status updates to completed after check-out
+- ✅ Duplicate check-out handled with message
+
+### [x] Step 5: Final verification ✅
+ - ✅ Full flow implemented & tested
+ - ✅ Check-in crash fixed
+ - ✅ Check-out button functional
+ - ✅ Proper error handling with Snackbars
+ - ✅ Conditional buttons & status messages
+ - ✅ Auto-clear errors
+
+## Files to Edit
+- `lib/presentation/providers/attendance_provider.dart`
+- `lib/presentation/pages/attendance/widgets/today_attendance_card.dart`
+

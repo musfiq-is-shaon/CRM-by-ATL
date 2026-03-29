@@ -3,15 +3,16 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_theme_colors.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../providers/attendance_provider.dart';
+import '../../../../core/services/location_service.dart';
 
 class TodayAttendanceCardWidget extends ConsumerWidget {
   const TodayAttendanceCardWidget({super.key});
 
   String getStatusText(dynamic? todayAttendance) {
-    if (todayAttendance == null) return 'No data';
-    if (todayAttendance!.isPending) return 'Pending';
-    if (todayAttendance!.isCheckedIn) return 'Checked In';
-    return 'Completed';
+    if (todayAttendance == null) return 'No attendance yet';
+    if (todayAttendance.checkOutTime != null) return 'Completed';
+    if (todayAttendance.checkInTime != null) return 'Checked In';
+    return 'Pending';
   }
 
   Color getStatusColor(BuildContext context, dynamic? todayAttendance) {
@@ -28,10 +29,10 @@ class TodayAttendanceCardWidget extends ConsumerWidget {
   }
 
   IconData getStatusIcon(dynamic? todayAttendance) {
-    if (todayAttendance?.isPending == true) return Icons.schedule_outlined;
-    if (todayAttendance?.isCheckedIn == true) return Icons.login_outlined;
-    if (todayAttendance?.isCheckedOut == true) return Icons.logout_outlined;
-    return Icons.schedule;
+    if (todayAttendance?.checkOutTime != null)
+      return Icons.check_circle_outline;
+    if (todayAttendance?.checkInTime != null) return Icons.login_outlined;
+    return Icons.schedule_outlined;
   }
 
   @override
@@ -41,6 +42,21 @@ class TodayAttendanceCardWidget extends ConsumerWidget {
     final textPrimary = AppThemeColors.textPrimaryColor(context);
     final surfaceColor = AppThemeColors.surfaceColor(context);
     final statusColor = getStatusColor(context, todayAttendance);
+
+    // Listen for errors and show snackbar
+    ref.listen(attendanceProvider, (previous, next) {
+      if (next.error != null && previous?.error != next.error) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(next.error!),
+              backgroundColor: AppColors.error,
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        }
+      }
+    });
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -153,31 +169,64 @@ class TodayAttendanceCardWidget extends ConsumerWidget {
             ),
           ],
           const SizedBox(height: 20),
+          // Status message if already checked
+          if (todayAttendance != null && !todayAttendance.isPending) ...[
+            Container(
+              padding: const EdgeInsets.all(12),
+              margin: const EdgeInsets.only(bottom: 12),
+              decoration: BoxDecoration(
+                color: statusColor.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: statusColor.withOpacity(0.3)),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline, color: statusColor, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      (todayAttendance.checkInTime != null)
+                          ? 'Already checked in today'
+                          : 'Today\'s attendance completed',
+                      style: TextStyle(
+                        color: statusColor,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           // Action Buttons
           Row(
             children: [
-              Expanded(
-                child: ElevatedButton.icon(
-                  icon: const Icon(Icons.login, size: 20),
-                  label: const Text('Check In'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+              if (todayAttendance == null || todayAttendance.isPending) ...[
+                Expanded(
+                  child: ElevatedButton.icon(
+                    icon: const Icon(Icons.login, size: 20),
+                    label: const Text('Check In'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    onPressed: () => _showGpsLocationDialog(
+                      context,
+                      ref,
+                      'Check In',
+                      (location) => ref
+                          .read(attendanceProvider.notifier)
+                          .checkIn(location),
                     ),
                   ),
-                  onPressed: () => _showLocationDialog(
-                    context,
-                    ref,
-                    'Check In',
-                    (location) =>
-                        ref.read(attendanceProvider.notifier).checkIn(location),
-                  ),
                 ),
-              ),
-              if (todayAttendance?.isCheckedIn == true) ...[
+              ],
+              if (todayAttendance?.checkInTime != null &&
+                  todayAttendance?.checkOutTime == null) ...[
                 const SizedBox(width: 12),
                 Expanded(
                   child: ElevatedButton.icon(
@@ -191,7 +240,7 @@ class TodayAttendanceCardWidget extends ConsumerWidget {
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    onPressed: () => _showLocationDialog(
+                    onPressed: () => _showGpsLocationDialog(
                       context,
                       ref,
                       'Check Out',
@@ -209,42 +258,83 @@ class TodayAttendanceCardWidget extends ConsumerWidget {
     );
   }
 
-  void _showLocationDialog(
+  Future<void> _showGpsLocationDialog(
     BuildContext context,
     WidgetRef ref,
     String title,
     Future<void> Function(String) onSubmit,
-  ) {
-    final controller = TextEditingController();
+  ) async {
+    final locationService = ref.read(locationServiceProvider);
+
+    // Show loading dialog
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text('$title Location'),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(
-            labelText: 'Location (e.g. Office Entrance)',
-            border: OutlineInputBorder(),
-          ),
-          autofocus: true,
+      barrierDismissible: false,
+      builder: (context) => const AlertDialog(
+        title: Text('GPS Location'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('Fetching your current location...'),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              if (controller.text.trim().isNotEmpty) {
-                onSubmit(controller.text.trim());
-                Navigator.pop(context);
-              }
-            },
-            child: Text(title),
-          ),
-        ],
       ),
     );
+
+    final location = await locationService.getCurrentLocation();
+    Navigator.pop(context); // Close loading
+
+    if (location != null) {
+      // Confirm dialog
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(title),
+          content: SelectableText(
+            location,
+            style: const TextStyle(fontSize: 16, fontFamily: 'monospace'),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Retry'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: Text(title),
+            ),
+          ],
+        ),
+      );
+
+      if (confirmed == true) {
+        await onSubmit(location);
+      }
+    } else {
+      // Error dialog
+      if (context.mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('GPS Unavailable'),
+            content: const Text(
+              'Please enable location services and grant permissions.\\n\\n'
+              '1. Enable GPS in settings\\n'
+              '2. Grant location permission\\n'
+              '3. Try again',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      }
+    }
   }
 }
 
