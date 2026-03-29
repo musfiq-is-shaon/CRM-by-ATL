@@ -15,6 +15,8 @@ import '../contacts/contact_detail_page.dart';
 import '../tasks/task_detail_page.dart';
 import '../tasks/tasks_list_page.dart';
 import '../expenses/expense_form_page.dart';
+import '../attendance/widgets/today_attendance_card.dart';
+import '../../providers/attendance_provider.dart';
 
 class DashboardPage extends ConsumerStatefulWidget {
   const DashboardPage({super.key});
@@ -24,6 +26,13 @@ class DashboardPage extends ConsumerStatefulWidget {
 }
 
 class _DashboardPageState extends ConsumerState<DashboardPage> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(attendanceProvider.notifier).loadToday();
+    });
+  }
   // Data loading is now handled by ShellPage for better performance
   // Individual tabs load their data on-demand
 
@@ -32,6 +41,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
       ref.read(salesProvider.notifier).loadSales(),
       ref.read(tasksProvider.notifier).loadTasks(),
       ref.read(contactsProvider.notifier).loadContacts(),
+      ref.read(attendanceProvider.notifier).loadToday(),
     ]);
   }
 
@@ -127,7 +137,13 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                   ),
                 ),
               ),
-
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: const TodayAttendanceCardWidget(),
+                ),
+              ),
+              const SliverToBoxAdapter(child: SizedBox(height: 24)),
               if (isAdmin) ...[
                 // KPI Cards
                 SliverToBoxAdapter(

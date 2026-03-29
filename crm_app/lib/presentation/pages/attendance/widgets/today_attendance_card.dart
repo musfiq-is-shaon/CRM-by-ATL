@@ -1,28 +1,20 @@
 import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_theme_colors.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../providers/attendance_provider.dart';
 
-class TodayAttendanceCard extends StatelessWidget {
-  final dynamic todayAttendance; // TodayAttendance?
-  final VoidCallback? onCheckIn;
-  final VoidCallback? onCheckOut;
+class TodayAttendanceCardWidget extends ConsumerWidget {
+  const TodayAttendanceCardWidget({super.key});
 
-  const TodayAttendanceCard({
-    super.key,
-    required this.todayAttendance,
-    this.onCheckIn,
-    this.onCheckOut,
-  });
-
-  String getStatusText() {
+  String getStatusText(dynamic? todayAttendance) {
     if (todayAttendance == null) return 'No data';
     if (todayAttendance!.isPending) return 'Pending';
     if (todayAttendance!.isCheckedIn) return 'Checked In';
     return 'Completed';
   }
 
-  Color getStatusColor(BuildContext context) {
+  Color getStatusColor(BuildContext context, dynamic? todayAttendance) {
     final errorColor = AppColors.error;
     final warningColor = AppColors.warning;
     final successColor = AppColors.success;
@@ -35,7 +27,7 @@ class TodayAttendanceCard extends StatelessWidget {
     return Colors.grey;
   }
 
-  IconData getStatusIcon() {
+  IconData getStatusIcon(dynamic? todayAttendance) {
     if (todayAttendance?.isPending == true) return Icons.schedule_outlined;
     if (todayAttendance?.isCheckedIn == true) return Icons.login_outlined;
     if (todayAttendance?.isCheckedOut == true) return Icons.logout_outlined;
@@ -43,10 +35,12 @@ class TodayAttendanceCard extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(attendanceProvider);
+    final todayAttendance = state.todayAttendance;
     final textPrimary = AppThemeColors.textPrimaryColor(context);
     final surfaceColor = AppThemeColors.surfaceColor(context);
-    final statusColor = getStatusColor(context);
+    final statusColor = getStatusColor(context, todayAttendance);
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -72,7 +66,11 @@ class TodayAttendanceCard extends StatelessWidget {
                   color: statusColor.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(getStatusIcon(), color: statusColor, size: 28),
+                child: Icon(
+                  getStatusIcon(todayAttendance),
+                  color: statusColor,
+                  size: 28,
+                ),
               ),
               const SizedBox(width: 16),
               Expanded(
@@ -80,7 +78,7 @@ class TodayAttendanceCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      getStatusText(),
+                      getStatusText(todayAttendance),
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
@@ -170,10 +168,16 @@ class TodayAttendanceCard extends StatelessWidget {
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  onPressed: onCheckIn,
+                  onPressed: () => _showLocationDialog(
+                    context,
+                    ref,
+                    'Check In',
+                    (location) =>
+                        ref.read(attendanceProvider.notifier).checkIn(location),
+                  ),
                 ),
               ),
-              if (onCheckOut != null) ...[
+              if (todayAttendance?.isCheckedIn == true) ...[
                 const SizedBox(width: 12),
                 Expanded(
                   child: ElevatedButton.icon(
@@ -187,11 +191,56 @@ class TodayAttendanceCard extends StatelessWidget {
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    onPressed: onCheckOut,
+                    onPressed: () => _showLocationDialog(
+                      context,
+                      ref,
+                      'Check Out',
+                      (location) => ref
+                          .read(attendanceProvider.notifier)
+                          .checkOut(location),
+                    ),
                   ),
                 ),
               ],
             ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showLocationDialog(
+    BuildContext context,
+    WidgetRef ref,
+    String title,
+    Future<void> Function(String) onSubmit,
+  ) {
+    final controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('$title Location'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(
+            labelText: 'Location (e.g. Office Entrance)',
+            border: OutlineInputBorder(),
+          ),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (controller.text.trim().isNotEmpty) {
+                onSubmit(controller.text.trim());
+                Navigator.pop(context);
+              }
+            },
+            child: Text(title),
           ),
         ],
       ),

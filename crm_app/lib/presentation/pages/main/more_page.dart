@@ -7,6 +7,7 @@ import '../settings/settings_page.dart';
 import '../admin/users_page.dart';
 import '../contacts/contacts_list_page.dart';
 import 'notification_settings_page.dart';
+import '../attendance/attendance_records_page.dart';
 
 class MorePage extends ConsumerWidget {
   const MorePage({super.key});
@@ -144,6 +145,23 @@ class MorePage extends ConsumerWidget {
                     context,
                     MaterialPageRoute(
                       builder: (context) => const ContactsListPage(),
+                    ),
+                  );
+                },
+              ),
+              _buildMenuItem(
+                icon: Icons.access_time_outlined,
+                title: 'Attendance Records',
+                subtitle: 'View attendance history',
+                textPrimary: textPrimary,
+                textSecondary: textSecondary,
+                textTertiary: textTertiary,
+                primaryColor: primaryColor,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const AttendanceRecordsPage(),
                     ),
                   );
                 },
