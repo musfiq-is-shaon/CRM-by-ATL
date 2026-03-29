@@ -14,9 +14,6 @@ import '../sales/sale_detail_page.dart';
 import '../contacts/contact_detail_page.dart';
 import '../tasks/task_detail_page.dart';
 import '../tasks/tasks_list_page.dart';
-import '../sales/sale_detail_page.dart';
-import '../contacts/contact_detail_page.dart';
-import '../tasks/task_detail_page.dart';
 import '../expenses/expense_form_page.dart';
 
 class DashboardPage extends ConsumerStatefulWidget {

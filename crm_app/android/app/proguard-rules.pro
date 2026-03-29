@@ -59,3 +59,26 @@
 -keep public enum * {*;}
 -keepclassmembers enum * {*;}
 
+
+# Flutter Local Notifications
+-keep class com.dexterous.flutterlocalnotifications.** { *; }
+-keep class ezpaypal.flutter_local_notifications_linux.** { *; }
+
+# Flutter Secure Storage
+-keep class com.it_nomads.fluttersecurestorage.** { *; }
+-keep class flutter_secure_storage.** { *; }
+
+# Enhanced JSON/Freezed/Riverpod (json_annotation, riverpod_annotation)
+-keepattributes *Annotation*
+-keep class * {
+    @com.google.gson.annotations.SerializedName *;
+    @json_annotation.JsonKey *;
+}
+-dontwarn androidx.annotation.**
+
+# Desugaring / Additional Play Services
+-dontwarn java.lang.invoke.**
+-dontwarn com.google.android.play.core.integrity.**
+-dontwarn com.google.android.datatransport.**
+
+
