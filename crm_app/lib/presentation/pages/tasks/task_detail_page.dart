@@ -1,4 +1,6 @@
+import 'package:confetti/confetti.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme_colors.dart';
 import '../../../data/models/task_model.dart';
@@ -13,6 +15,7 @@ import '../../widgets/crm_card.dart';
 import '../../widgets/status_badge.dart';
 import '../../widgets/loading_widget.dart';
 import '../../widgets/searchable_dropdown.dart';
+import '../../widgets/celebration_shell.dart';
 
 // Provider for users
 final taskUsersProvider = FutureProvider<List>((ref) async {
@@ -20,15 +23,38 @@ final taskUsersProvider = FutureProvider<List>((ref) async {
   return repository.getUsers();
 });
 
-class TaskDetailPage extends ConsumerWidget {
+class TaskDetailPage extends ConsumerStatefulWidget {
   final String taskId;
 
   const TaskDetailPage({super.key, required this.taskId});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<TaskDetailPage> createState() => _TaskDetailPageState();
+}
+
+class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
+  late ConfettiController _confettiController;
+  bool _celebrating = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _confettiController = ConfettiController(
+      duration: const Duration(seconds: 3),
+    );
+  }
+
+  @override
+  void dispose() {
+    _confettiController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final tasksState = ref.watch(tasksProvider);
-    final task = tasksState.tasks.where((t) => t.id == taskId).firstOrNull;
+    final task =
+        tasksState.tasks.where((t) => t.id == widget.taskId).firstOrNull;
     final isAdmin = ref.watch(isAdminProvider);
 
     final bgColor = AppThemeColors.backgroundColor(context);
@@ -37,15 +63,21 @@ class TaskDetailPage extends ConsumerWidget {
     final textSecondary = AppThemeColors.textSecondaryColor(context);
     final primaryColor = Theme.of(context).colorScheme.primary;
 
-    return Scaffold(
-      backgroundColor: bgColor,
-      appBar: AppBar(
-        backgroundColor: surfaceColor,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: textPrimary),
-          onPressed: () => Navigator.pop(context),
-        ),
+    return CelebrationShell(
+      celebrating: _celebrating,
+      confettiController: _confettiController,
+      title: 'Task complete!',
+      message: 'Nice work — this task is done.',
+      icon: Icons.task_alt_rounded,
+      child: Scaffold(
+        backgroundColor: bgColor,
+        appBar: AppBar(
+          backgroundColor: surfaceColor,
+          elevation: 0,
+          leading: IconButton(
+            icon: Icon(Icons.arrow_back, color: textPrimary),
+            onPressed: _celebrating ? null : () => Navigator.pop(context),
+          ),
         title: Text('Task Details', style: TextStyle(color: textPrimary)),
         actions: [
           if (isAdmin)
@@ -64,7 +96,7 @@ class TaskDetailPage extends ConsumerWidget {
             IconButton(
               icon: Icon(Icons.delete_outline, color: Colors.red),
               onPressed: task != null
-                  ? () => _showDeleteConfirmation(context, ref, task)
+                  ? () => _showDeleteConfirmation(context, task)
                   : null,
             ),
         ],
@@ -154,7 +186,6 @@ class TaskDetailPage extends ConsumerWidget {
                     children: [
                       _buildStatusButton(
                         context,
-                        ref,
                         task,
                         'pending',
                         primaryColor,
@@ -162,7 +193,6 @@ class TaskDetailPage extends ConsumerWidget {
                       ),
                       _buildStatusButton(
                         context,
-                        ref,
                         task,
                         'in_progress',
                         primaryColor,
@@ -170,7 +200,6 @@ class TaskDetailPage extends ConsumerWidget {
                       ),
                       _buildStatusButton(
                         context,
-                        ref,
                         task,
                         'completed',
                         primaryColor,
@@ -178,7 +207,6 @@ class TaskDetailPage extends ConsumerWidget {
                       ),
                       _buildStatusButton(
                         context,
-                        ref,
                         task,
                         'cancelled',
                         primaryColor,
@@ -189,6 +217,7 @@ class TaskDetailPage extends ConsumerWidget {
                 ],
               ),
             ),
+    ),
     );
   }
 
@@ -219,7 +248,6 @@ class TaskDetailPage extends ConsumerWidget {
 
   Widget _buildStatusButton(
     BuildContext context,
-    WidgetRef ref,
     Task task,
     String status,
     Color primaryColor,
@@ -259,10 +287,14 @@ class TaskDetailPage extends ConsumerWidget {
                       .read(tasksProvider.notifier)
                       .changeTaskStatus(id: task.id, status: status);
 
-                  // Fast update via single-task enrichment - no full reload needed
-
-                  // Success feedback
-                  if (context.mounted) {
+                  if (!context.mounted) return;
+                  if (status == 'completed') {
+                    HapticFeedback.mediumImpact();
+                    setState(() => _celebrating = true);
+                    _confettiController.play();
+                    await Future.delayed(const Duration(milliseconds: 2800));
+                    if (mounted) setState(() => _celebrating = false);
+                  } else {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text(
@@ -290,7 +322,7 @@ class TaskDetailPage extends ConsumerWidget {
     );
   }
 
-  void _showDeleteConfirmation(BuildContext context, WidgetRef ref, Task task) {
+  void _showDeleteConfirmation(BuildContext context, Task task) {
     final textPrimary = AppThemeColors.textPrimaryColor(context);
     final textSecondary = AppThemeColors.textSecondaryColor(context);
     final cs = Theme.of(context).colorScheme;

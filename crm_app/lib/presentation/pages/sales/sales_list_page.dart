@@ -6,7 +6,6 @@ import '../../../data/models/user_model.dart';
 import '../../providers/sale_provider.dart';
 import '../../providers/company_provider.dart';
 import '../../providers/user_provider.dart';
-import '../../providers/auth_provider.dart';
 import '../../widgets/crm_card.dart';
 import '../../widgets/status_badge.dart';
 import '../../widgets/loading_widget.dart';
@@ -61,9 +60,6 @@ class _SalesListPageState extends ConsumerState<SalesListPage>
     final salesState = ref.watch(salesProvider);
     final companiesState = ref.watch(companiesProvider);
     final usersState = ref.watch(usersProvider);
-    final isAdmin = ref.watch(isAdminProvider);
-    final currentUserId = ref.watch(currentUserIdProvider);
-
     final bgColor = AppThemeColors.backgroundColor(context);
     final surfaceColor = AppThemeColors.surfaceColor(context);
     final textPrimary = AppThemeColors.textPrimaryColor(context);
@@ -277,14 +273,14 @@ class _SalesListPageState extends ConsumerState<SalesListPage>
       body: TabBarView(
         controller: _tabController,
         children: [
-          _buildSalesList(salesState, 'lead', isAdmin, currentUserId),
-          _buildSalesList(salesState, 'prospect', isAdmin, currentUserId),
-          _buildSalesList(salesState, 'proposal', isAdmin, currentUserId),
-          _buildSalesList(salesState, 'negotiation', isAdmin, currentUserId),
-          _buildSalesList(salesState, 'closed_won', isAdmin, currentUserId),
-          _buildSalesList(salesState, 'closed_lost', isAdmin, currentUserId),
-          _buildSalesList(salesState, 'disqualified', isAdmin, currentUserId),
-          _buildSalesList(salesState, null, isAdmin, currentUserId),
+          _buildSalesList(salesState, 'lead'),
+          _buildSalesList(salesState, 'prospect'),
+          _buildSalesList(salesState, 'proposal'),
+          _buildSalesList(salesState, 'negotiation'),
+          _buildSalesList(salesState, 'closed_won'),
+          _buildSalesList(salesState, 'closed_lost'),
+          _buildSalesList(salesState, 'disqualified'),
+          _buildSalesList(salesState, null),
         ],
       ),
       floatingActionButton: FloatingActionButton(
@@ -302,8 +298,6 @@ class _SalesListPageState extends ConsumerState<SalesListPage>
   Widget _buildSalesList(
     SalesState state,
     String? status,
-    bool isAdmin,
-    String? currentUserId,
   ) {
     final textPrimary = AppThemeColors.textPrimaryColor(context);
     final textSecondary = AppThemeColors.textSecondaryColor(context);
@@ -315,11 +309,6 @@ class _SalesListPageState extends ConsumerState<SalesListPage>
     }
 
     var sales = state.sales;
-    if (!isAdmin && currentUserId != null) {
-      sales = sales
-          .where((s) => s.company?.kamUserId == currentUserId)
-          .toList();
-    }
     if (status != null) {
       sales = sales.where((s) => s.status == status).toList();
     }

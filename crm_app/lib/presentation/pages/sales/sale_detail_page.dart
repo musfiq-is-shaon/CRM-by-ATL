@@ -1,4 +1,6 @@
+import 'package:confetti/confetti.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme_colors.dart';
 import '../../../data/models/sale_model.dart';
@@ -12,15 +14,38 @@ import '../../widgets/crm_card.dart';
 import '../../widgets/status_badge.dart';
 import '../../widgets/loading_widget.dart';
 import '../../widgets/searchable_dropdown.dart';
+import '../../widgets/celebration_shell.dart';
 
-class SaleDetailPage extends ConsumerWidget {
+class SaleDetailPage extends ConsumerStatefulWidget {
   final String saleId;
 
   const SaleDetailPage({super.key, required this.saleId});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final saleAsync = ref.watch(saleDetailProvider(saleId));
+  ConsumerState<SaleDetailPage> createState() => _SaleDetailPageState();
+}
+
+class _SaleDetailPageState extends ConsumerState<SaleDetailPage> {
+  late ConfettiController _confettiController;
+  bool _celebrating = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _confettiController = ConfettiController(
+      duration: const Duration(seconds: 3),
+    );
+  }
+
+  @override
+  void dispose() {
+    _confettiController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final saleAsync = ref.watch(saleDetailProvider(widget.saleId));
 
     final bgColor = AppThemeColors.backgroundColor(context);
     final surfaceColor = AppThemeColors.surfaceColor(context);
@@ -47,22 +72,27 @@ class SaleDetailPage extends ConsumerWidget {
           child: Text('Error: $error', style: TextStyle(color: textPrimary)),
         ),
       ),
-      data: (sale) => _buildContent(
-        context,
-        ref,
-        sale,
-        bgColor,
-        surfaceColor,
-        textPrimary,
-        textSecondary,
-        primaryColor,
+      data: (sale) => CelebrationShell(
+        celebrating: _celebrating,
+        confettiController: _confettiController,
+        title: 'You won!',
+        message: 'This deal is marked Closed Won.',
+        icon: Icons.emoji_events_rounded,
+        child: _buildContent(
+          context,
+          sale,
+          bgColor,
+          surfaceColor,
+          textPrimary,
+          textSecondary,
+          primaryColor,
+        ),
       ),
     );
   }
 
   Widget _buildContent(
     BuildContext context,
-    WidgetRef ref,
     Sale sale,
     Color bgColor,
     Color surfaceColor,
@@ -95,7 +125,7 @@ class SaleDetailPage extends ConsumerWidget {
           ),
           IconButton(
             icon: Icon(Icons.delete_outline, color: cs.error),
-            onPressed: () => _showDeleteDialog(context, ref, sale),
+            onPressed: () => _showDeleteDialog(context, sale),
           ),
         ],
       ),
@@ -186,7 +216,6 @@ class SaleDetailPage extends ConsumerWidget {
               children: [
                 _buildStatusButton(
                   context,
-                  ref,
                   sale,
                   'lead',
                   primaryColor,
@@ -194,7 +223,6 @@ class SaleDetailPage extends ConsumerWidget {
                 ),
                 _buildStatusButton(
                   context,
-                  ref,
                   sale,
                   'prospect',
                   primaryColor,
@@ -202,7 +230,6 @@ class SaleDetailPage extends ConsumerWidget {
                 ),
                 _buildStatusButton(
                   context,
-                  ref,
                   sale,
                   'proposal',
                   primaryColor,
@@ -210,7 +237,6 @@ class SaleDetailPage extends ConsumerWidget {
                 ),
                 _buildStatusButton(
                   context,
-                  ref,
                   sale,
                   'negotiation',
                   primaryColor,
@@ -218,7 +244,6 @@ class SaleDetailPage extends ConsumerWidget {
                 ),
                 _buildStatusButton(
                   context,
-                  ref,
                   sale,
                   'closed_won',
                   cs.tertiary,
@@ -226,7 +251,6 @@ class SaleDetailPage extends ConsumerWidget {
                 ),
                 _buildStatusButton(
                   context,
-                  ref,
                   sale,
                   'closed_lost',
                   cs.error,
@@ -234,7 +258,6 @@ class SaleDetailPage extends ConsumerWidget {
                 ),
                 _buildStatusButton(
                   context,
-                  ref,
                   sale,
                   'disqualified',
                   cs.outline,
@@ -247,7 +270,6 @@ class SaleDetailPage extends ConsumerWidget {
             // Activity Section
             _buildActivitySection(
               context,
-              ref,
               sale.id,
               surfaceColor,
               textPrimary,
@@ -262,7 +284,6 @@ class SaleDetailPage extends ConsumerWidget {
 
   Widget _buildActivitySection(
     BuildContext context,
-    WidgetRef ref,
     String saleId,
     Color surfaceColor,
     Color textPrimary,
@@ -293,7 +314,7 @@ class SaleDetailPage extends ConsumerWidget {
                   ),
                 ),
                 TextButton.icon(
-                  onPressed: () => _showAddActivityDialog(context, ref, saleId),
+                  onPressed: () => _showAddActivityDialog(context, saleId),
                   icon: Icon(Icons.add, size: 18, color: primaryColor),
                   label: Text(
                     'Add Activity',
@@ -335,7 +356,6 @@ class SaleDetailPage extends ConsumerWidget {
 
   void _showAddActivityDialog(
     BuildContext context,
-    WidgetRef ref,
     String saleId,
   ) {
     final titleController = TextEditingController();
@@ -548,7 +568,6 @@ class SaleDetailPage extends ConsumerWidget {
 
   Widget _buildStatusButton(
     BuildContext context,
-    WidgetRef ref,
     Sale sale,
     String status,
     Color primaryColor,
@@ -595,8 +614,14 @@ class SaleDetailPage extends ConsumerWidget {
                   await ref
                       .read(salesProvider.notifier)
                       .changeSaleStatus(id: sale.id, status: status);
-                  // Invalidate the sale detail provider to refresh the UI with new status
                   ref.invalidate(saleDetailProvider(sale.id));
+                  if (status == 'closed_won' && context.mounted) {
+                    HapticFeedback.mediumImpact();
+                    setState(() => _celebrating = true);
+                    _confettiController.play();
+                    await Future.delayed(const Duration(milliseconds: 2800));
+                    if (mounted) setState(() => _celebrating = false);
+                  }
                 },
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -625,7 +650,7 @@ class SaleDetailPage extends ConsumerWidget {
     }
   }
 
-  void _showDeleteDialog(BuildContext context, WidgetRef ref, Sale? sale) {
+  void _showDeleteDialog(BuildContext context, Sale? sale) {
     if (sale == null) return;
 
     final textPrimary = AppThemeColors.textPrimaryColor(context);
@@ -678,14 +703,19 @@ class _SaleFormPageState extends ConsumerState<SaleFormPage> {
   late TextEditingController _prospectController;
   late TextEditingController _revenueController;
   late TextEditingController _closingDateController;
+  late ConfettiController _confettiController;
   String _category = 'warm';
   String _status = 'lead';
   String? _selectedCompanyId;
   bool _isLoading = false;
+  bool _celebrating = false;
 
   @override
   void initState() {
     super.initState();
+    _confettiController = ConfettiController(
+      duration: const Duration(seconds: 3),
+    );
     _prospectController = TextEditingController(
       text: widget.sale?.prospect ?? '',
     );
@@ -713,6 +743,7 @@ class _SaleFormPageState extends ConsumerState<SaleFormPage> {
 
   @override
   void dispose() {
+    _confettiController.dispose();
     _prospectController.dispose();
     _revenueController.dispose();
     _closingDateController.dispose();
@@ -915,21 +946,34 @@ class _SaleFormPageState extends ConsumerState<SaleFormPage> {
               status: _status,
               createdByUserId: currentUserId,
             );
-      } else {
-        // Update existing sale
-        await ref
-            .read(salesProvider.notifier)
-            .updateSale(
-              id: widget.sale!.id,
-              prospect: _prospectController.text,
-              category: _category,
-              expectedRevenue: double.tryParse(_revenueController.text),
-              expectedClosingDate: DateTime.tryParse(
-                _closingDateController.text,
-              ),
-              companyId: _selectedCompanyId,
-            );
+
+        if (!mounted) return;
+        HapticFeedback.mediumImpact();
+        setState(() {
+          _isLoading = false;
+          _celebrating = true;
+        });
+        _confettiController.play();
+        await Future.delayed(const Duration(milliseconds: 2800));
+        if (mounted) {
+          Navigator.pop(context);
+        }
+        return;
       }
+
+      // Update existing sale
+      await ref
+          .read(salesProvider.notifier)
+          .updateSale(
+            id: widget.sale!.id,
+            prospect: _prospectController.text,
+            category: _category,
+            expectedRevenue: double.tryParse(_revenueController.text),
+            expectedClosingDate: DateTime.tryParse(
+              _closingDateController.text,
+            ),
+            companyId: _selectedCompanyId,
+          );
 
       if (mounted) {
         Navigator.pop(context);
@@ -941,7 +985,7 @@ class _SaleFormPageState extends ConsumerState<SaleFormPage> {
         ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     } finally {
-      if (mounted) {
+      if (mounted && !_celebrating) {
         setState(() => _isLoading = false);
       }
     }
@@ -955,33 +999,38 @@ class _SaleFormPageState extends ConsumerState<SaleFormPage> {
     final textSecondary = AppThemeColors.textSecondaryColor(context);
     final borderColor = AppThemeColors.borderColor(context);
 
-    return Scaffold(
-      backgroundColor: bgColor,
-      appBar: AppBar(
-        backgroundColor: surfaceColor,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.close, color: textPrimary),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(
-          widget.sale == null ? 'New Deal' : 'Edit Deal',
-          style: TextStyle(color: textPrimary),
-        ),
-        actions: [
-          TextButton(
-            onPressed: _isLoading ? null : _saveSale,
-            child: _isLoading
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Text('Save'),
+    return CelebrationShell(
+      celebrating: _celebrating,
+      confettiController: _confettiController,
+      title: 'Congratulations!',
+      message: 'Your new deal is in the pipeline.',
+      child: Scaffold(
+        backgroundColor: bgColor,
+        appBar: AppBar(
+          backgroundColor: surfaceColor,
+          elevation: 0,
+          leading: IconButton(
+            icon: Icon(Icons.close, color: textPrimary),
+            onPressed: _celebrating ? null : () => Navigator.pop(context),
           ),
-        ],
-      ),
-      body: SafeArea(
+          title: Text(
+            widget.sale == null ? 'New Deal' : 'Edit Deal',
+            style: TextStyle(color: textPrimary),
+          ),
+          actions: [
+            TextButton(
+              onPressed: (_isLoading || _celebrating) ? null : _saveSale,
+              child: _isLoading
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Save'),
+            ),
+          ],
+        ),
+        body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(20),
           child: Form(
@@ -1055,7 +1104,7 @@ class _SaleFormPageState extends ConsumerState<SaleFormPage> {
                         setState(() => _selectedCompanyId = value);
                       },
                       validator: (value) {
-                        if (value == null) {
+                        if (value == null || value.trim().isEmpty) {
                           return 'Please select a company';
                         }
                         return null;
@@ -1255,6 +1304,7 @@ class _SaleFormPageState extends ConsumerState<SaleFormPage> {
           ),
         ),
       ),
+    ),
     );
   }
 }

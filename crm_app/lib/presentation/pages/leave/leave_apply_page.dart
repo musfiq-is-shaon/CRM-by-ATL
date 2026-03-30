@@ -1,12 +1,15 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:confetti/confetti.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme_colors.dart';
 import '../../../data/models/leave_model.dart';
 import '../../providers/leave_provider.dart';
+import '../../widgets/celebration_shell.dart';
 
 class LeaveApplyPage extends ConsumerStatefulWidget {
   const LeaveApplyPage({super.key});
@@ -26,6 +29,8 @@ class _LeaveApplyPageState extends ConsumerState<LeaveApplyPage> {
   LeaveHalfDayPart? _halfDayPart;
   final _reasonCtrl = TextEditingController();
   bool _submitting = false;
+  bool _celebrating = false;
+  late ConfettiController _confettiController;
   Timer? _workingDaysDebounce;
   int? _workingDays;
   bool _workingDaysLoading = false;
@@ -35,6 +40,7 @@ class _LeaveApplyPageState extends ConsumerState<LeaveApplyPage> {
   @override
   void dispose() {
     _workingDaysDebounce?.cancel();
+    _confettiController.dispose();
     _reasonCtrl.dispose();
     super.dispose();
   }
@@ -42,6 +48,9 @@ class _LeaveApplyPageState extends ConsumerState<LeaveApplyPage> {
   @override
   void initState() {
     super.initState();
+    _confettiController = ConfettiController(
+      duration: const Duration(seconds: 3),
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(leaveProvider.notifier).loadTypes();
     });
@@ -253,10 +262,14 @@ class _LeaveApplyPageState extends ConsumerState<LeaveApplyPage> {
             attachmentData: _attachmentData,
           );
       if (mounted) {
-        messenger.showSnackBar(
-          const SnackBar(content: Text('Leave request submitted')),
-        );
-        nav.pop();
+        HapticFeedback.mediumImpact();
+        setState(() {
+          _submitting = false;
+          _celebrating = true;
+        });
+        _confettiController.play();
+        await Future.delayed(const Duration(milliseconds: 2800));
+        if (mounted) nav.pop();
       }
     } catch (e) {
       if (mounted) {
@@ -268,7 +281,7 @@ class _LeaveApplyPageState extends ConsumerState<LeaveApplyPage> {
         );
       }
     } finally {
-      if (mounted) setState(() => _submitting = false);
+      if (mounted && !_celebrating) setState(() => _submitting = false);
     }
   }
 
@@ -282,15 +295,21 @@ class _LeaveApplyPageState extends ConsumerState<LeaveApplyPage> {
     final types = ref.watch(leaveProvider.select((s) => s.types));
     final typesLoading = ref.watch(leaveProvider.select((s) => s.typesLoading));
 
-    return Scaffold(
-      backgroundColor: bg,
-      appBar: AppBar(
-        title: const Text('Apply for leave'),
-        backgroundColor: surface,
-        foregroundColor: textPrimary,
-        elevation: 0,
-      ),
-      body: ListView(
+    return CelebrationShell(
+      celebrating: _celebrating,
+      confettiController: _confettiController,
+      title: 'Request sent!',
+      message: 'Your leave request was submitted.',
+      icon: Icons.event_available_rounded,
+      child: Scaffold(
+        backgroundColor: bg,
+        appBar: AppBar(
+          title: const Text('Apply for leave'),
+          backgroundColor: surface,
+          foregroundColor: textPrimary,
+          elevation: 0,
+        ),
+        body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
           _sectionLabel('Leave type', textSecondary),
@@ -475,7 +494,7 @@ class _LeaveApplyPageState extends ConsumerState<LeaveApplyPage> {
           ),
           const SizedBox(height: 28),
           FilledButton(
-            onPressed: _submitting ? null : _submit,
+            onPressed: (_submitting || _celebrating) ? null : _submit,
             style: FilledButton.styleFrom(
               padding: const EdgeInsets.symmetric(vertical: 16),
               shape: RoundedRectangleBorder(
@@ -492,6 +511,7 @@ class _LeaveApplyPageState extends ConsumerState<LeaveApplyPage> {
           ),
         ],
       ),
+    ),
     );
   }
 

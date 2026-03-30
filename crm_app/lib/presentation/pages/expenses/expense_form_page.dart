@@ -1,4 +1,6 @@
+import 'package:confetti/confetti.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme_colors.dart';
 import '../../providers/expense_provider.dart';
@@ -7,6 +9,7 @@ import '../../providers/auth_provider.dart';
 import '../../providers/user_provider.dart';
 import '../../providers/currency_provider.dart';
 import '../../widgets/searchable_dropdown.dart';
+import '../../widgets/celebration_shell.dart';
 
 class ExpenseFormPage extends ConsumerStatefulWidget {
   final String? expenseId;
@@ -30,10 +33,15 @@ class _ExpenseFormPageState extends ConsumerState<ExpenseFormPage> {
   String? _selectedStatus;
   DateTime? _selectedDate;
   bool _isLoading = false;
+  bool _celebrating = false;
+  late ConfettiController _confettiController;
 
   @override
   void initState() {
     super.initState();
+    _confettiController = ConfettiController(
+      duration: const Duration(seconds: 3),
+    );
     _amountController = TextEditingController();
     _amountReturnController = TextEditingController();
     _fromLocationController = TextEditingController();
@@ -76,6 +84,7 @@ class _ExpenseFormPageState extends ConsumerState<ExpenseFormPage> {
 
   @override
   void dispose() {
+    _confettiController.dispose();
     _amountController.dispose();
     _amountReturnController.dispose();
     _fromLocationController.dispose();
@@ -297,6 +306,17 @@ class _ExpenseFormPageState extends ConsumerState<ExpenseFormPage> {
               status: _selectedStatus,
               createdByUserId: currentUserId,
             );
+        if (mounted) {
+          HapticFeedback.mediumImpact();
+          setState(() {
+            _isLoading = false;
+            _celebrating = true;
+          });
+          _confettiController.play();
+          await Future.delayed(const Duration(milliseconds: 2800));
+          if (mounted) Navigator.pop(context);
+        }
+        return;
       } else {
         // Update existing expense
         await ref
@@ -332,7 +352,7 @@ class _ExpenseFormPageState extends ConsumerState<ExpenseFormPage> {
         ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     } finally {
-      if (mounted) {
+      if (mounted && !_celebrating) {
         setState(() => _isLoading = false);
       }
     }
@@ -348,22 +368,28 @@ class _ExpenseFormPageState extends ConsumerState<ExpenseFormPage> {
     final borderColor = AppThemeColors.borderColor(context);
     final primaryColor = Theme.of(context).colorScheme.primary;
 
-    return Scaffold(
-      backgroundColor: bgColor,
-      appBar: AppBar(
-        backgroundColor: surfaceColor,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.close, color: textPrimary),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(
-          widget.expenseId == null ? 'New Expense' : 'Edit Expense',
-          style: TextStyle(color: textPrimary),
-        ),
-        actions: [
-          TextButton(
-            onPressed: _isLoading ? null : _saveExpense,
+    return CelebrationShell(
+      celebrating: _celebrating,
+      confettiController: _confettiController,
+      title: 'Expense submitted!',
+      message: 'Your expense was added successfully.',
+      icon: Icons.receipt_long_rounded,
+      child: Scaffold(
+        backgroundColor: bgColor,
+        appBar: AppBar(
+          backgroundColor: surfaceColor,
+          elevation: 0,
+          leading: IconButton(
+            icon: Icon(Icons.close, color: textPrimary),
+            onPressed: _celebrating ? null : () => Navigator.pop(context),
+          ),
+          title: Text(
+            widget.expenseId == null ? 'New Expense' : 'Edit Expense',
+            style: TextStyle(color: textPrimary),
+          ),
+          actions: [
+            TextButton(
+              onPressed: (_isLoading || _celebrating) ? null : _saveExpense,
             child: _isLoading
                 ? const SizedBox(
                     width: 20,
@@ -720,6 +746,7 @@ class _ExpenseFormPageState extends ConsumerState<ExpenseFormPage> {
           ),
         ),
       ),
+    ),
     );
   }
 }

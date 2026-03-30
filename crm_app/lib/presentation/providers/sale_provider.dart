@@ -5,7 +5,6 @@ import '../../data/models/user_model.dart';
 import '../../data/repositories/sale_repository.dart';
 import '../../data/repositories/company_repository.dart';
 import '../../data/repositories/user_repository.dart';
-import 'auth_provider.dart';
 
 class SalesState {
   final List<Sale> sales;
@@ -72,21 +71,9 @@ class SalesState {
       .fold(0.0, (sum, s) => sum + s.expectedRevenue!);
 }
 
-// Provider to get filtered sales based on user role (KAM)
+/// All authenticated users see the full deals list (same as server returns).
 final userFilteredSalesProvider = Provider<List<Sale>>((ref) {
-  final salesState = ref.watch(salesProvider);
-  final currentUserId = ref.watch(currentUserIdProvider);
-  final isAdmin = ref.watch(isAdminProvider);
-
-  // Admin sees all sales, regular users see only their KAM deals
-  if (isAdmin) {
-    return salesState.sales;
-  }
-
-  // Filter sales where the user is the KAM of the associated company
-  return salesState.sales
-      .where((sale) => sale.company?.kamUserId == currentUserId)
-      .toList();
+  return ref.watch(salesProvider).sales;
 });
 
 // Provider to get filtered leads
@@ -302,6 +289,7 @@ class SalesNotifier extends StateNotifier<SalesState> {
       await loadSales();
     } catch (e) {
       state = state.copyWith(error: e.toString());
+      rethrow;
     }
   }
 
@@ -363,6 +351,7 @@ class SalesNotifier extends StateNotifier<SalesState> {
       await loadSales();
     } catch (e) {
       state = state.copyWith(error: e.toString());
+      rethrow;
     }
   }
 
