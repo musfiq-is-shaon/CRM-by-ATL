@@ -4,10 +4,11 @@ import '../../providers/theme_provider.dart';
 import '../../providers/sale_provider.dart';
 import '../../providers/task_provider.dart';
 import '../../providers/contact_provider.dart';
+import '../../providers/attendance_provider.dart';
 import '../dashboard/dashboard_page.dart';
 import '../sales/sales_list_page.dart';
 import '../expenses/expenses_list_page.dart';
-import '../tasks/tasks_list_page.dart';
+import '../contacts/contacts_list_page.dart';
 import '../../../core/theme/app_theme_colors.dart';
 import 'more_page.dart';
 
@@ -23,14 +24,36 @@ class ShellPage extends ConsumerStatefulWidget {
   ConsumerState<ShellPage> createState() => _ShellPageState();
 }
 
-class _ShellPageState extends ConsumerState<ShellPage> {
+class _ShellPageState extends ConsumerState<ShellPage>
+    with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // Load dashboard data immediately after login
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      // Always land on Dashboard (IndexedStack can keep another tab from last session).
+      ref.read(selectedTabProvider.notifier).state = 0;
       _loadTabData(0);
     });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.resumed) {
+      // Pick up check-in/out done on another device (same account) from API.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ref.read(attendanceProvider.notifier).loadToday();
+      });
+    }
   }
 
   void _loadTabData(int index) {
@@ -40,6 +63,7 @@ class _ShellPageState extends ConsumerState<ShellPage> {
       ref.read(salesProvider.notifier).loadSales();
       ref.read(tasksProvider.notifier).loadTasks();
       ref.read(contactsProvider.notifier).loadContacts();
+      ref.read(attendanceProvider.notifier).loadToday();
       return;
     }
 
@@ -58,10 +82,8 @@ class _ShellPageState extends ConsumerState<ShellPage> {
         case 2: // Expenses
           // Load expenses if needed
           break;
-        case 3: // Tasks
-          ref.read(tasksProvider.notifier).loadTasks();
-          break;
-        case 4: // More - load contacts for other pages
+        case 3: // Contacts
+        case 4: // More (may open contact-related screens)
           ref.read(contactsProvider.notifier).loadContacts();
           break;
       }
@@ -83,7 +105,7 @@ class _ShellPageState extends ConsumerState<ShellPage> {
       const DashboardPage(),
       const SalesListPage(),
       const ExpensesListPage(),
-      const TasksListPage(),
+      const ContactsListPage(),
       const MorePage(),
     ];
 
@@ -155,9 +177,9 @@ class _ShellPageState extends ConsumerState<ShellPage> {
                   context,
                   ref,
                   index: 3,
-                  icon: Icons.checklist_outlined,
-                  activeIcon: Icons.checklist,
-                  label: 'Tasks',
+                  icon: Icons.people_outline,
+                  activeIcon: Icons.people,
+                  label: 'Contacts',
                   selectedTab: selectedTab,
                   isDarkMode: isDarkMode,
                   primaryColor: primaryColor,

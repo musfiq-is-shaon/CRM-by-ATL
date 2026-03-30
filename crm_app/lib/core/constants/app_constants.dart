@@ -29,6 +29,20 @@ class AppConstants {
   static const String attendanceCheckOut = '/api/attendance/check-out';
   static const String attendanceRecords = '/api/attendance/records';
 
+  /// Leave requests (base path used by backend sub-routes).
+  /// "My leaves" — backend route is `/my` (not `/me`).
+  static const String leavesMy = '/api/leaves/my';
+  static const String leavesTeam = '/api/leaves/team';
+  static const String leavesAll = '/api/leaves/all';
+  static const String leavesApply = '/api/leaves/apply';
+  static const String leavesTypes = '/api/leaves/types';
+  static const String leavesReportingManager = '/api/leaves/is-reporting-manager';
+  static const String leavesCalculateDays = '/api/leaves/calculate-days';
+
+  static String leavesById(String leaveId) => '/api/leaves/$leaveId';
+  static String leavesApprove(String leaveId) => '/api/leaves/$leaveId/approve';
+  static String leavesReject(String leaveId) => '/api/leaves/$leaveId/reject';
+
   // Storage Keys
   static const String tokenKey = 'auth_token';
   static const String userKey = 'user_data';

@@ -17,12 +17,15 @@ class _AttendanceRecordsPageState extends ConsumerState<AttendanceRecordsPage> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(attendanceProvider.notifier).loadRecords();
+      final n = ref.read(attendanceProvider.notifier);
+      n.loadRecords();
+      n.loadToday();
     });
   }
 
   Future<void> _refresh() async {
-    ref.read(attendanceProvider.notifier).loadRecords();
+    final n = ref.read(attendanceProvider.notifier);
+    await Future.wait([n.loadRecords(), n.loadToday()]);
   }
 
   @override

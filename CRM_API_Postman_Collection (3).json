@@ -1,0 +1,1683 @@
+{
+  "info": {
+    "name": "CRM API",
+    "description": "Backend API for CRM (Flask). Set {{baseUrl}} to your backend (e.g. http://localhost:5000). Use **Login** to get a token; {{token}} is set automatically from the login response for use in auth-required requests.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:5000" },
+    { "key": "token", "value": "" },
+    { "key": "userId", "value": "" },
+    { "key": "companyId", "value": "" },
+    { "key": "contactId", "value": "" },
+    { "key": "taskId", "value": "" },
+    { "key": "saleId", "value": "" },
+    { "key": "activityId", "value": "" },
+    { "key": "currencyId", "value": "" },
+    { "key": "expensePurposeId", "value": "" },
+    { "key": "expenseId", "value": "" },
+    { "key": "accountParticularId", "value": "" },
+    { "key": "accountEntryId", "value": "" },
+    { "key": "notificationId", "value": "" },
+    { "key": "shiftId", "value": "" },
+    { "key": "leaveTypeId", "value": "" },
+    { "key": "leaveId", "value": "" },
+    { "key": "weekendId", "value": "" },
+    { "key": "holidayId", "value": "" },
+    { "key": "hrEntryId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var j = pm.response.json();",
+                  "if (j && j.token) { pm.collectionVariables.set('token', j.token); }"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@apptriangle.com\",\n  \"password\": \"admin123\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/login",
+            "description": "Returns user, token, expiresAt. Token is saved to collection variable {{token}}."
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": "{{baseUrl}}/api/auth/logout",
+            "description": "Revoke current token (optional)."
+          }
+        },
+        {
+          "name": "Change password",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currentPassword\": \"admin123\",\n  \"newPassword\": \"newpassword123\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/change-password",
+            "description": "Logged-in user changes own password. Requires Bearer token."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "List users",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/users",
+            "description": "Returns all users."
+          }
+        },
+        {
+          "name": "Get user by ID",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/users/{{userId}}",
+            "description": "Replace {{userId}} with actual user ID."
+          }
+        },
+        {
+          "name": "Update me (profile)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"My Name\",\n  \"phone\": \"+1234567890\"\n}"
+            },
+            "url": "{{baseUrl}}/api/users/me",
+            "description": "Logged-in user updates own name/phone. Requires Bearer."
+          }
+        },
+        {
+          "name": "Create user (admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"New User\",\n  \"email\": \"user@example.com\",\n  \"password\": \"password123\",\n  \"phone\": \"\",\n  \"role\": \"user\"\n}"
+            },
+            "url": "{{baseUrl}}/api/users",
+            "description": "Admin only. Sends welcome email. role: admin | user."
+          }
+        },
+        {
+          "name": "Update user (admin)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated Name\",\n  \"email\": \"updated@example.com\",\n  \"phone\": \"\",\n  \"role\": \"user\",\n  \"isActive\": true\n}"
+            },
+            "url": "{{baseUrl}}/api/users/{{userId}}",
+            "description": "Admin only. Replace {{userId}}."
+          }
+        },
+        {
+          "name": "Set user password (admin)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"newPassword\": \"newpassword123\"\n}"
+            },
+            "url": "{{baseUrl}}/api/users/{{userId}}/password",
+            "description": "Admin only. Replace {{userId}}."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Companies",
+      "item": [
+        {
+          "name": "List companies",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/companies?search=&country=&kamUserId=",
+            "description": "Query params: search, country, kamUserId (optional)."
+          }
+        },
+        {
+          "name": "Create company",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Acme Inc\",\n  \"location\": \"New York\",\n  \"country\": \"United States\",\n  \"currencyId\": \"<currency-id>\",\n  \"kamUserId\": \"<user-id>\"\n}"
+            },
+            "url": "{{baseUrl}}/api/companies",
+            "description": "currencyId and kamUserId required. Get currencyId from GET /api/currencies."
+          }
+        },
+        {
+          "name": "Get company",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/companies/{{companyId}}",
+            "description": "Replace {{companyId}}."
+          }
+        },
+        {
+          "name": "Update company",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Acme Inc\",\n  \"location\": \"Boston\",\n  \"country\": \"United States\",\n  \"currencyId\": \"<currency-id>\",\n  \"kamUserId\": \"<user-id>\"\n}"
+            },
+            "url": "{{baseUrl}}/api/companies/{{companyId}}",
+            "description": "Replace {{companyId}}. currencyId optional."
+          }
+        },
+        {
+          "name": "Delete company",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/companies/{{companyId}}",
+            "description": "Replace {{companyId}}."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Contacts",
+      "item": [
+        {
+          "name": "List contacts",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/contacts?companyId=&search=",
+            "description": "Query params: companyId, search (optional)."
+          }
+        },
+        {
+          "name": "Create contact",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"John Doe\",\n  \"companyId\": \"<company-id>\",\n  \"designation\": \"Manager\",\n  \"mobile\": \"+1234567890\",\n  \"email\": \"john@example.com\"\n}"
+            },
+            "url": "{{baseUrl}}/api/contacts",
+            "description": "name, companyId, mobile required."
+          }
+        },
+        {
+          "name": "Get contact",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/contacts/{{contactId}}",
+            "description": "Replace {{contactId}}."
+          }
+        },
+        {
+          "name": "Update contact",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"John Doe\",\n  \"companyId\": \"<company-id>\",\n  \"designation\": \"Director\",\n  \"mobile\": \"+1234567890\",\n  \"email\": \"john@example.com\"\n}"
+            },
+            "url": "{{baseUrl}}/api/contacts/{{contactId}}",
+            "description": "Replace {{contactId}}."
+          }
+        },
+        {
+          "name": "Delete contact",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/contacts/{{contactId}}",
+            "description": "Replace {{contactId}}."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Tasks",
+      "item": [
+        {
+          "name": "List tasks",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/tasks?status=&companyId=&assignToUserId=&assignByUserId=&search=",
+            "description": "Query params: status, companyId, assignToUserId, assignByUserId, search (optional)."
+          }
+        },
+        {
+          "name": "Create task",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Follow up call\",\n  \"note\": \"Optional note\",\n  \"companyId\": \"<company-id>\",\n  \"dueDatetime\": \"2025-12-31T14:00:00\",\n  \"assignByUserId\": \"<user-id>\",\n  \"assignToUserId\": \"<user-id>\"\n}"
+            },
+            "url": "{{baseUrl}}/api/tasks",
+            "description": "title, companyId, dueDatetime required. dueDatetime: ISO 8601."
+          }
+        },
+        {
+          "name": "Get task",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/tasks/{{taskId}}",
+            "description": "Replace {{taskId}}."
+          }
+        },
+        {
+          "name": "Update task",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Updated title\",\n  \"note\": \"Note\",\n  \"companyId\": \"<company-id>\",\n  \"dueDatetime\": \"2025-12-31T15:00:00\",\n  \"assignByUserId\": \"<user-id>\",\n  \"assignToUserId\": \"<user-id>\",\n  \"actorUserId\": \"<user-id>\"\n}"
+            },
+            "url": "{{baseUrl}}/api/tasks/{{taskId}}",
+            "description": "Replace {{taskId}}. actorUserId optional for activity log."
+          }
+        },
+        {
+          "name": "Change task status",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"in_progress\",\n  \"note\": \"Optional note\",\n  \"actorUserId\": \"<user-id>\"\n}"
+            },
+            "url": "{{baseUrl}}/api/tasks/{{taskId}}/status",
+            "description": "Replace {{taskId}}. status: pending | in_progress | completed | cancelled."
+          }
+        },
+        {
+          "name": "Get task logs",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/tasks/{{taskId}}/logs",
+            "description": "Replace {{taskId}}. Returns activity logs."
+          }
+        },
+        {
+          "name": "Delete task",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/tasks/{{taskId}}",
+            "description": "Replace {{taskId}}."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Sales",
+      "item": [
+        {
+          "name": "List sales",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/sales?status=&companyId=&category=&createdByUserId=&search=",
+            "description": "Query params: status, companyId, category, createdByUserId, search (optional)."
+          }
+        },
+        {
+          "name": "Create sale",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"companyId\": \"<company-id>\",\n  \"prospect\": \"Jane Smith\",\n  \"category\": \"warm\",\n  \"expectedClosingDate\": \"2025-12-31\",\n  \"expectedRevenue\": 50000,\n  \"status\": \"lead\",\n  \"createdByUserId\": \"<user-id>\"\n}"
+            },
+            "url": "{{baseUrl}}/api/sales",
+            "description": "companyId, prospect, expectedClosingDate required. category: hot|warm|cold. status: lead|prospect|negotiation|closed|disqualified."
+          }
+        },
+        {
+          "name": "Get sale",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/sales/{{saleId}}",
+            "description": "Replace {{saleId}}."
+          }
+        },
+        {
+          "name": "Update sale",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prospect\": \"Jane Smith\",\n  \"companyId\": \"<company-id>\",\n  \"category\": \"hot\",\n  \"expectedClosingDate\": \"2025-12-31\",\n  \"expectedRevenue\": 75000\n}"
+            },
+            "url": "{{baseUrl}}/api/sales/{{saleId}}",
+            "description": "Replace {{saleId}}."
+          }
+        },
+        {
+          "name": "Change sale status",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"prospect\",\n  \"note\": \"Moved to prospect\",\n  \"changedByUserId\": \"<user-id>\"\n}"
+            },
+            "url": "{{baseUrl}}/api/sales/{{saleId}}/status",
+            "description": "Replace {{saleId}}. Creates status log."
+          }
+        },
+        {
+          "name": "Get sale logs",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/sales/{{saleId}}/logs",
+            "description": "Replace {{saleId}}. Returns status change logs."
+          }
+        },
+        {
+          "name": "List sale activities",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/sales/{{saleId}}/activities",
+            "description": "Replace {{saleId}}."
+          }
+        },
+        {
+          "name": "Create sale activity",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Call with prospect\",\n  \"note\": \"Discussed pricing\",\n  \"date\": \"2025-12-15\",\n  \"createdByUserId\": \"<user-id>\"\n}"
+            },
+            "url": "{{baseUrl}}/api/sales/{{saleId}}/activities",
+            "description": "Replace {{saleId}}. title and date required."
+          }
+        },
+        {
+          "name": "Update sale activity",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Updated title\",\n  \"note\": \"Updated note\",\n  \"date\": \"2025-12-16\"\n}"
+            },
+            "url": "{{baseUrl}}/api/sales/{{saleId}}/activities/{{activityId}}",
+            "description": "Replace {{saleId}} and {{activityId}}."
+          }
+        },
+        {
+          "name": "Delete sale activity",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/sales/{{saleId}}/activities/{{activityId}}",
+            "description": "Replace {{saleId}} and {{activityId}}."
+          }
+        },
+        {
+          "name": "Delete sale",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/sales/{{saleId}}",
+            "description": "Replace {{saleId}}."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Notifications",
+      "item": [
+        {
+          "name": "Get my notifications",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/notifications?limit=50&offset=0",
+            "description": "Get notifications for the current logged-in user."
+          }
+        },
+        {
+          "name": "Mark as read",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/notifications/{{notificationId}}/read",
+            "description": "Mark a specific notification as read."
+          }
+        },
+        {
+          "name": "Mark all read",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/notifications/read-all",
+            "description": "Mark all notifications as read for the current user."
+          }
+        },
+        {
+          "name": "Delete notification",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/notifications/{{notificationId}}",
+            "description": "Delete a specific notification."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Shifts",
+      "item": [
+        {
+          "name": "List shifts",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/shifts",
+            "description": "Get all configured shifts."
+          }
+        },
+        {
+          "name": "Create shift (admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Night Shift\",\n  \"startTime\": \"22:00\",\n  \"endTime\": \"06:00\",\n  \"weekendDays\": [5, 6],\n  \"gracePeriod\": 15,\n  \"employeeIds\": []\n}"
+            },
+            "url": "{{baseUrl}}/api/shifts",
+            "description": "Admin only. Create a new shift. weekendDays: 0=Mon, 6=Sun."
+          }
+        },
+        {
+          "name": "Update shift (admin)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated Night Shift\",\n  \"startTime\": \"21:00\",\n  \"endTime\": \"05:00\",\n  \"weekendDays\": [4, 5],\n  \"gracePeriod\": 10,\n  \"employeeIds\": []\n}"
+            },
+            "url": "{{baseUrl}}/api/shifts/{{shiftId}}",
+            "description": "Admin only. Update shift details and employee assignments."
+          }
+        },
+        {
+          "name": "Delete shift (admin)",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/shifts/{{shiftId}}",
+            "description": "Admin only. Delete a shift (only if no employees are assigned)."
+          }
+        },
+        {
+          "name": "Assign shift (admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"<user-id>\",\n  \"shiftId\": \"<shift-id>\"\n}"
+            },
+            "url": "{{baseUrl}}/api/shifts/assign",
+            "description": "Admin only. Assign a user to a shift (or remove if shiftId is null)."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Attendance",
+      "item": [
+        {
+          "name": "Get today attendance",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/attendance/today",
+            "description": "Get today's attendance status for the current user."
+          }
+        },
+        {
+          "name": "Check-in",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"location\": \"Office Main Entrance\"\n}"
+            },
+            "url": "{{baseUrl}}/api/attendance/check-in",
+            "description": "Check in for today. Location is required."
+          }
+        },
+        {
+          "name": "Check-out",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"location\": \"Office Exit\"\n}"
+            },
+            "url": "{{baseUrl}}/api/attendance/check-out",
+            "description": "Check out for today. Location is required."
+          }
+        },
+        {
+          "name": "My attendance records",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/attendance/records?period=month",
+            "description": "Get attendance records for the current user. period: today, yesterday, week, last_week, month, last_month, year, last_year."
+          }
+        },
+        {
+          "name": "All attendance (admin)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/attendance/all?period=today&userId=",
+            "description": "Admin only. Get attendance records for all users or filtered by userId."
+          }
+        },
+        {
+          "name": "Initialize today (admin)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/attendance/initialize-today",
+            "description": "Admin only. Initialize attendance records for today for all active employees."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Leaves",
+      "item": [
+        {
+          "name": "List active leave types",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/leaves/types",
+            "description": "Get all active leave types."
+          }
+        },
+        {
+          "name": "List all leave types (admin)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/leaves/types/all",
+            "description": "Admin only. Get all leave types (including inactive)."
+          }
+        },
+        {
+          "name": "Create leave type (admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Sick Leave\"\n}"
+            },
+            "url": "{{baseUrl}}/api/leaves/types",
+            "description": "Admin only. Create a new leave type."
+          }
+        },
+        {
+          "name": "Update leave type (admin)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated Sick Leave\",\n  \"isActive\": true\n}"
+            },
+            "url": "{{baseUrl}}/api/leaves/types/{{leaveTypeId}}",
+            "description": "Admin only. Update a leave type."
+          }
+        },
+        {
+          "name": "Delete leave type (admin)",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/leaves/types/{{leaveTypeId}}",
+            "description": "Admin only. Delete a leave type (only if not used)."
+          }
+        },
+        {
+          "name": "Apply for leave",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"leaveTypeId\": \"<type-id>\",\n  \"startDate\": \"2025-12-20\",\n  \"endDate\": \"2025-12-22\",\n  \"reason\": \"Medical appointment\",\n  \"attachmentFileName\": \"\",\n  \"attachmentData\": \"\"\n}"
+            },
+            "url": "{{baseUrl}}/api/leaves/apply",
+            "description": "Apply for a leave. Working days are calculated automatically."
+          }
+        },
+        {
+          "name": "My leaves",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/leaves/my",
+            "description": "Get leave requests for the current user."
+          }
+        },
+        {
+          "name": "All leaves (admin)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/leaves/all",
+            "description": "Admin only. Get all leave requests."
+          }
+        },
+        {
+          "name": "Team leaves (manager)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/leaves/team",
+            "description": "Get leave requests for employees managed by the current user."
+          }
+        },
+        {
+          "name": "Is reporting manager",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/leaves/is-reporting-manager",
+            "description": "Returns isReportingManager and teamSize for the current user (HR reporting-manager relationships)."
+          }
+        },
+        {
+          "name": "Calculate working days",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"startDate\": \"2025-12-20\",\n  \"endDate\": \"2025-12-27\",\n  \"userId\": \"\"\n}"
+            },
+            "url": "{{baseUrl}}/api/leaves/calculate-days",
+            "description": "Working days between startDate and endDate (excludes weekends/holidays per user shift rules). Optional userId: admin any user; manager only their reports; omit for current user."
+          }
+        },
+        {
+          "name": "Approve leave (admin/manager)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/leaves/{{leaveId}}/approve",
+            "description": "Approve a leave request."
+          }
+        },
+        {
+          "name": "Reject leave (admin/manager)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Insufficient staffing during this period\"\n}"
+            },
+            "url": "{{baseUrl}}/api/leaves/{{leaveId}}/reject",
+            "description": "Reject a leave request with a reason."
+          }
+        },
+        {
+          "name": "Get leave details",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/leaves/{{leaveId}}",
+            "description": "Get details of a specific leave request (includes attachment)."
+          }
+        },
+        {
+          "name": "Update leave",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"leaveTypeId\": \"<type-id>\",\n  \"startDate\": \"2025-12-21\",\n  \"endDate\": \"2025-12-23\",\n  \"reason\": \"Updated reason\",\n  \"attachmentFileName\": \"\",\n  \"attachmentData\": \"\"\n}"
+            },
+            "url": "{{baseUrl}}/api/leaves/{{leaveId}}",
+            "description": "Update a pending leave request."
+          }
+        },
+        {
+          "name": "List weekends",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/leaves/weekends",
+            "description": "Get all configured global weekend days."
+          }
+        },
+        {
+          "name": "Create weekend (admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dayOfWeek\": 5\n}"
+            },
+            "url": "{{baseUrl}}/api/leaves/weekends",
+            "description": "Admin only. Add a global weekend day (0=Mon, 6=Sun)."
+          }
+        },
+        {
+          "name": "Delete weekend (admin)",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/leaves/weekends/{{weekendId}}",
+            "description": "Admin only. Remove a global weekend day."
+          }
+        },
+        {
+          "name": "List holidays",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/leaves/holidays",
+            "description": "Get all configured holidays."
+          }
+        },
+        {
+          "name": "Create holiday (admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"New Year\",\n  \"date\": \"2026-01-01\"\n}"
+            },
+            "url": "{{baseUrl}}/api/leaves/holidays",
+            "description": "Admin only. Add a holiday."
+          }
+        },
+        {
+          "name": "Update holiday (admin)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated New Year\",\n  \"date\": \"2026-01-01\"\n}"
+            },
+            "url": "{{baseUrl}}/api/leaves/holidays/{{holidayId}}",
+            "description": "Admin only. Update a holiday."
+          }
+        },
+        {
+          "name": "Delete holiday (admin)",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/leaves/holidays/{{holidayId}}",
+            "description": "Admin only. Remove a holiday."
+          }
+        }
+      ]
+    },
+    {
+      "name": "HR",
+      "item": [
+        {
+          "name": "Get HR info (admin)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/hr/info/{{userId}}",
+            "description": "Admin only. Get full HR info for a user (includes history, certs, contacts)."
+          }
+        },
+        {
+          "name": "Update HR info (admin)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"birthDate\": \"1990-01-01\",\n  \"nid\": \"123456789\",\n  \"department\": \"Engineering\",\n  \"designation\": \"Senior Dev\",\n  \"religion\": \"\",\n  \"bloodGroup\": \"O+\",\n  \"officeMail\": \"user@company.com\",\n  \"personalMail\": \"user@gmail.com\",\n  \"maritalStatus\": \"Single\",\n  \"gender\": \"Male\",\n  \"employeeType\": \"Full-time\",\n  \"joiningDate\": \"2020-01-01\",\n  \"reportingManagerId\": \"\",\n  \"presentAddress\": \"\",\n  \"permanentAddress\": \"\",\n  \"mobile\": \"\",\n  \"employeeId\": \"EMP001\",\n  \"profilePicture\": null\n}"
+            },
+            "url": "{{baseUrl}}/api/hr/info/{{userId}}",
+            "description": "Admin only. Update HR info for a user."
+          }
+        },
+        {
+          "name": "Create employment history (admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"hrInfoId\": \"<hr-info-id>\",\n  \"activity\": \"Joined\",\n  \"appraisalDate\": \"2020-01-01\",\n  \"nextActivity\": \"Appraisal\",\n  \"nextActivityDate\": \"2021-01-01\",\n  \"remarks\": \"\"\n}"
+            },
+            "url": "{{baseUrl}}/api/hr/employment-history",
+            "description": "Admin only. Create employment history entry."
+          }
+        },
+        {
+          "name": "Update employment history (admin)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"activity\": \"Promotion\",\n  \"appraisalDate\": \"2021-01-01\",\n  \"nextActivity\": \"Appraisal\",\n  \"nextActivityDate\": \"2022-01-01\",\n  \"remarks\": \"Promoted to Senior\"\n}"
+            },
+            "url": "{{baseUrl}}/api/hr/employment-history/{{hrEntryId}}",
+            "description": "Admin only. Update employment history entry."
+          }
+        },
+        {
+          "name": "Delete employment history (admin)",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/hr/employment-history/{{hrEntryId}}",
+            "description": "Admin only. Delete employment history entry."
+          }
+        },
+        {
+          "name": "Create academic certification (admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"hrInfoId\": \"<hr-info-id>\",\n  \"degree\": \"BSc in CS\",\n  \"institute\": \"University Name\",\n  \"grade\": \"3.8\",\n  \"year\": \"2012\",\n  \"attachmentFileName\": \"\",\n  \"attachmentData\": \"\"\n}"
+            },
+            "url": "{{baseUrl}}/api/hr/academic-certification",
+            "description": "Admin only. Create academic certification entry."
+          }
+        },
+        {
+          "name": "Update academic certification (admin)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"degree\": \"MSc in CS\",\n  \"institute\": \"University Name\",\n  \"grade\": \"3.9\",\n  \"year\": \"2014\",\n  \"attachmentFileName\": \"\",\n  \"attachmentData\": \"\"\n}"
+            },
+            "url": "{{baseUrl}}/api/hr/academic-certification/{{hrEntryId}}",
+            "description": "Admin only. Update academic certification entry."
+          }
+        },
+        {
+          "name": "Delete academic certification (admin)",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/hr/academic-certification/{{hrEntryId}}",
+            "description": "Admin only. Delete academic certification entry."
+          }
+        },
+        {
+          "name": "Create emergency contact (admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"hrInfoId\": \"<hr-info-id>\",\n  \"name\": \"Emergency Contact\",\n  \"phone\": \"+123456789\",\n  \"relation\": \"Spouse\",\n  \"address\": \"\"\n}"
+            },
+            "url": "{{baseUrl}}/api/hr/emergency-contact",
+            "description": "Admin only. Create emergency contact entry."
+          }
+        },
+        {
+          "name": "Update emergency contact (admin)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated Contact\",\n  \"phone\": \"+987654321\",\n  \"relation\": \"Parent\",\n  \"address\": \"\"\n}"
+            },
+            "url": "{{baseUrl}}/api/hr/emergency-contact/{{hrEntryId}}",
+            "description": "Admin only. Update emergency contact entry."
+          }
+        },
+        {
+          "name": "Delete emergency contact (admin)",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/hr/emergency-contact/{{hrEntryId}}",
+            "description": "Admin only. Delete emergency contact entry."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Status config",
+      "item": [
+        {
+          "name": "Get status config",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/status-config",
+            "description": "Returns taskStatuses, salesCategories, salesStatuses. No auth required."
+          }
+        },
+        {
+          "name": "Add status (admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"group\": \"taskStatuses\",\n  \"value\": \"on_hold\"\n}"
+            },
+            "url": "{{baseUrl}}/api/status-config",
+            "description": "Admin only. group: taskStatuses | salesCategories | salesStatuses. value stored lower-case, spaces→underscores."
+          }
+        },
+        {
+          "name": "Remove status (admin)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"group\": \"taskStatuses\",\n  \"value\": \"on_hold\"\n}"
+            },
+            "url": "{{baseUrl}}/api/status-config",
+            "description": "Admin only. Must leave at least one value per group."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Currencies",
+      "item": [
+        {
+          "name": "List currencies",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/currencies",
+            "description": "Returns all currencies. No auth required for GET."
+          }
+        },
+        {
+          "name": "Create currency (admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"USD\",\n  \"name\": \"US Dollar\",\n  \"symbol\": \"$\",\n  \"sortOrder\": 0\n}"
+            },
+            "url": "{{baseUrl}}/api/currencies",
+            "description": "Admin only. code and name required."
+          }
+        },
+        {
+          "name": "Get currency",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/currencies/{{currencyId}}",
+            "description": "Replace {{currencyId}}."
+          }
+        },
+        {
+          "name": "Update currency (admin)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"USD\",\n  \"name\": \"US Dollar\",\n  \"symbol\": \"$\",\n  \"sortOrder\": 0\n}"
+            },
+            "url": "{{baseUrl}}/api/currencies/{{currencyId}}",
+            "description": "Admin only. Replace {{currencyId}}. All fields optional."
+          }
+        },
+        {
+          "name": "Delete currency (admin)",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/currencies/{{currencyId}}",
+            "description": "Admin only. Replace {{currencyId}}."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Company profile",
+      "item": [
+        {
+          "name": "Get company profile",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/company-profile",
+            "description": "Single org profile for Settings. No auth required for GET."
+          }
+        },
+        {
+          "name": "Update company profile (admin)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"My Company\",\n  \"email\": \"contact@company.com\",\n  \"phone\": \"\",\n  \"website\": \"\",\n  \"address\": \"\",\n  \"city\": \"\",\n  \"country\": \"\",\n  \"industry\": \"\",\n  \"taxId\": \"\",\n  \"description\": \"\",\n  \"logo\": null\n}"
+            },
+            "url": "{{baseUrl}}/api/company-profile",
+            "description": "Admin only. All fields optional. logo: base64 data URL or null."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Expense Purposes",
+      "item": [
+        {
+          "name": "List expense purposes",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/expense-purposes",
+            "description": "Returns all expense purposes, ordered by sort_order then name. No auth required for GET."
+          }
+        },
+        {
+          "name": "Create expense purpose (admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Travel\",\n  \"sortOrder\": 0,\n  \"isActive\": true\n}"
+            },
+            "url": "{{baseUrl}}/api/expense-purposes",
+            "description": "Admin only. name required. sortOrder and isActive optional."
+          }
+        },
+        {
+          "name": "Get expense purpose",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/expense-purposes/{{expensePurposeId}}",
+            "description": "Replace {{expensePurposeId}}."
+          }
+        },
+        {
+          "name": "Update expense purpose (admin)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Travel Expenses\",\n  \"sortOrder\": 1,\n  \"isActive\": true\n}"
+            },
+            "url": "{{baseUrl}}/api/expense-purposes/{{expensePurposeId}}",
+            "description": "Admin only. Replace {{expensePurposeId}}. All fields optional."
+          }
+        },
+        {
+          "name": "Delete expense purpose (admin)",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/expense-purposes/{{expensePurposeId}}",
+            "description": "Admin only. Replace {{expensePurposeId}}."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Expenses",
+      "item": [
+        {
+          "name": "List expenses",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/expenses",
+            "description": "Admin: all expenses. User: only their own (createdByUserId = current user)."
+          }
+        },
+        {
+          "name": "Create expense",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"companyId\": \"<company-id>\",\n  \"date\": \"2025-12-15\",\n  \"amount\": 500.00,\n  \"amountReturn\": 300.00,\n  \"fromLocation\": \"New York\",\n  \"toLocation\": \"Boston\",\n  \"purposeId\": \"<purpose-id>\",\n  \"purpose\": \"Business trip notes\",\n  \"tripType\": \"round_trip\",\n  \"status\": \"unpaid\"\n}"
+            },
+            "url": "{{baseUrl}}/api/expenses",
+            "description": "companyId, date, amount required. tripType: single_trip | round_trip. amountReturn required for round_trip. status: unpaid | paid. createdByUserId set from current user."
+          }
+        },
+        {
+          "name": "Get expense",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/expenses/{{expenseId}}",
+            "description": "Replace {{expenseId}}. Users can only view their own expenses (unless admin)."
+          }
+        },
+        {
+          "name": "Update expense",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"paid\",\n  \"companyId\": \"<company-id>\",\n  \"date\": \"2025-12-15\",\n  \"amount\": 500.00,\n  \"tripType\": \"single_trip\",\n  \"purposeId\": \"<purpose-id>\",\n  \"purpose\": \"Updated notes\",\n  \"fromLocation\": \"New York\",\n  \"toLocation\": \"Boston\"\n}"
+            },
+            "url": "{{baseUrl}}/api/expenses/{{expenseId}}",
+            "description": "Replace {{expenseId}}. Users can only update their own expenses (unless admin). All fields optional."
+          }
+        },
+        {
+          "name": "Delete expense",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/expenses/{{expenseId}}",
+            "description": "Replace {{expenseId}}. Users can only delete their own expenses (unless admin)."
+          }
+        },
+        {
+          "name": "List expenses (bin)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/expenses/bin",
+            "description": "Soft-deleted expenses. Admin: all. User: own only."
+          }
+        },
+        {
+          "name": "Bulk soft delete expenses",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ids\": [\"<expense-id-1>\", \"<expense-id-2>\"]\n}"
+            },
+            "url": "{{baseUrl}}/api/expenses/bulk-soft-delete",
+            "description": "Soft-delete multiple active expenses. Admin: any. User: own only. Body: non-empty ids array."
+          }
+        },
+        {
+          "name": "Restore expenses from bin",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ids\": [\"<expense-id>\"]\n}"
+            },
+            "url": "{{baseUrl}}/api/expenses/restore",
+            "description": "Restore soft-deleted expenses. Admin: any. User: own only. Body: non-empty ids array."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Account Particulars",
+      "item": [
+        {
+          "name": "List account particulars",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/account-particulars?type=",
+            "description": "Query param: type (received|expense, optional). Returns all if not specified. Ordered by sort_order, name."
+          }
+        },
+        {
+          "name": "Create account particular (admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Office Deposit\",\n  \"type\": \"received\",\n  \"sortOrder\": 0\n}"
+            },
+            "url": "{{baseUrl}}/api/account-particulars",
+            "description": "Admin only. name and type (received|expense) required. sortOrder optional."
+          }
+        },
+        {
+          "name": "Get account particular",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/account-particulars/{{accountParticularId}}",
+            "description": "Replace {{accountParticularId}}."
+          }
+        },
+        {
+          "name": "Update account particular (admin)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated Name\",\n  \"type\": \"expense\",\n  \"sortOrder\": 1\n}"
+            },
+            "url": "{{baseUrl}}/api/account-particulars/{{accountParticularId}}",
+            "description": "Admin only. Replace {{accountParticularId}}. All fields optional."
+          }
+        },
+        {
+          "name": "Delete account particular (admin)",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/account-particulars/{{accountParticularId}}",
+            "description": "Admin only. Replace {{accountParticularId}}."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Accounts",
+      "item": [
+        {
+          "name": "List account entries",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/accounts?from=&to=",
+            "description": "Query params: from, to (date filters, optional). Returns all entries, last added first."
+          }
+        },
+        {
+          "name": "Create account entry (admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"date\": \"2025-12-15\",\n  \"particular\": \"Office Deposit\",\n  \"description\": \"Monthly office deposit\",\n  \"type\": \"received\",\n  \"amount\": 10000.00,\n  \"paidTo\": \"Petty Cash\",\n  \"attachmentFileName\": \"receipt.pdf\",\n  \"attachmentData\": \"<base64-string>\"\n}"
+            },
+            "url": "{{baseUrl}}/api/accounts",
+            "description": "Admin only. date, type (received|expense), amount required. paidTo required for expense. Voucher auto-generated. Received: paidBy=AppTriangle, paidTo=Petty Cash. Expense: paidBy=Petty Cash, paidTo=user input. attachmentData: base64 string (optional)."
+          }
+        },
+        {
+          "name": "Get account entry",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/accounts/{{accountEntryId}}",
+            "description": "Replace {{accountEntryId}}. Returns entry with attachmentData if present."
+          }
+        },
+        {
+          "name": "Update account entry (admin)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"date\": \"2025-12-15\",\n  \"particular\": \"Updated Particular\",\n  \"description\": \"Updated description\",\n  \"type\": \"expense\",\n  \"amount\": 500.00,\n  \"paidTo\": \"Vendor Name\",\n  \"attachmentFileName\": \"updated.pdf\",\n  \"attachmentData\": \"<base64-string>\"\n}"
+            },
+            "url": "{{baseUrl}}/api/accounts/{{accountEntryId}}",
+            "description": "Admin only. Replace {{accountEntryId}}. Voucher not changed. All fields optional. Can also use amountDebit/amountCredit/paidBy/paidTo directly."
+          }
+        },
+        {
+          "name": "Delete account entry (admin)",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/accounts/{{accountEntryId}}",
+            "description": "Admin only. Replace {{accountEntryId}}."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Departments",
+      "item": [
+        {
+          "name": "List departments",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/departments",
+            "description": "List all departments, sorted by sort_order then name. No auth required for read."
+          }
+        },
+        {
+          "name": "Create department (admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Engineering\"\n}"
+            },
+            "url": "{{baseUrl}}/api/departments",
+            "description": "Admin only. Create a department."
+          }
+        },
+        {
+          "name": "Update department (admin)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Software Engineering\",\n  \"isActive\": true\n}"
+            },
+            "url": "{{baseUrl}}/api/departments/{{departmentId}}",
+            "description": "Admin only. Update a department."
+          }
+        },
+        {
+          "name": "Delete department (admin)",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/departments/{{departmentId}}",
+            "description": "Admin only. Delete a department."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Designations",
+      "item": [
+        {
+          "name": "List designations",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/designations",
+            "description": "List all designations, sorted by sort_order then name. No auth required for read."
+          }
+        },
+        {
+          "name": "Create designation (admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Senior Software Engineer\"\n}"
+            },
+            "url": "{{baseUrl}}/api/designations",
+            "description": "Admin only. Create a designation."
+          }
+        },
+        {
+          "name": "Update designation (admin)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Lead Software Engineer\",\n  \"isActive\": true\n}"
+            },
+            "url": "{{baseUrl}}/api/designations/{{designationId}}",
+            "description": "Admin only. Update a designation."
+          }
+        },
+        {
+          "name": "Delete designation (admin)",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/designations/{{designationId}}",
+            "description": "Admin only. Delete a designation."
+          }
+        }
+      ]
+    }
+  ]
+}

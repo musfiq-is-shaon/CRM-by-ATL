@@ -46,7 +46,7 @@ class UsersPage extends ConsumerWidget {
         loading: () => const LoadingWidget(),
         error: (error, stack) => app_widgets.ErrorWidget(
           message: error.toString(),
-          onRetry: () => ref.refresh(usersProvider),
+          onRetry: () => ref.invalidate(usersProvider),
         ),
         data: (users) {
           if (users.isEmpty) {
@@ -59,7 +59,8 @@ class UsersPage extends ConsumerWidget {
 
           return RefreshIndicator(
             onRefresh: () async {
-              ref.refresh(usersProvider);
+              ref.invalidate(usersProvider);
+              await ref.read(usersProvider.future);
             },
             child: ListView.builder(
               padding: const EdgeInsets.all(16),
@@ -225,7 +226,6 @@ class UsersPage extends ConsumerWidget {
   }
 
   void _showCreateUserDialog(BuildContext context) {
-    final bgColor = AppThemeColors.backgroundColor(context);
     final surfaceColor = AppThemeColors.surfaceColor(context);
     final textPrimary = AppThemeColors.textPrimaryColor(context);
     final textSecondary = AppThemeColors.textSecondaryColor(context);

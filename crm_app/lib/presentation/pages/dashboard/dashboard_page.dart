@@ -57,19 +57,13 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     final isAdmin = ref.watch(isAdminProvider);
     final authState = ref.watch(authProvider);
 
-    // Use filtered data based on user role
-    final userFilteredSales = ref.watch(userFilteredSalesProvider);
-    final userFilteredClosed = ref.watch(userFilteredClosedProvider);
     final userFilteredTasks = ref.watch(userFilteredTasksProvider);
-    final userPendingTasks = ref.watch(userFilteredPendingTasksProvider);
-    final userInProgressTasks = ref.watch(userFilteredInProgressTasksProvider);
     final userPendingTasksSorted = ref.watch(userPendingTasksSortedProvider);
 
     final bgColor = AppThemeColors.backgroundColor(context);
     final surfaceColor = AppThemeColors.surfaceColor(context);
     final textPrimary = AppThemeColors.textPrimaryColor(context);
     final textSecondary = AppThemeColors.textSecondaryColor(context);
-    final textTertiary = AppThemeColors.textTertiaryColor(context);
     final borderColor = AppThemeColors.borderColor(context);
 
     return Scaffold(
@@ -78,6 +72,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
         child: RefreshIndicator(
           onRefresh: _refreshData,
           child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
             slivers: [
               // App Bar
               SliverToBoxAdapter(
@@ -139,13 +134,6 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                   ),
                 ),
               ),
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: const TodayAttendanceCardWidget(),
-                ),
-              ),
-              const SliverToBoxAdapter(child: SizedBox(height: 24)),
               if (isAdmin) ...[
                 // KPI Cards
                 SliverToBoxAdapter(
@@ -213,8 +201,175 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                 const SliverToBoxAdapter(child: SizedBox(height: 24)),
               ],
 
-              // Pending Tasks for non-admin
+              // Quick Actions
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Quick Actions',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                          color: textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      if (!isAdmin)
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _QuickActionButton(
+                                icon: Icons.trending_up_outlined,
+                                label: 'Add Deal',
+                                color: const Color(0xFF2563EB),
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) =>
+                                          const SaleFormPage(),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: _QuickActionButton(
+                                icon: Icons.receipt_outlined,
+                                label: 'Add Expense',
+                                color: const Color(0xFFF59E0B),
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) =>
+                                          const ExpenseFormPage(),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: _QuickActionButton(
+                                icon: Icons.checklist_outlined,
+                                label: 'Tasks',
+                                color: const Color(0xFF8B5CF6),
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) =>
+                                          const TasksListPage(),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          ],
+                        )
+                      else
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _QuickActionButton(
+                                    icon: Icons.person_add_outlined,
+                                    label: 'Add Lead',
+                                    color: const Color(0xFF2563EB),
+                                    onTap: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (context) =>
+                                              const SaleFormPage(),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: _QuickActionButton(
+                                    icon: Icons.people_outline,
+                                    label: 'Add Contact',
+                                    color: const Color(0xFF8B5CF6),
+                                    onTap: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (context) =>
+                                              const ContactFormPage(),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _QuickActionButton(
+                                    icon: Icons.task_alt,
+                                    label: 'Add Task',
+                                    color: const Color(0xFFF59E0B),
+                                    onTap: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (context) =>
+                                              const TaskFormPage(),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: _QuickActionButton(
+                                    icon: Icons.checklist_outlined,
+                                    label: 'Tasks',
+                                    color: const Color(0xFF2563EB),
+                                    onTap: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (context) =>
+                                              const TasksListPage(),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+
+              const SliverToBoxAdapter(child: SizedBox(height: 28)),
+
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                  child: const TodayAttendanceCardWidget(),
+                ),
+              ),
+
+              // Pending Tasks for non-admin (after Quick Actions + attendance)
               if (!isAdmin) ...[
+                const SliverToBoxAdapter(child: SizedBox(height: 20)),
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -251,10 +406,16 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                   ),
                 ),
                 if (userPendingTasksSorted.isEmpty)
-                  const SliverToBoxAdapter(
+                  SliverToBoxAdapter(
                     child: Padding(
-                      padding: EdgeInsets.all(20),
-                      child: SizedBox(height: 100), // Empty space
+                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 4),
+                      child: Text(
+                        'No pending tasks',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: textSecondary,
+                        ),
+                      ),
                     ),
                   )
                 else
@@ -356,136 +517,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                           : userPendingTasksSorted.length,
                     ),
                   ),
-                const SliverToBoxAdapter(child: SizedBox(height: 24)),
               ],
-
-              // Quick Actions
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Quick Actions',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w600,
-                          color: textPrimary,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          if (!isAdmin) ...[
-                            Expanded(
-                              child: _QuickActionButton(
-                                icon: Icons.trending_up_outlined,
-                                label: 'Add Deal',
-                                color: const Color(0xFF2563EB),
-                                onTap: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) =>
-                                          const SaleFormPage(),
-                                    ),
-                                  );
-                                },
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: _QuickActionButton(
-                                icon: Icons.receipt_outlined,
-                                label: 'Add Expense',
-                                color: const Color(0xFFF59E0B),
-                                onTap: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) =>
-                                          const ExpenseFormPage(),
-                                    ),
-                                  );
-                                },
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: _QuickActionButton(
-                                icon: Icons.group_add_outlined,
-                                label: 'Add Contacts',
-                                color: const Color(0xFF8B5CF6),
-                                onTap: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) =>
-                                          const ContactFormPage(),
-                                    ),
-                                  );
-                                },
-                              ),
-                            ),
-                          ] else ...[
-                            Expanded(
-                              child: _QuickActionButton(
-                                icon: Icons.person_add_outlined,
-                                label: 'Add Lead',
-                                color: const Color(0xFF2563EB),
-                                onTap: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) =>
-                                          const SaleFormPage(),
-                                    ),
-                                  );
-                                },
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: _QuickActionButton(
-                                icon: Icons.people_outline,
-                                label: 'Add Contact',
-                                color: const Color(0xFF8B5CF6),
-                                onTap: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) =>
-                                          const ContactFormPage(),
-                                    ),
-                                  );
-                                },
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: _QuickActionButton(
-                                icon: Icons.task_alt,
-                                label: 'Add Task',
-                                color: const Color(0xFFF59E0B),
-                                onTap: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) =>
-                                          const TaskFormPage(),
-                                    ),
-                                  );
-                                },
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
 
               if (isAdmin) ...[
                 const SliverToBoxAdapter(child: SizedBox(height: 24)),
@@ -647,11 +679,8 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                           : userFilteredTasks.length,
                     ),
                   ),
-
-                const SliverToBoxAdapter(child: SizedBox(height: 100)),
               ],
-
-              const SliverToBoxAdapter(child: SizedBox(height: 100)),
+              const SliverToBoxAdapter(child: SizedBox(height: 32)),
             ],
           ),
         ),

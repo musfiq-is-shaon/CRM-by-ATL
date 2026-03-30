@@ -1,3 +1,5 @@
+import 'dart:math' show pi;
+
 import 'package:flutter/material.dart';
 import '../../../../core/services/app_haptics.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -256,9 +258,9 @@ class TodayAttendanceCardWidget extends ConsumerWidget {
               ),
             ),
           ],
-          // Hold to check in / check out
+          // Hold to check in / check out (fingerprint-style ring; same duration + haptics)
           if (todayAttendance?.safeStatus != 'completed') ...[
-            const SizedBox(height: 8),
+            const SizedBox(height: 16),
             Builder(
               builder: (context) {
                 final flow = todayAttendance?.safeStatus ?? 'pending';
@@ -268,7 +270,6 @@ class TodayAttendanceCardWidget extends ConsumerWidget {
                     enabled: !busy,
                     label: 'Hold to check in',
                     accentColor: Colors.green.shade600,
-                    icon: Icons.login_rounded,
                     onHoldComplete: () => _fetchLocationAndSubmit(
                       context,
                       ref,
@@ -283,7 +284,6 @@ class TodayAttendanceCardWidget extends ConsumerWidget {
                     enabled: !busy,
                     label: 'Hold to check out',
                     accentColor: Colors.red.shade600,
-                    icon: Icons.logout_rounded,
                     onHoldComplete: () => _fetchLocationAndSubmit(
                       context,
                       ref,
@@ -383,13 +383,12 @@ String _formatTime(DateTime time) {
   return '$hour12:$minute $period';
 }
 
-/// Press and hold until the bar fills; then runs [onHoldComplete] (e.g. GPS flow).
-/// Release early to cancel.
+/// Press and hold until the ring completes; then runs [onHoldComplete] (e.g. GPS flow).
+/// Same duration and [AppHaptics.holdComplete] as before. Release early to cancel.
 class HoldToAttendanceAction extends StatefulWidget {
   final bool enabled;
   final String label;
   final Color accentColor;
-  final IconData icon;
   final Future<void> Function() onHoldComplete;
 
   const HoldToAttendanceAction({
@@ -397,7 +396,6 @@ class HoldToAttendanceAction extends StatefulWidget {
     required this.enabled,
     required this.label,
     required this.accentColor,
-    required this.icon,
     required this.onHoldComplete,
   });
 
@@ -407,7 +405,7 @@ class HoldToAttendanceAction extends StatefulWidget {
 
 class _HoldToAttendanceActionState extends State<HoldToAttendanceAction>
     with SingleTickerProviderStateMixin {
-  static const double _height = 52;
+  static const double _ringSize = 140;
   static const Duration _holdDuration = Duration(milliseconds: 1600);
 
   late AnimationController _controller;
@@ -472,123 +470,160 @@ class _HoldToAttendanceActionState extends State<HoldToAttendanceAction>
   @override
   Widget build(BuildContext context) {
     final textPrimary = AppThemeColors.textPrimaryColor(context);
+    final textSecondary = AppThemeColors.textSecondaryColor(context);
     final disabled = !widget.enabled || _busy;
+    final accent = widget.accentColor;
 
     return Opacity(
       opacity: disabled && !_busy ? 0.55 : 1,
       child: AbsorbPointer(
         absorbing: disabled,
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTapDown: _onTapDown,
-          onTapUp: (_) => _onTapEnd(),
-          onTapCancel: _onTapEnd,
-          child: AnimatedBuilder(
-            animation: _controller,
-            builder: (context, _) {
-              final p = _controller.value.clamp(0.0, 1.0);
-              final accent = widget.accentColor;
-              final borderCol = Color.lerp(
-                accent.withOpacity(0.38),
-                accent.withOpacity(0.78),
-                p,
-              )!;
-              final iconCol = Color.lerp(
-                accent,
-                Color.lerp(accent, Colors.white, 0.38)!,
-                p,
-              )!;
-              return Container(
-                height: _height,
-                decoration: BoxDecoration(
-                  color: accent.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: borderCol, width: 1 + p * 0.45),
-                ),
-                clipBehavior: Clip.antiAlias,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    // Full-width L→R gradient; clip reveals from left to right with p.
-                    LayoutBuilder(
-                      builder: (context, constraints) {
-                        final fw = constraints.maxWidth;
-                        return Stack(
-                          clipBehavior: Clip.hardEdge,
-                          fit: StackFit.expand,
-                          children: [
-                            if (fw > 0 && p > 0)
-                              Positioned(
-                                left: 0,
-                                top: 0,
-                                bottom: 0,
-                                width: fw * p,
-                                child: ClipRect(
-                                  child: Align(
-                                    alignment: Alignment.centerLeft,
-                                    child: SizedBox(
-                                      width: fw,
-                                      height: _height,
-                                      child: DecoratedBox(
-                                        decoration: BoxDecoration(
-                                          gradient: LinearGradient(
-                                            begin: Alignment.centerLeft,
-                                            end: Alignment.centerRight,
-                                            colors: [
-                                              accent.withOpacity(0.32),
-                                              accent.withOpacity(0.78),
-                                              Color.lerp(
-                                                    accent,
-                                                    Colors.white,
-                                                    0.28,
-                                                  ) ??
-                                                  accent,
-                                            ],
-                                            stops: const [0.0, 0.58, 1.0],
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTapDown: _onTapDown,
+              onTapUp: (_) => _onTapEnd(),
+              onTapCancel: _onTapEnd,
+              child: AnimatedBuilder(
+                animation: _controller,
+                builder: (context, _) {
+                  final p = _controller.value.clamp(0.0, 1.0);
+                  final track = Color.lerp(
+                    accent.withValues(alpha: 0.14),
+                    accent.withValues(alpha: 0.22),
+                    p,
+                  )!;
+                  return SizedBox(
+                    width: _ringSize,
+                    height: _ringSize,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        Positioned.fill(
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: accent.withValues(alpha: 0.06 + p * 0.08),
+                              boxShadow: [
+                                BoxShadow(
+                                  color:
+                                      accent.withValues(alpha: 0.12 + p * 0.18),
+                                  blurRadius: 18 + p * 12,
+                                  spreadRadius: p * 2,
                                 ),
-                              ),
-                          ],
-                        );
-                      },
-                    ),
-                    Center(
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            widget.icon,
-                            size: 22,
-                            color: iconCol,
-                          ),
-                          const SizedBox(width: 10),
-                          Text(
-                            widget.label,
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600,
-                              color: Color.lerp(
-                                textPrimary.withOpacity(0.82),
-                                textPrimary,
-                                p,
-                              ),
+                              ],
                             ),
                           ),
-                        ],
-                      ),
+                        ),
+                        CustomPaint(
+                          size: const Size(_ringSize, _ringSize),
+                          painter: _FingerprintHoldRingPainter(
+                            progress: p,
+                            accent: accent,
+                            trackColor: track,
+                          ),
+                        ),
+                        Icon(
+                          Icons.fingerprint,
+                          size: 56,
+                          color: Color.lerp(
+                            accent.withValues(alpha: 0.65),
+                            accent,
+                            p,
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 14),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Text(
+                widget.label,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: textPrimary,
                 ),
-              );
-            },
-          ),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Keep holding until the ring completes',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 12,
+                color: textSecondary,
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
+}
+
+/// Outer track + inner scanner-style rings + sweep progress (clockwise from top).
+class _FingerprintHoldRingPainter extends CustomPainter {
+  _FingerprintHoldRingPainter({
+    required this.progress,
+    required this.accent,
+    required this.trackColor,
+  });
+
+  final double progress;
+  final Color accent;
+  final Color trackColor;
+
+  static const double _stroke = 4.5;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final c = Offset(size.width / 2, size.height / 2);
+    final r = size.width / 2 - _stroke;
+
+    for (var i = 0; i < 3; i++) {
+      final rr = r * (0.38 + i * 0.17);
+      final p = Paint()
+        ..color = accent.withValues(alpha: 0.05 + i * 0.035)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1;
+      canvas.drawCircle(c, rr, p);
+    }
+
+    final track = Paint()
+      ..color = trackColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = _stroke
+      ..strokeCap = StrokeCap.round;
+    canvas.drawCircle(c, r, track);
+
+    final sweep = 2 * pi * progress.clamp(0.0, 1.0);
+    if (sweep > 0.002) {
+      final prog = Paint()
+        ..color = accent
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = _stroke
+        ..strokeCap = StrokeCap.round;
+      canvas.drawArc(
+        Rect.fromCircle(center: c, radius: r),
+        -pi / 2,
+        sweep,
+        false,
+        prog,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _FingerprintHoldRingPainter oldDelegate) =>
+      oldDelegate.progress != progress ||
+      oldDelegate.accent != accent ||
+      oldDelegate.trackColor != trackColor;
 }

@@ -4,6 +4,7 @@ import '../../../core/theme/app_theme_colors.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../providers/notification_provider.dart';
+import '../../providers/task_provider.dart';
 import '../../widgets/crm_card.dart';
 
 class SettingsPage extends ConsumerWidget {
@@ -96,10 +97,14 @@ class SettingsPage extends ConsumerWidget {
                   primaryColor: primaryColor,
                   trailing: Switch(
                     value: notificationSettings.enabled,
-                    onChanged: (value) {
-                      ref
+                    onChanged: (value) async {
+                      await ref
                           .read(notificationSettingsProvider.notifier)
                           .setEnabled(value);
+                      final tasks = ref.read(tasksProvider).tasks;
+                      await ref
+                          .read(notificationSettingsProvider.notifier)
+                          .rescheduleNotifications(tasks);
                     },
                     activeThumbColor: primaryColor,
                   ),
@@ -336,11 +341,15 @@ class SettingsPage extends ConsumerWidget {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: () {
-                    ref
+                  onPressed: () async {
+                    await ref
                         .read(notificationSettingsProvider.notifier)
                         .setDaysBefore(selectedDays);
-                    Navigator.pop(context);
+                    final tasks = ref.read(tasksProvider).tasks;
+                    await ref
+                        .read(notificationSettingsProvider.notifier)
+                        .rescheduleNotifications(tasks);
+                    if (context.mounted) Navigator.pop(context);
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: primaryColor,

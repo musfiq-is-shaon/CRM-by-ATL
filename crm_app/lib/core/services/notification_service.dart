@@ -1,4 +1,5 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz_data;
 import '../../data/models/task_model.dart';
@@ -16,8 +17,8 @@ class NotificationService {
   Future<void> initialize() async {
     if (_isInitialized) return;
 
-    // Initialize timezone
     tz_data.initializeTimeZones();
+    await _syncLocalTimeZone();
 
     const androidSettings = AndroidInitializationSettings(
       '@mipmap/ic_launcher',
@@ -39,6 +40,17 @@ class NotificationService {
     );
 
     _isInitialized = true;
+  }
+
+  /// Maps [tz.local] to the device IANA zone. Without this, the timezone
+  /// package defaults to UTC and scheduled wall-clock times are wrong.
+  Future<void> _syncLocalTimeZone() async {
+    try {
+      final info = await FlutterTimezone.getLocalTimezone();
+      tz.setLocalLocation(tz.getLocation(info.identifier));
+    } catch (_) {
+      // Keep package default (UTC) if the OS reports an unknown identifier.
+    }
   }
 
   void _onNotificationTapped(NotificationResponse response) {

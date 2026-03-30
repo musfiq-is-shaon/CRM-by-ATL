@@ -5,9 +5,9 @@ import '../../providers/auth_provider.dart';
 import '../../widgets/crm_card.dart';
 import '../settings/settings_page.dart';
 import '../admin/users_page.dart';
-import '../contacts/contacts_list_page.dart';
 import 'notification_settings_page.dart';
 import '../attendance/attendance_records_page.dart';
+import '../leave/leave_list_page.dart';
 
 class MorePage extends ConsumerWidget {
   const MorePage({super.key});
@@ -23,7 +23,6 @@ class MorePage extends ConsumerWidget {
     final textPrimary = AppThemeColors.textPrimaryColor(context);
     final textSecondary = AppThemeColors.textSecondaryColor(context);
     final textTertiary = AppThemeColors.textTertiaryColor(context);
-    final borderColor = AppThemeColors.borderColor(context);
     final primaryColor = const Color(0xFF2563EB);
     final errorColor = const Color(0xFFEF4444);
 
@@ -133,23 +132,6 @@ class MorePage extends ConsumerWidget {
                   },
                 ),
               _buildMenuItem(
-                icon: Icons.people_outline,
-                title: 'Contacts',
-                subtitle: 'Manage contacts',
-                textPrimary: textPrimary,
-                textSecondary: textSecondary,
-                textTertiary: textTertiary,
-                primaryColor: primaryColor,
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const ContactsListPage(),
-                    ),
-                  );
-                },
-              ),
-              _buildMenuItem(
                 icon: Icons.access_time_outlined,
                 title: 'Attendance Records',
                 subtitle: 'View attendance history',
@@ -162,6 +144,23 @@ class MorePage extends ConsumerWidget {
                     context,
                     MaterialPageRoute(
                       builder: (context) => const AttendanceRecordsPage(),
+                    ),
+                  );
+                },
+              ),
+              _buildMenuItem(
+                icon: Icons.event_note_outlined,
+                title: 'Leave',
+                subtitle: 'Apply and track leave requests',
+                textPrimary: textPrimary,
+                textSecondary: textSecondary,
+                textTertiary: textTertiary,
+                primaryColor: primaryColor,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const LeaveListPage(),
                     ),
                   );
                 },
