@@ -10,7 +10,7 @@ DateTime? _parseAttendanceDateTime(dynamic raw) {
 
 class TodayAttendance {
   final String userId;
-  final String status; // 'pending', 'checked_in', 'checked_out', 'completed'
+  final String status; // 'pending', 'checked_in', 'checked_out', 'completed', 'no_shift', ...
   final String date; // '2025-01-20'
   final DateTime? checkInTime;
   final DateTime? checkOutTime;
@@ -19,6 +19,15 @@ class TodayAttendance {
   final double? totalHours;
   final String? locationIn;
   final String? locationOut;
+  /// From API when shift is required for attendance (see Postman / HR shifts).
+  final bool? hasShiftAssigned;
+  final bool? isWeekend;
+  final bool? isHoliday;
+  /// Snapshot from nested `shift` on `/api/attendance/today` when API sends it.
+  final String? shiftName;
+  final String? shiftStartTime;
+  final String? shiftEndTime;
+  final int? shiftGraceMinutes;
 
   TodayAttendance({
     required this.userId,
@@ -31,6 +40,13 @@ class TodayAttendance {
     this.totalHours,
     this.locationIn,
     this.locationOut,
+    this.hasShiftAssigned,
+    this.isWeekend,
+    this.isHoliday,
+    this.shiftName,
+    this.shiftStartTime,
+    this.shiftEndTime,
+    this.shiftGraceMinutes,
   });
 
   factory TodayAttendance.fromJson(dynamic raw) {
@@ -41,6 +57,26 @@ class TodayAttendance {
     final checkOutTime = _parseAttendanceDateTime(
       json['checkOutTime'] ?? json['check_out_time'],
     );
+    String? shiftName;
+    String? shiftStart;
+    String? shiftEnd;
+    int? shiftGrace;
+    final shiftObj = json['shift'] ?? json['shiftInfo'] ?? json['shift_info'];
+    if (shiftObj is Map) {
+      final sm = Map<String, dynamic>.from(shiftObj);
+      shiftName = sm['name']?.toString();
+      shiftStart =
+          (sm['startTime'] ?? sm['start_time'])?.toString();
+      shiftEnd = (sm['endTime'] ?? sm['end_time'])?.toString();
+      shiftGrace = _optionalInt(sm['gracePeriod'] ?? sm['grace_period']);
+    }
+    shiftName ??= json['shiftName']?.toString() ?? json['shift_name']?.toString();
+    shiftStart ??=
+        json['shiftStartTime']?.toString() ?? json['shift_start_time']?.toString();
+    shiftEnd ??=
+        json['shiftEndTime']?.toString() ?? json['shift_end_time']?.toString();
+    shiftGrace ??= _optionalInt(json['shiftGraceMinutes'] ?? json['shift_grace_minutes']);
+
     return TodayAttendance(
       userId: (json['userId'] ?? json['user_id'] ?? '').toString(),
       status: json['status'] ?? 'pending',
@@ -50,6 +86,15 @@ class TodayAttendance {
       isLate: json['isLate'] ?? json['is_late'] ?? false,
       lateMinutes: _optionalInt(json['lateMinutes'] ?? json['late_minutes']),
       totalHours: _optionalDouble(json['totalHours'] ?? json['total_hours']),
+      hasShiftAssigned: _optionalBool(
+        json['hasShiftAssigned'] ?? json['has_shift_assigned'],
+      ),
+      isWeekend: _optionalBool(json['isWeekend'] ?? json['is_weekend']),
+      isHoliday: _optionalBool(json['isHoliday'] ?? json['is_holiday']),
+      shiftName: shiftName,
+      shiftStartTime: shiftStart,
+      shiftEndTime: shiftEnd,
+      shiftGraceMinutes: shiftGrace,
       locationIn: _pickLocationString(
         json,
         const [
@@ -100,6 +145,15 @@ class TodayAttendance {
       final t = s.trim();
       if (t.isNotEmpty) return t;
     }
+    return null;
+  }
+
+  static bool? _optionalBool(dynamic v) {
+    if (v == null) return null;
+    if (v is bool) return v;
+    final s = v.toString().toLowerCase();
+    if (s == 'true') return true;
+    if (s == 'false') return false;
     return null;
   }
 
@@ -156,6 +210,10 @@ class TodayAttendance {
 
   String get _statusNorm => status.toLowerCase().trim();
 
+  /// API: no shift assigned or explicit `no_shift` — check-in/out return 422.
+  bool get hasNoShift =>
+      _statusNorm == 'no_shift' || hasShiftAssigned == false;
+
   /// Both check-in and check-out are done (times and/or API status).
   bool get isAttendanceFlowCompleted {
     if (checkInTime != null && checkOutTime != null) return true;
@@ -168,8 +226,9 @@ class TodayAttendance {
     return checkInTime != null || _statusNorm == 'checked_in';
   }
 
-  /// Safe status for UI: pending → checked_in (still pending day) → completed.
+  /// Safe status for UI: `no_shift` → pending → checked_in → completed.
   String get safeStatus {
+    if (hasNoShift) return 'no_shift';
     if (!isToday) return 'pending';
     if (isAttendanceFlowCompleted) return 'completed';
     if (needsCheckOut) return 'checked_in';

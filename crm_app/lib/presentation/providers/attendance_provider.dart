@@ -81,7 +81,7 @@ class AttendanceNotifier extends StateNotifier<AttendanceState> {
     }
     state = state.copyWith(isLoading: true, error: null);
     try {
-      final today = await _repository.getTodayAttendance(currentUserId);
+      final today = await _repository.getTodayAttendance();
       // Validate: use safeStatus and log if suspicious
       print(
         '📅 Attendance loaded: ${today.safeStatus} for date ${today.date} (isToday: ${today.isToday})',
@@ -145,10 +145,7 @@ class AttendanceNotifier extends StateNotifier<AttendanceState> {
     }
     state = state.copyWith(isLoading: true, error: null);
     try {
-      final records = await _repository.getRecords(
-        currentUserId,
-        period: period,
-      );
+      final records = await _repository.getRecords(period: period);
       state = state.copyWith(
         records: records,
         period: period,
@@ -171,7 +168,7 @@ class AttendanceNotifier extends StateNotifier<AttendanceState> {
       print(
         '🟢 Check-in API call: userId=$currentUserId location=$coordinatesPayload',
       );
-      await _repository.checkIn(currentUserId, coordinatesPayload);
+      await _repository.checkIn(coordinatesPayload);
       final label = placeLabel.trim();
       state = state.copyWith(
         localCheckInLocation: label.isNotEmpty ? label : null,
@@ -211,7 +208,7 @@ class AttendanceNotifier extends StateNotifier<AttendanceState> {
       print(
         '🔴 Check-out API call: userId=$currentUserId location=$coordinatesPayload',
       );
-      await _repository.checkOut(currentUserId, coordinatesPayload);
+      await _repository.checkOut(coordinatesPayload);
       final label = placeLabel.trim();
       state = state.copyWith(
         localCheckOutLocation: label.isNotEmpty ? label : null,

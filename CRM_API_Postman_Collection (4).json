@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "CRM API",
-    "description": "Backend API for CRM (Flask). Set {{baseUrl}} to your backend (e.g. http://localhost:5000). Use **Login** to get a token; {{token}} is set automatically from the login response for use in auth-required requests.",
+    "description": "Backend API for CRM (**Flask**). Set {{baseUrl}} (e.g. http://localhost:5000). Use **Login** to set {{token}} for authenticated requests.\n\n**Resources:** Auth, Users, Companies, Contacts, Tasks, Sales, Notifications, Shifts, **Attendance** (shift required for check-in/out), Leaves, HR, Status config, Company profile, Currencies, Expense purposes, Expenses (incl. bin/restore), Account particulars, Accounts, Departments, Designations.\n\n**Attendance:** Users must have **shiftId** on HR (`/api/shifts/assign` or shift create with employeeIds). Without a shift: `GET /api/attendance/today` returns `hasShiftAssigned: false` and `status: no_shift`; `POST` check-in/check-out return **422** with an error message.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -24,7 +24,9 @@
     { "key": "leaveId", "value": "" },
     { "key": "weekendId", "value": "" },
     { "key": "holidayId", "value": "" },
-    { "key": "hrEntryId", "value": "" }
+    { "key": "hrEntryId", "value": "" },
+    { "key": "departmentId", "value": "" },
+    { "key": "designationId", "value": "" }
   ],
   "item": [
     {
@@ -571,6 +573,7 @@
     },
     {
       "name": "Shifts",
+      "description": "Employees should be assigned to a shift for attendance. Create/update shifts with `employeeIds` or use **Assign shift**.",
       "item": [
         {
           "name": "List shifts",
@@ -642,6 +645,7 @@
     },
     {
       "name": "Attendance",
+      "description": "Check-in and check-out require an **assigned shift** (see HR / Shifts). If the user has no shift: GET /today returns `status: no_shift` and `hasShiftAssigned: false`; POST check-in or check-out returns **422** with `{ \"error\": \"...\" }`.",
       "item": [
         {
           "name": "Get today attendance",
@@ -649,7 +653,7 @@
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
             "url": "{{baseUrl}}/api/attendance/today",
-            "description": "Get today's attendance status for the current user."
+            "description": "Today's row for the current user. Includes `hasShiftAssigned`, `isWeekend`, `isHoliday` when synthetic. If no shift and no row: `status` may be `no_shift`."
           }
         },
         {
@@ -662,10 +666,10 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"location\": \"Office Main Entrance\"\n}"
+              "raw": "{\n  \"location\": \"23.8103, 90.4125\"\n}"
             },
             "url": "{{baseUrl}}/api/attendance/check-in",
-            "description": "Check in for today. Location is required."
+            "description": "Body: `location` (required). Late/present uses the user's **shift** start + grace. **422** if not assigned to a shift. **400** if weekend for shift or already checked in."
           }
         },
         {
@@ -678,10 +682,19 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"location\": \"Office Exit\"\n}"
+              "raw": "{\n  \"location\": \"23.8103, 90.4125\"\n}"
             },
             "url": "{{baseUrl}}/api/attendance/check-out",
-            "description": "Check out for today. Location is required."
+            "description": "Body: `location` (required). Must have checked in first. **422** if not assigned to a shift."
+          }
+        },
+        {
+          "name": "My attendance records (today)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/attendance/records?period=today",
+            "description": "Same as other periods; `period=today` returns today's record(s) for the current user after ensuring rows exist for the range."
           }
         },
         {
@@ -690,7 +703,7 @@
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
             "url": "{{baseUrl}}/api/attendance/records?period=month",
-            "description": "Get attendance records for the current user. period: today, yesterday, week, last_week, month, last_month, year, last_year."
+            "description": "Get attendance records for the current user. Query **period**: today, yesterday, week, last_week, month, last_month, year, last_year."
           }
         },
         {
@@ -1338,6 +1351,7 @@
     },
     {
       "name": "Expenses",
+      "description": "DELETE soft-deletes to the **bin**. Use **List expenses (bin)**, **Bulk soft delete**, **Restore** for recycle-bin flows.",
       "item": [
         {
           "name": "List expenses",

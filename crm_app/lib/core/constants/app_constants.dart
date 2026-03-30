@@ -29,6 +29,11 @@ class AppConstants {
   static const String attendanceCheckOut = '/api/attendance/check-out';
   static const String attendanceRecords = '/api/attendance/records';
 
+  // Shifts (HR — required for check-in/out; see Postman "Shifts")
+  static const String shifts = '/api/shifts';
+  static const String shiftsAssign = '/api/shifts/assign';
+  static String shiftById(String shiftId) => '/api/shifts/$shiftId';
+
   /// Leave requests (base path used by backend sub-routes).
   /// "My leaves" — backend route is `/my` (not `/me`).
   static const String leavesMy = '/api/leaves/my';

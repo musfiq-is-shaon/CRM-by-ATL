@@ -6,8 +6,11 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_theme_colors.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../providers/attendance_provider.dart';
+import '../../../providers/auth_provider.dart';
+import '../../../providers/shift_provider.dart';
 import '../../../../core/services/location_service.dart';
 import '../../../../../data/models/attendance_model.dart';
+import '../../../../../data/models/shift_model.dart';
 import 'attendance_location_row.dart';
 
 /// Prefer a human-readable server value; otherwise session [localFallback]; else [server] (may be coords).
@@ -21,12 +24,63 @@ String _displaySource(String? server, String? localFallback) {
   return s;
 }
 
-class TodayAttendanceCardWidget extends ConsumerWidget {
+bool _hasShiftDetails(TodayAttendance t, WorkShift? fromList) {
+  final name = t.shiftName?.trim();
+  if (name != null && name.isNotEmpty) return true;
+  final a = t.shiftStartTime?.trim();
+  final b = t.shiftEndTime?.trim();
+  if (a != null && a.isNotEmpty && b != null && b.isNotEmpty) return true;
+  return fromList != null;
+}
+
+String _shiftTitle(TodayAttendance t, WorkShift? fromList) {
+  final n = t.shiftName?.trim();
+  if (n != null && n.isNotEmpty) return n;
+  return fromList?.name ?? 'Shift';
+}
+
+String? _shiftTimeRange(TodayAttendance t, WorkShift? fromList) {
+  final a = t.shiftStartTime?.trim();
+  final b = t.shiftEndTime?.trim();
+  if (a != null && a.isNotEmpty && b != null && b.isNotEmpty) {
+    return '$a – $b';
+  }
+  if (fromList != null) {
+    return '${fromList.startTime} – ${fromList.endTime}';
+  }
+  return null;
+}
+
+String? _shiftGraceLine(TodayAttendance t, WorkShift? fromList) {
+  final g = t.shiftGraceMinutes ?? fromList?.gracePeriod;
+  if (g == null || g <= 0) return null;
+  return 'Grace period: $g min';
+}
+
+class TodayAttendanceCardWidget extends ConsumerStatefulWidget {
   const TodayAttendanceCardWidget({super.key});
 
-  String getStatusText(TodayAttendance? todayAttendance) {
+  @override
+  ConsumerState<TodayAttendanceCardWidget> createState() =>
+      _TodayAttendanceCardWidgetState();
+}
+
+class _TodayAttendanceCardWidgetState
+    extends ConsumerState<TodayAttendanceCardWidget> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(shiftProvider.notifier).loadShifts();
+    });
+  }
+
+  String _statusText(TodayAttendance? todayAttendance) {
     if (todayAttendance == null || todayAttendance.safeStatus == 'pending') {
       return 'Pending';
+    }
+    if (todayAttendance.safeStatus == 'no_shift') {
+      return 'No shift assigned';
     }
     if (todayAttendance.safeStatus == 'checked_in') {
       return 'Pending';
@@ -34,14 +88,13 @@ class TodayAttendanceCardWidget extends ConsumerWidget {
     return 'Completed';
   }
 
-  Color getStatusColor(BuildContext context, TodayAttendance? todayAttendance) {
+  Color _statusColor(BuildContext context, TodayAttendance? todayAttendance) {
     final warningColor = AppColors.warning;
     final successColor = AppColors.success;
     final primaryColor = Theme.of(context).primaryColor;
 
     if (todayAttendance == null) return Colors.grey;
 
-    // Prioritize late status, then safe status
     if (todayAttendance.isLate) return warningColor;
 
     switch (todayAttendance.safeStatus) {
@@ -50,25 +103,33 @@ class TodayAttendanceCardWidget extends ConsumerWidget {
         return successColor;
       case 'checked_in':
         return primaryColor;
+      case 'no_shift':
+        return AppColors.warning;
       default:
         return Colors.grey;
     }
   }
 
-  IconData getStatusIcon(TodayAttendance? todayAttendance) {
+  IconData _statusIcon(TodayAttendance? todayAttendance) {
     final status = todayAttendance?.safeStatus;
     if (status == null || status == 'pending') {
-      return Icons.schedule_outlined; // Pending clock
+      return Icons.schedule_outlined;
+    } else if (status == 'no_shift') {
+      return Icons.event_busy_outlined;
     } else if (status == 'checked_in') {
-      return Icons.timer_outlined; // Pending checkout timer
+      return Icons.timer_outlined;
     }
-    return Icons.check_circle_outline; // Completed check
+    return Icons.check_circle_outline;
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final state = ref.watch(attendanceProvider);
     final todayAttendance = state.todayAttendance;
+    final auth = ref.watch(authProvider);
+    final shiftState = ref.watch(shiftProvider);
+    final uid = auth.user?.id;
+    final shiftFromList = WorkShift.forUser(uid, shiftState.shifts);
     final locIn = _displaySource(
       todayAttendance?.locationIn,
       state.localCheckInLocation,
@@ -80,7 +141,11 @@ class TodayAttendanceCardWidget extends ConsumerWidget {
     final hasLocationLines = locIn.isNotEmpty || locOut.isNotEmpty;
     final textPrimary = AppThemeColors.textPrimaryColor(context);
     final surfaceColor = AppThemeColors.surfaceColor(context);
-    final statusColor = getStatusColor(context, todayAttendance);
+    final statusColor = _statusColor(context, todayAttendance);
+
+    final showMyShift = todayAttendance != null &&
+        todayAttendance.safeStatus != 'no_shift' &&
+        _hasShiftDetails(todayAttendance, shiftFromList);
 
     // Listen for errors and show snackbar
     ref.listen(attendanceProvider, (previous, next) {
@@ -122,7 +187,7 @@ class TodayAttendanceCardWidget extends ConsumerWidget {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(
-                  getStatusIcon(todayAttendance),
+                  _statusIcon(todayAttendance),
                   color: statusColor,
                   size: 28,
                 ),
@@ -133,14 +198,14 @@ class TodayAttendanceCardWidget extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      getStatusText(todayAttendance),
+                      _statusText(todayAttendance),
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
                         color: textPrimary,
                       ),
                     ),
-                    if (todayAttendance != null)
+                    if (todayAttendance != null) ...[
                       Text(
                         todayAttendance.date,
                         style: TextStyle(
@@ -148,6 +213,22 @@ class TodayAttendanceCardWidget extends ConsumerWidget {
                           color: AppThemeColors.textSecondaryColor(context),
                         ),
                       ),
+                      if (todayAttendance.isWeekend == true ||
+                          todayAttendance.isHoliday == true) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          [
+                            if (todayAttendance.isWeekend == true) 'Weekend',
+                            if (todayAttendance.isHoliday == true) 'Holiday',
+                          ].join(' · '),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppThemeColors.textSecondaryColor(context),
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ],
+                    ],
                   ],
                 ),
               ),
@@ -183,6 +264,93 @@ class TodayAttendanceCardWidget extends ConsumerWidget {
                 ),
             ],
           ),
+          if (showMyShift) ...[
+            const SizedBox(height: 16),
+            Builder(
+              builder: (context) {
+                final t = todayAttendance;
+                final timeRange = _shiftTimeRange(t, shiftFromList);
+                final graceText = _shiftGraceLine(t, shiftFromList);
+                return Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).primaryColor.withOpacity(0.06),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: Theme.of(context).primaryColor.withOpacity(0.2),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.schedule,
+                            size: 18,
+                            color: Theme.of(context).primaryColor,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'My shift',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color:
+                                  AppThemeColors.textSecondaryColor(context),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        _shiftTitle(t, shiftFromList),
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: textPrimary,
+                        ),
+                      ),
+                      if (timeRange != null) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          timeRange,
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: AppThemeColors.textSecondaryColor(context),
+                          ),
+                        ),
+                      ],
+                      if (graceText != null) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          graceText,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color:
+                                AppThemeColors.textSecondaryColor(context),
+                          ),
+                        ),
+                      ],
+                      if (shiftFromList != null &&
+                          shiftFromList.weekendDays.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          'Weekend: ${shiftFromList.weekendDaysLabel}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color:
+                                AppThemeColors.textSecondaryColor(context),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                );
+              },
+            ),
+          ],
           const SizedBox(height: 24),
           // Times Row
           Row(
@@ -229,6 +397,38 @@ class TodayAttendanceCardWidget extends ConsumerWidget {
             ),
           ],
           const SizedBox(height: 20),
+          if (todayAttendance != null &&
+              todayAttendance.safeStatus == 'no_shift') ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              margin: const EdgeInsets.only(bottom: 8),
+              decoration: BoxDecoration(
+                color: AppColors.warning.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: AppColors.warning.withOpacity(0.35),
+                ),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.info_outline, color: AppColors.warning, size: 22),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'You need an assigned shift to check in or out. Ask HR to assign you to a shift.',
+                      style: TextStyle(
+                        fontSize: 14,
+                        height: 1.35,
+                        color: textPrimary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           // Status message if already checked (validated)
           if (todayAttendance != null &&
               todayAttendance.safeStatus == 'completed') ...[
@@ -259,7 +459,8 @@ class TodayAttendanceCardWidget extends ConsumerWidget {
             ),
           ],
           // Hold to check in / check out (fingerprint-style ring; same duration + haptics)
-          if (todayAttendance?.safeStatus != 'completed') ...[
+          if (todayAttendance?.safeStatus != 'completed' &&
+              todayAttendance?.safeStatus != 'no_shift') ...[
             const SizedBox(height: 16),
             Builder(
               builder: (context) {

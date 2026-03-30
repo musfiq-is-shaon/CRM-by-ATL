@@ -8,39 +8,32 @@ class AttendanceRepository {
 
   AttendanceRepository({required ApiClient apiClient}) : _apiClient = apiClient;
 
-  /// Get today's attendance status for user
-  Future<TodayAttendance> getTodayAttendance(String userId) async {
-    final response = await _apiClient.get(
-      AppConstants.attendanceToday,
-      queryParameters: {'userId': userId},
-    );
+  /// Today's attendance for the **current user** (Bearer token). No query params.
+  Future<TodayAttendance> getTodayAttendance() async {
+    final response = await _apiClient.get(AppConstants.attendanceToday);
     return TodayAttendance.fromJson(response.data);
   }
 
-  /// Check-in for today
-  Future<void> checkIn(String userId, String location) async {
+  /// Body: `{ "location": "<lat>, <lng>" }` only (Postman / Flask API).
+  Future<void> checkIn(String location) async {
     await _apiClient.post(
       AppConstants.attendanceCheckIn,
-      data: {'userId': userId, 'location': location},
+      data: {'location': location},
     );
   }
 
-  /// Check-out for today
-  Future<void> checkOut(String userId, String location) async {
+  Future<void> checkOut(String location) async {
     await _apiClient.post(
       AppConstants.attendanceCheckOut,
-      data: {'userId': userId, 'location': location},
+      data: {'location': location},
     );
   }
 
-  /// Get attendance records for user
-  Future<List<AttendanceRecord>> getRecords(
-    String userId, {
-    String period = 'month',
-  }) async {
+  /// My records: `GET /api/attendance/records?period=...` (current user).
+  Future<List<AttendanceRecord>> getRecords({String period = 'month'}) async {
     final response = await _apiClient.get(
       AppConstants.attendanceRecords,
-      queryParameters: {'userId': userId, 'period': period},
+      queryParameters: {'period': period},
     );
     final rows = _recordsListFromResponse(response.data);
     return rows.map(AttendanceRecord.fromJson).toList();

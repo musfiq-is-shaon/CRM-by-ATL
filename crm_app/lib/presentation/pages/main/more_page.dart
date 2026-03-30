@@ -8,6 +8,7 @@ import '../admin/users_page.dart';
 import 'notification_settings_page.dart';
 import '../attendance/attendance_records_page.dart';
 import '../leave/leave_list_page.dart';
+import '../shifts/shifts_admin_page.dart';
 
 class MorePage extends ConsumerWidget {
   const MorePage({super.key});
@@ -127,6 +128,24 @@ class MorePage extends ConsumerWidget {
                       context,
                       MaterialPageRoute(
                         builder: (context) => const UsersPage(),
+                      ),
+                    );
+                  },
+                ),
+              if (isAdmin)
+                _buildMenuItem(
+                  icon: Icons.schedule_outlined,
+                  title: 'Shifts',
+                  subtitle: 'Create shifts and assign staff',
+                  textPrimary: textPrimary,
+                  textSecondary: textSecondary,
+                  textTertiary: textTertiary,
+                  primaryColor: primaryColor,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const ShiftsAdminPage(),
                       ),
                     );
                   },
