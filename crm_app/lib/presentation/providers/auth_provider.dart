@@ -81,6 +81,23 @@ class AuthNotifier extends StateNotifier<AuthState> {
       );
     }
   }
+
+  /// `PATCH /api/users/me` — Postman: Update me (profile).
+  Future<void> updateProfile({required String name, String phone = ''}) async {
+    state = state.copyWith(error: null);
+    try {
+      final user = await _userRepository.updateMe(name: name, phone: phone);
+      await _authRepository.persistUser(user);
+      state = AuthState(status: AuthStatus.authenticated, user: user);
+    } catch (e) {
+      state = AuthState(
+        status: AuthStatus.authenticated,
+        user: state.user,
+        error: e.toString().replaceFirst('Exception: ', ''),
+      );
+      rethrow;
+    }
+  }
 }
 
 // Helper provider to get current user ID

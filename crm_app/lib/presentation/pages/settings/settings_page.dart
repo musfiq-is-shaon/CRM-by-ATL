@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme_colors.dart';
-import '../../providers/auth_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../providers/notification_provider.dart';
 import '../../providers/task_provider.dart';
@@ -12,8 +11,6 @@ class SettingsPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final authState = ref.watch(authProvider);
-    final user = authState.user;
     final themeMode = ref.watch(themeProvider);
     final isDarkMode = themeMode == ThemeMode.dark;
     final notificationSettings = ref.watch(notificationSettingsProvider);
@@ -34,48 +31,6 @@ class SettingsPage extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          CRMCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Profile',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                    color: textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                _buildProfileItem(
-                  label: 'Name',
-                  value: user?.name ?? 'Not set',
-                  textPrimary: textPrimary,
-                  textSecondary: textSecondary,
-                ),
-                _buildProfileItem(
-                  label: 'Email',
-                  value: user?.email ?? 'Not set',
-                  textPrimary: textPrimary,
-                  textSecondary: textSecondary,
-                ),
-                _buildProfileItem(
-                  label: 'Phone',
-                  value: user?.phone ?? 'Not set',
-                  textPrimary: textPrimary,
-                  textSecondary: textSecondary,
-                ),
-                _buildProfileItem(
-                  label: 'Role',
-                  value: user?.role ?? 'user',
-                  textPrimary: textPrimary,
-                  textSecondary: textSecondary,
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-
           CRMCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -191,37 +146,6 @@ class SettingsPage extends ConsumerWidget {
     );
   }
 
-  Widget _buildProfileItem({
-    required String label,
-    required String value,
-    Color? textPrimary,
-    Color? textSecondary,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 14,
-              color: textSecondary ?? const Color(0xFF64748B),
-            ),
-          ),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-              color: textPrimary ?? const Color(0xFF1E293B),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildSettingItem({
     required IconData icon,
     required String title,
@@ -261,7 +185,6 @@ class SettingsPage extends ConsumerWidget {
 
   void _showNotificationSettingsSheet(BuildContext context, WidgetRef ref) {
     final notificationSettings = ref.read(notificationSettingsProvider);
-    final bgColor = AppThemeColors.backgroundColor(context);
     final surfaceColor = AppThemeColors.surfaceColor(context);
     final textPrimary = AppThemeColors.textPrimaryColor(context);
     final textSecondary = AppThemeColors.textSecondaryColor(context);

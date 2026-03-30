@@ -3,7 +3,6 @@ import '../../core/services/location_service.dart';
 import '../../data/models/attendance_model.dart';
 import '../../data/repositories/attendance_repository.dart';
 import '../providers/auth_provider.dart';
-import 'dart:async' show Timer;
 
 class AttendanceState {
   final TodayAttendance? todayAttendance;
@@ -54,22 +53,11 @@ class AttendanceState {
 class AttendanceNotifier extends StateNotifier<AttendanceState> {
   final AttendanceRepository _repository;
   final Ref ref;
-  Timer? _refreshTimer;
 
   AttendanceNotifier(this._repository, this.ref)
     : super(const AttendanceState()) {
-    // Auto-refresh every 30 seconds
-    _refreshTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
-      loadToday();
-    });
     // Initial load
     loadToday();
-  }
-
-  @override
-  void dispose() {
-    _refreshTimer?.cancel();
-    super.dispose();
   }
 
   /// Load today's attendance status with validation
@@ -82,13 +70,6 @@ class AttendanceNotifier extends StateNotifier<AttendanceState> {
     state = state.copyWith(isLoading: true, error: null);
     try {
       final today = await _repository.getTodayAttendance();
-      // Validate: use safeStatus and log if suspicious
-      print(
-        '📅 Attendance loaded: ${today.safeStatus} for date ${today.date} (isToday: ${today.isToday})',
-      );
-      if (!today.isToday) {
-        print('⚠️  Warning: Attendance date ${today.date} != today');
-      }
 
       final prevDate = state.todayAttendance?.date ?? '';
       final newDate = today.date;

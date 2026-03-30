@@ -67,6 +67,10 @@ class AuthRepository {
     return null;
   }
 
+  Future<void> persistUser(User user) async {
+    await _storage.saveUserData(user.toJson());
+  }
+
   Future<bool> isLoggedIn() async {
     return await _storage.isLoggedIn();
   }

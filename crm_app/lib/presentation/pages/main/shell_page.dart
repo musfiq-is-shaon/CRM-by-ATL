@@ -5,6 +5,7 @@ import '../../providers/sale_provider.dart';
 import '../../providers/task_provider.dart';
 import '../../providers/contact_provider.dart';
 import '../../providers/attendance_provider.dart';
+import '../../providers/notifications_provider.dart';
 import '../dashboard/dashboard_page.dart';
 import '../sales/sales_list_page.dart';
 import '../expenses/expenses_list_page.dart';
@@ -64,6 +65,7 @@ class _ShellPageState extends ConsumerState<ShellPage>
       ref.read(tasksProvider.notifier).loadTasks();
       ref.read(contactsProvider.notifier).loadContacts();
       ref.read(attendanceProvider.notifier).loadToday();
+      ref.read(notificationsProvider.notifier).load(silent: true);
       return;
     }
 
@@ -219,7 +221,10 @@ class _ShellPageState extends ConsumerState<ShellPage>
   }) {
     final isSelected = selectedTab == index;
     return InkWell(
-      onTap: () => ref.read(selectedTabProvider.notifier).state = index,
+      onTap: () {
+        ref.read(selectedTabProvider.notifier).state = index;
+        _loadTabData(index);
+      },
       borderRadius: BorderRadius.circular(12),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),

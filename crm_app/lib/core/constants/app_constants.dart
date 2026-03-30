@@ -22,6 +22,12 @@ class AppConstants {
   static const String currencies = '/api/currencies';
   static const String expenses = '/api/expenses';
   static const String expensePurposes = '/api/expense-purposes';
+  static const String notifications = '/api/notifications';
+  static const String notificationsReadAll = '/api/notifications/read-all';
+  static String notificationRead(String notificationId) =>
+      '/api/notifications/$notificationId/read';
+  static String notificationById(String notificationId) =>
+      '/api/notifications/$notificationId';
 
   // Attendance endpoints
   static const String attendanceToday = '/api/attendance/today';

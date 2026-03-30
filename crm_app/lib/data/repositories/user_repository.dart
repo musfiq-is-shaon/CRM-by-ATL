@@ -83,12 +83,13 @@ class UserRepository {
     _cachedUsers = null;
   }
 
-  Future<User> updateMe({String? name, String? phone}) async {
+  /// `PATCH /api/users/me` — Postman: name, phone.
+  Future<User> updateMe({required String name, String phone = ''}) async {
     final response = await _apiClient.patch(
       AppConstants.usersMe,
       data: {'name': name, 'phone': phone},
     );
-    return User.fromJson(response.data);
+    return User.fromJson(_unwrapUserMap(response.data));
   }
 
   Future<User> createUser({
@@ -150,6 +151,14 @@ class UserRepository {
     );
     clearCache();
   }
+}
+
+Map<String, dynamic> _unwrapUserMap(dynamic raw) {
+  if (raw is! Map) return {};
+  final m = Map<String, dynamic>.from(raw);
+  final inner = m['data'] ?? m['user'];
+  if (inner is Map) return Map<String, dynamic>.from(inner);
+  return m;
 }
 
 final userRepositoryProvider = Provider<UserRepository>((ref) {

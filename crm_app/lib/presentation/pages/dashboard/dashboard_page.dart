@@ -17,6 +17,8 @@ import '../tasks/tasks_list_page.dart';
 import '../expenses/expense_form_page.dart';
 import '../attendance/widgets/today_attendance_card.dart';
 import '../../providers/attendance_provider.dart';
+import '../../providers/notifications_provider.dart';
+import '../main/notifications_page.dart';
 
 class DashboardPage extends ConsumerStatefulWidget {
   const DashboardPage({super.key});
@@ -32,6 +34,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final notifier = ref.read(attendanceProvider.notifier);
       notifier.loadToday(); // Initial load
+      ref.read(notificationsProvider.notifier).load(silent: true);
       // Setup periodic refresh handled by provider
     });
   }
@@ -44,6 +47,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
       ref.read(tasksProvider.notifier).loadTasks(),
       ref.read(contactsProvider.notifier).loadContacts(),
       ref.read(attendanceProvider.notifier).loadToday(),
+      ref.read(notificationsProvider.notifier).load(silent: true),
     ]);
   }
 
@@ -56,6 +60,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     final isDarkMode = themeMode == ThemeMode.dark;
     final isAdmin = ref.watch(isAdminProvider);
     final authState = ref.watch(authProvider);
+    final notificationsState = ref.watch(notificationsProvider);
 
     final userFilteredTasks = ref.watch(userFilteredTasksProvider);
     final userPendingTasksSorted = ref.watch(userPendingTasksSortedProvider);
@@ -109,24 +114,68 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                               const SizedBox(height: 12),
                             ],
                           ),
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: surfaceColor,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: borderColor),
-                            ),
-                            child: GestureDetector(
-                              onTap: () {
-                                ref.read(themeProvider.notifier).toggleTheme();
-                              },
-                              child: Icon(
-                                isDarkMode
-                                    ? Icons.light_mode_outlined
-                                    : Icons.dark_mode_outlined,
-                                color: textSecondary,
+                          Row(
+                            children: [
+                              Container(
+                                decoration: BoxDecoration(
+                                  color: surfaceColor,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: borderColor),
+                                ),
+                                child: Stack(
+                                  clipBehavior: Clip.none,
+                                  children: [
+                                    IconButton(
+                                      onPressed: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (context) =>
+                                                const NotificationsPage(),
+                                          ),
+                                        );
+                                      },
+                                      icon: Icon(
+                                        Icons.notifications_outlined,
+                                        color: textSecondary,
+                                      ),
+                                    ),
+                                    if (notificationsState.unreadCount > 0)
+                                      Positioned(
+                                        right: 6,
+                                        top: 6,
+                                        child: Container(
+                                          width: 9,
+                                          height: 9,
+                                          decoration: const BoxDecoration(
+                                            color: Color(0xFFEF4444),
+                                            shape: BoxShape.circle,
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
                               ),
-                            ),
+                              const SizedBox(width: 8),
+                              Container(
+                                decoration: BoxDecoration(
+                                  color: surfaceColor,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: borderColor),
+                                ),
+                                child: IconButton(
+                                  onPressed: () {
+                                    ref.read(themeProvider.notifier).toggleTheme();
+                                  },
+                                  icon: Icon(
+                                    isDarkMode
+                                        ? Icons.light_mode_outlined
+                                        : Icons.dark_mode_outlined,
+                                    color: textSecondary,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),

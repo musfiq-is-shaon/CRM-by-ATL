@@ -9,6 +9,7 @@ import 'notification_settings_page.dart';
 import '../attendance/attendance_records_page.dart';
 import '../leave/leave_list_page.dart';
 import '../shifts/shifts_admin_page.dart';
+import '../profile/profile_page.dart';
 
 class MorePage extends ConsumerWidget {
   const MorePage({super.key});
@@ -37,7 +38,14 @@ class MorePage extends ConsumerWidget {
         padding: const EdgeInsets.all(16),
         children: [
           CRMCard(
-            onTap: () {},
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const ProfilePage(),
+                ),
+              );
+            },
             child: Row(
               children: [
                 Container(
