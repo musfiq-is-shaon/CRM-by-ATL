@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme_colors.dart';
 import '../../providers/theme_provider.dart';
 import '../../providers/accent_color_provider.dart';
+import '../../providers/amoled_provider.dart';
 import '../../providers/notification_provider.dart';
 import '../../providers/task_provider.dart';
 import '../../widgets/crm_card.dart';
@@ -17,6 +18,7 @@ class SettingsPage extends ConsumerWidget {
     final isDarkMode = themeMode == ThemeMode.dark;
     final notificationSettings = ref.watch(notificationSettingsProvider);
     final accent = ref.watch(accentColorProvider);
+    final amoledBlack = ref.watch(amoledDarkProvider);
 
     final bgColor = AppThemeColors.backgroundColor(context);
     final surfaceColor = AppThemeColors.surfaceColor(context);
@@ -83,6 +85,22 @@ class SettingsPage extends ConsumerWidget {
                   ),
                 ),
                 _buildSettingItem(
+                  icon: Icons.contrast,
+                  title: 'OLED black',
+                  textPrimary: textPrimary,
+                  textSecondary: textSecondary,
+                  primaryColor: primaryColor,
+                  trailing: Switch(
+                    value: amoledBlack,
+                    onChanged: isDarkMode
+                        ? (value) => ref
+                            .read(amoledDarkProvider.notifier)
+                            .setEnabled(value)
+                        : null,
+                    activeThumbColor: primaryColor,
+                  ),
+                ),
+                _buildSettingItem(
                   icon: Icons.palette_outlined,
                   title: 'Accent color',
                   textPrimary: textPrimary,
@@ -115,8 +133,9 @@ class SettingsPage extends ConsumerWidget {
                     ],
                   ),
                   onTap: () async {
-                    final recent =
-                        ref.read(accentColorProvider.notifier).recentColors;
+                    final recent = ref
+                        .read(accentColorProvider.notifier)
+                        .recentColors;
                     final picked = await showPremiumColorPicker(
                       context,
                       initialColor: accent,
@@ -211,11 +230,7 @@ class SettingsPage extends ConsumerWidget {
         padding: const EdgeInsets.symmetric(vertical: 12),
         child: Row(
           children: [
-            Icon(
-              icon,
-              color: primaryColor,
-              size: 22,
-            ),
+            Icon(icon, color: primaryColor, size: 22),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
@@ -313,7 +328,7 @@ class SettingsPage extends ConsumerWidget {
               const SizedBox(height: 32),
               SizedBox(
                 width: double.infinity,
-                child: ElevatedButton(
+                child: FilledButton(
                   onPressed: () async {
                     await ref
                         .read(notificationSettingsProvider.notifier)
@@ -324,19 +339,7 @@ class SettingsPage extends ConsumerWidget {
                         .rescheduleNotifications(tasks);
                     if (context.mounted) Navigator.pop(context);
                   },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: primaryColor,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    elevation: 0,
-                  ),
-                  child: const Text(
-                    'Save',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                  ),
+                  child: const Text('Save'),
                 ),
               ),
             ],

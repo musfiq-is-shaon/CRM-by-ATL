@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../providers/theme_provider.dart';
 import '../../providers/sale_provider.dart';
 import '../../providers/task_provider.dart';
 import '../../providers/contact_provider.dart';
@@ -11,7 +10,6 @@ import '../sales/sales_list_page.dart';
 import '../expenses/expenses_list_page.dart';
 import '../contacts/contacts_list_page.dart';
 import '../../../core/theme/app_theme_colors.dart';
-import '../../../core/theme/design_tokens.dart';
 import 'more_page.dart';
 
 final selectedTabProvider = StateProvider<int>((ref) => 0);
@@ -96,8 +94,6 @@ class _ShellPageState extends ConsumerState<ShellPage>
   @override
   Widget build(BuildContext context) {
     final selectedTab = ref.watch(selectedTabProvider);
-    final themeMode = ref.watch(themeProvider);
-    final isDarkMode = themeMode == ThemeMode.dark;
 
     // Load data when tab changes
     ref.listen<int>(selectedTabProvider, (previous, next) {
@@ -112,161 +108,42 @@ class _ShellPageState extends ConsumerState<ShellPage>
       const MorePage(),
     ];
 
-    final surfaceColor = AppThemeColors.surfaceColor(context);
-    final textTertiary = AppThemeColors.textTertiaryColor(context);
-    final primaryColor = Theme.of(context).colorScheme.primary;
-
     return Scaffold(
+      backgroundColor: AppThemeColors.backgroundColor(context),
       body: IndexedStack(index: selectedTab, children: pages),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: surfaceColor,
-          boxShadow: isDarkMode ? AppElevation.navDark : AppElevation.navLight,
-        ),
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.only(
-              left: 4,
-              right: 4,
-              top: 10,
-              bottom: 10,
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _buildNavItem(
-                  context,
-                  ref,
-                  index: 0,
-                  icon: Icons.dashboard_outlined,
-                  activeIcon: Icons.dashboard,
-                  label: 'Dashboard',
-                  selectedTab: selectedTab,
-                  isDarkMode: isDarkMode,
-                  primaryColor: primaryColor,
-                  textTertiary: textTertiary,
-                ),
-                _buildNavItem(
-                  context,
-                  ref,
-                  index: 1,
-                  icon: Icons.trending_up_outlined,
-                  activeIcon: Icons.trending_up,
-                  label: 'Deals',
-                  selectedTab: selectedTab,
-                  isDarkMode: isDarkMode,
-                  primaryColor: primaryColor,
-                  textTertiary: textTertiary,
-                ),
-                _buildNavItem(
-                  context,
-                  ref,
-                  index: 2,
-                  icon: Icons.receipt_long_outlined,
-                  activeIcon: Icons.receipt_long,
-                  label: 'Expense',
-                  selectedTab: selectedTab,
-                  isDarkMode: isDarkMode,
-                  primaryColor: primaryColor,
-                  textTertiary: textTertiary,
-                ),
-                _buildNavItem(
-                  context,
-                  ref,
-                  index: 3,
-                  icon: Icons.people_outline,
-                  activeIcon: Icons.people,
-                  label: 'Contacts',
-                  selectedTab: selectedTab,
-                  isDarkMode: isDarkMode,
-                  primaryColor: primaryColor,
-                  textTertiary: textTertiary,
-                ),
-                _buildNavItem(
-                  context,
-                  ref,
-                  index: 4,
-                  icon: Icons.menu_outlined,
-                  activeIcon: Icons.menu,
-                  label: 'More',
-                  selectedTab: selectedTab,
-                  isDarkMode: isDarkMode,
-                  primaryColor: primaryColor,
-                  textTertiary: textTertiary,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNavItem(
-    BuildContext context,
-    WidgetRef ref, {
-    required int index,
-    required IconData icon,
-    required IconData activeIcon,
-    required String label,
-    required int selectedTab,
-    required bool isDarkMode,
-    required Color primaryColor,
-    required Color textTertiary,
-  }) {
-    final isSelected = selectedTab == index;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () {
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: selectedTab,
+        onDestinationSelected: (index) {
           ref.read(selectedTabProvider.notifier).state = index;
           _loadTabData(index);
         },
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        splashColor: primaryColor.withOpacity(0.12),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: isSelected
-                ? primaryColor.withOpacity(isDarkMode ? 0.16 : 0.1)
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(AppRadius.md),
-            border: isSelected
-                ? Border.all(
-                    color: primaryColor.withOpacity(isDarkMode ? 0.35 : 0.22),
-                  )
-                : null,
-            boxShadow: isSelected && isDarkMode
-                ? [
-                    BoxShadow(
-                      color: primaryColor.withOpacity(0.2),
-                      blurRadius: 12,
-                      offset: const Offset(0, 2),
-                    ),
-                  ]
-                : null,
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.dashboard_outlined),
+            selectedIcon: Icon(Icons.dashboard),
+            label: 'Dashboard',
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                isSelected ? activeIcon : icon,
-                color: isSelected ? primaryColor : textTertiary,
-                size: 24,
-              ),
-              const SizedBox(height: 4),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 11,
-                  letterSpacing: 0.2,
-                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                  color: isSelected ? primaryColor : textTertiary,
-                ),
-              ),
-            ],
+          NavigationDestination(
+            icon: Icon(Icons.trending_up_outlined),
+            selectedIcon: Icon(Icons.trending_up),
+            label: 'Deals',
           ),
-        ),
+          NavigationDestination(
+            icon: Icon(Icons.receipt_long_outlined),
+            selectedIcon: Icon(Icons.receipt_long),
+            label: 'Expense',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.people_outline),
+            selectedIcon: Icon(Icons.people),
+            label: 'Contacts',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.menu_outlined),
+            selectedIcon: Icon(Icons.menu),
+            label: 'More',
+          ),
+        ],
       ),
     );
   }

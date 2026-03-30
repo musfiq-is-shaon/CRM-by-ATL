@@ -97,11 +97,7 @@ class CRMButton extends StatelessWidget {
       return Row(
         mainAxisSize: MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, size: 20),
-          const SizedBox(width: 8),
-          Text(text),
-        ],
+        children: [Icon(icon, size: 20), const SizedBox(width: 8), Text(text)],
       );
     }
 

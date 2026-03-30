@@ -48,6 +48,8 @@ dependencies:
   geocoding: ^4.0.0
   flutter_timezone: ^5.0.2
   file_picker: ^10.3.10
+  google_fonts: ^8.0.2
+  dynamic_color: ^1.8.1
 
 dev_dependencies:
   flutter_test:

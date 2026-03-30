@@ -200,8 +200,12 @@ class _PremiumColorPickerBodyState extends State<_PremiumColorPickerBody> {
     final b = int.tryParse(_bCtrl.text) ?? 0;
     _setFromHsv(
       HSVColor.fromColor(
-        Color.fromARGB((_hsv.alpha * 255).round(), r.clamp(0, 255),
-            g.clamp(0, 255), b.clamp(0, 255)),
+        Color.fromARGB(
+          (_hsv.alpha * 255).round(),
+          r.clamp(0, 255),
+          g.clamp(0, 255),
+          b.clamp(0, 255),
+        ),
       ),
     );
   }
@@ -221,9 +225,7 @@ class _PremiumColorPickerBodyState extends State<_PremiumColorPickerBody> {
 
     return AnimatedPadding(
       duration: const Duration(milliseconds: 220),
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.viewInsetsOf(context).bottom,
-      ),
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
       child: SizedBox(
         height: h,
         child: Material(
@@ -249,8 +251,8 @@ class _PremiumColorPickerBodyState extends State<_PremiumColorPickerBody> {
                     Text(
                       'Accent color',
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                     const Spacer(),
                     TextButton(
@@ -288,6 +290,8 @@ class _PremiumColorPickerBodyState extends State<_PremiumColorPickerBody> {
                         ),
                       ),
                     ),
+                    const SizedBox(height: 16),
+                    _TonalPalettePreview(seedColor: _color),
                     const SizedBox(height: 20),
                     _HueBar(
                       hsv: _hsv,
@@ -325,7 +329,8 @@ class _PremiumColorPickerBodyState extends State<_PremiumColorPickerBody> {
                         ),
                         inputFormatters: [
                           FilteringTextInputFormatter.allow(
-                            RegExp(r'[0-9a-fA-F#]')),
+                            RegExp(r'[0-9a-fA-F#]'),
+                          ),
                         ],
                         onSubmitted: (_) => _applyHex(),
                         onEditingComplete: _applyHex,
@@ -367,10 +372,13 @@ class _PremiumColorPickerBodyState extends State<_PremiumColorPickerBody> {
                           Expanded(
                             child: TextField(
                               controller: _hCtrl,
-                              keyboardType: const TextInputType.numberWithOptions(
-                                  decimal: true),
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                    decimal: true,
+                                  ),
                               decoration: const InputDecoration(
-                                  labelText: 'H°'),
+                                labelText: 'H°',
+                              ),
                               onSubmitted: (_) => _applyHsl(),
                             ),
                           ),
@@ -378,10 +386,13 @@ class _PremiumColorPickerBodyState extends State<_PremiumColorPickerBody> {
                           Expanded(
                             child: TextField(
                               controller: _sCtrl,
-                              keyboardType: const TextInputType.numberWithOptions(
-                                  decimal: true),
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                    decimal: true,
+                                  ),
                               decoration: const InputDecoration(
-                                  labelText: 'S%'),
+                                labelText: 'S%',
+                              ),
                               onSubmitted: (_) => _applyHsl(),
                             ),
                           ),
@@ -389,10 +400,13 @@ class _PremiumColorPickerBodyState extends State<_PremiumColorPickerBody> {
                           Expanded(
                             child: TextField(
                               controller: _lCtrl,
-                              keyboardType: const TextInputType.numberWithOptions(
-                                  decimal: true),
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                    decimal: true,
+                                  ),
                               decoration: const InputDecoration(
-                                  labelText: 'L%'),
+                                labelText: 'L%',
+                              ),
                               onSubmitted: (_) => _applyHsl(),
                             ),
                           ),
@@ -402,8 +416,8 @@ class _PremiumColorPickerBodyState extends State<_PremiumColorPickerBody> {
                     Text(
                       'Presets',
                       style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                     const SizedBox(height: 10),
                     Wrap(
@@ -422,10 +436,9 @@ class _PremiumColorPickerBodyState extends State<_PremiumColorPickerBody> {
                       const SizedBox(height: 20),
                       Text(
                         'Recent',
-                        style:
-                            Theme.of(context).textTheme.titleSmall?.copyWith(
-                                  fontWeight: FontWeight.w600,
-                                ),
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                       const SizedBox(height: 10),
                       Wrap(
@@ -436,8 +449,7 @@ class _PremiumColorPickerBodyState extends State<_PremiumColorPickerBody> {
                             _SwatchDot(
                               color: p,
                               selected: _color.toARGB32() == p.toARGB32(),
-                              onTap: () =>
-                                  _setFromHsv(HSVColor.fromColor(p)),
+                              onTap: () => _setFromHsv(HSVColor.fromColor(p)),
                             ),
                         ],
                       ),
@@ -494,6 +506,65 @@ class _SwatchDot extends StatelessWidget {
   }
 }
 
+/// Material 3 tonal roles preview for the chosen seed color (matches system palette feel).
+class _TonalPalettePreview extends StatelessWidget {
+  const _TonalPalettePreview({required this.seedColor});
+
+  final Color seedColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final brightness = Theme.of(context).brightness;
+    final cs = ColorScheme.fromSeed(
+      seedColor: seedColor,
+      brightness: brightness,
+      dynamicSchemeVariant: DynamicSchemeVariant.fidelity,
+    );
+    final tt = Theme.of(context).textTheme;
+    final outline = Theme.of(context).colorScheme.outlineVariant;
+    final tiles = <({Color color, String label})>[
+      (color: cs.primary, label: 'Primary'),
+      (color: cs.primaryContainer, label: 'Primary c.'),
+      (color: cs.secondaryContainer, label: 'Secondary'),
+      (color: cs.tertiaryContainer, label: 'Tertiary'),
+      (color: cs.error, label: 'Error'),
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Tonal palette',
+          style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            for (var i = 0; i < tiles.length; i++)
+              Expanded(
+                child: Tooltip(
+                  message: tiles[i].label,
+                  child: AspectRatio(
+                    aspectRatio: 1.15,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: tiles[i].color,
+                        border: Border(
+                          right: i < tiles.length - 1
+                              ? BorderSide(color: outline.withOpacity(0.4))
+                              : BorderSide.none,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
 class _HueBar extends StatelessWidget {
   const _HueBar({required this.hsv, required this.onChanged});
 
@@ -508,10 +579,7 @@ class _HueBar extends StatelessWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Hue',
-              style: Theme.of(context).textTheme.labelLarge,
-            ),
+            Text('Hue', style: Theme.of(context).textTheme.labelLarge),
             const SizedBox(height: 8),
             ClipRRect(
               borderRadius: BorderRadius.circular(AppRadius.sm),
@@ -526,10 +594,12 @@ class _HueBar extends StatelessWidget {
                     SliderTheme(
                       data: SliderTheme.of(context).copyWith(
                         trackHeight: 28,
-                        thumbShape:
-                            const RoundSliderThumbShape(enabledThumbRadius: 11),
-                        overlayShape:
-                            const RoundSliderOverlayShape(overlayRadius: 16),
+                        thumbShape: const RoundSliderThumbShape(
+                          enabledThumbRadius: 11,
+                        ),
+                        overlayShape: const RoundSliderOverlayShape(
+                          overlayRadius: 16,
+                        ),
                       ),
                       child: Slider(
                         value: hsv.hue.clamp(0, 359.99),
@@ -696,10 +766,7 @@ class _AlphaSlider extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Opacity',
-          style: Theme.of(context).textTheme.labelLarge,
-        ),
+        Text('Opacity', style: Theme.of(context).textTheme.labelLarge),
         const SizedBox(height: 8),
         Row(
           children: [
@@ -731,9 +798,11 @@ class _AlphaSlider extends StatelessWidget {
                             data: SliderTheme.of(context).copyWith(
                               trackHeight: 28,
                               thumbShape: const RoundSliderThumbShape(
-                                  enabledThumbRadius: 11),
+                                enabledThumbRadius: 11,
+                              ),
                               overlayShape: const RoundSliderOverlayShape(
-                                  overlayRadius: 16),
+                                overlayRadius: 16,
+                              ),
                             ),
                             child: Slider(
                               value: hsv.alpha.clamp(0, 1),

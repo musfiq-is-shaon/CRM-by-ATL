@@ -31,8 +31,8 @@ class CRMCard extends StatelessWidget {
     final shadows = !hasShadow
         ? null
         : context.isDark
-            ? AppElevation.cardDark(accent)
-            : AppElevation.cardLight;
+        ? AppElevation.cardDark(accent)
+        : AppElevation.cardLight;
 
     // Use [Container], not [AnimatedContainer]. Theme mode changes already run
     // through MaterialApp's AnimatedTheme; animating the same colors again here

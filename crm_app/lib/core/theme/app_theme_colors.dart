@@ -1,19 +1,14 @@
 import 'package:flutter/material.dart';
 
-import 'app_colors.dart';
-
-/// Theme-aware colors aligned with [ThemeData.colorScheme] and pitch-black dark scaffold.
+/// Theme-aware colors — always derived from [ThemeData] / [ColorScheme].
 class AppThemeColors {
   static Color backgroundColor(BuildContext context) {
-    final b = Theme.of(context).brightness;
-    if (b == Brightness.dark) {
-      return AppColors.pitchBlack;
-    }
-    return Theme.of(context).colorScheme.surfaceContainerLowest;
+    return Theme.of(context).scaffoldBackgroundColor;
   }
 
+  /// App bars, sheets — matches scaffold (including AMOLED black).
   static Color surfaceColor(BuildContext context) {
-    return Theme.of(context).colorScheme.surface;
+    return Theme.of(context).scaffoldBackgroundColor;
   }
 
   static Color cardColor(BuildContext context) {
@@ -35,7 +30,7 @@ class AppThemeColors {
     final cs = Theme.of(context).colorScheme;
     return Color.alphaBlend(
       cs.onSurface.withOpacity(0.38),
-      cs.surface,
+      Theme.of(context).scaffoldBackgroundColor,
     );
   }
 

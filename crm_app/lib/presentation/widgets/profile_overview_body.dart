@@ -128,9 +128,19 @@ class _ProfileOverviewBodyState extends ConsumerState<ProfileOverviewBody> {
   }) {
     final surface = AppThemeColors.surfaceColor(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final accentGreen = const Color(0xFF10B981);
+    final cs = Theme.of(context).colorScheme;
     final initial =
         profileName.isNotEmpty ? profileName[0].toUpperCase() : '?';
+
+    // Material You–style diagonal wash: primary → tertiary hint → surface.
+    final washTop = Color.alphaBlend(
+      cs.primary.withValues(alpha: isDark ? 0.34 : 0.22),
+      surface,
+    );
+    final washMid = Color.alphaBlend(
+      cs.tertiary.withValues(alpha: isDark ? 0.18 : 0.12),
+      surface,
+    );
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(20),
@@ -138,15 +148,39 @@ class _ProfileOverviewBodyState extends ConsumerState<ProfileOverviewBody> {
         clipBehavior: Clip.none,
         children: [
           Positioned(
-            right: -28,
-            top: -28,
+            right: -32,
+            top: -40,
             child: IgnorePointer(
               child: Container(
-                width: 112,
-                height: 112,
+                width: 140,
+                height: 140,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: primaryColor.withValues(alpha: isDark ? 0.06 : 0.05),
+                  gradient: RadialGradient(
+                    colors: [
+                      cs.tertiary.withValues(alpha: isDark ? 0.14 : 0.10),
+                      cs.tertiary.withValues(alpha: 0),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            left: -36,
+            bottom: -24,
+            child: IgnorePointer(
+              child: Container(
+                width: 120,
+                height: 120,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      cs.primary.withValues(alpha: isDark ? 0.12 : 0.08),
+                      cs.primary.withValues(alpha: 0),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -154,23 +188,24 @@ class _ProfileOverviewBodyState extends ConsumerState<ProfileOverviewBody> {
           Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
                 colors: [
-                  primaryColor.withValues(alpha: isDark ? 0.28 : 0.18),
-                  primaryColor.withValues(alpha: isDark ? 0.08 : 0.05),
+                  washTop,
+                  washMid,
                   surface,
                 ],
-                stops: const [0.0, 0.55, 1.0],
+                stops: const [0.0, 0.48, 1.0],
               ),
               border: Border.all(
-                color: primaryColor.withValues(alpha: isDark ? 0.35 : 0.22),
+                color: cs.outlineVariant.withValues(alpha: isDark ? 0.55 : 0.65),
               ),
               boxShadow: [
                 BoxShadow(
-                  color: primaryColor.withValues(alpha: isDark ? 0.12 : 0.08),
-                  blurRadius: 24,
-                  offset: const Offset(0, 10),
+                  color: cs.shadow.withValues(alpha: isDark ? 0.35 : 0.08),
+                  blurRadius: 18,
+                  offset: const Offset(0, 8),
+                  spreadRadius: -2,
                 ),
               ],
             ),
@@ -184,16 +219,18 @@ class _ProfileOverviewBodyState extends ConsumerState<ProfileOverviewBody> {
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
                         colors: [
-                          primaryColor,
-                          primaryColor.withValues(alpha: 0.55),
+                          cs.primary,
+                          Color.lerp(cs.primary, cs.tertiary, 0.55)!,
                         ],
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: primaryColor.withValues(alpha: 0.35),
-                          blurRadius: 12,
-                          offset: const Offset(0, 4),
+                          color: cs.primary.withValues(alpha: 0.28),
+                          blurRadius: 14,
+                          offset: const Offset(0, 6),
                         ),
                       ],
                     ),
@@ -276,8 +313,8 @@ class _ProfileOverviewBodyState extends ConsumerState<ProfileOverviewBody> {
                         icon: Icons.apartment_rounded,
                         label: companyName,
                         foreground: textPrimary,
-                        background: accentGreen.withValues(alpha: 0.14),
-                        border: accentGreen.withValues(alpha: 0.35),
+                        background: cs.secondary.withValues(alpha: 0.16),
+                        border: cs.secondary.withValues(alpha: 0.38),
                       ),
                     ],
                   ),

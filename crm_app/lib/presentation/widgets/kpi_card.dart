@@ -62,11 +62,7 @@ class KPICard extends StatelessWidget {
                       color: accent.withOpacity(0.12),
                       borderRadius: BorderRadius.circular(AppRadius.sm),
                     ),
-                    child: Icon(
-                      icon,
-                      color: accent,
-                      size: 18,
-                    ),
+                    child: Icon(icon, color: accent, size: 18),
                   ),
                   if (onTap != null)
                     Icon(
