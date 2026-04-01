@@ -78,4 +78,10 @@ class AppConstants {
 
   // Retry
   static const int maxRetries = 3;
+
+  /// Help & Support inbox.
+  static const String supportEmail = 'eshita@apptriangle.com';
+
+  /// Optional public help/doc URL; leave empty to hide “Help center” on Help & Support.
+  static const String helpCenterUrl = '';
 }

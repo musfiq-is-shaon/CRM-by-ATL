@@ -5,9 +5,11 @@ import '../../../core/theme/design_tokens.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/notifications_provider.dart';
 import '../../widgets/crm_card.dart';
+import '../settings/change_password_page.dart';
 import '../settings/settings_page.dart';
 import '../admin/users_page.dart';
 import 'notification_settings_page.dart';
+import 'help_support_page.dart';
 import '../attendance/attendance_records_page.dart';
 import '../leave/leave_list_page.dart';
 import '../shifts/shifts_admin_page.dart';
@@ -227,7 +229,14 @@ class MorePage extends ConsumerWidget {
                 textSecondary: textSecondary,
                 textTertiary: textTertiary,
                 primaryColor: primaryColor,
-                onTap: () {},
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const ChangePasswordPage(),
+                    ),
+                  );
+                },
               ),
               _buildMenuItem(context,
                 icon: Icons.notifications_outlined,
@@ -254,7 +263,14 @@ class MorePage extends ConsumerWidget {
                 textSecondary: textSecondary,
                 textTertiary: textTertiary,
                 primaryColor: primaryColor,
-                onTap: () {},
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const HelpSupportPage(),
+                    ),
+                  );
+                },
               ),
             ],
           ),

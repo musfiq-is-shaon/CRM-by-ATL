@@ -24,8 +24,20 @@
 	<string>????</string>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>CRM Pro needs camera access when you choose to take a photo for an attachment.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>CRM Pro uses your location for attendance check-in and check-out.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>CRM Pro uses your location for attendance check-in and check-out.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>CRM Pro needs microphone access when you record a video attachment.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>CRM Pro needs photo library access so you can attach files to leave requests.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -66,18 +78,5 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
-	<!-- Required for physical device: system dialogs block access without these strings -->
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>CRM Pro uses your location for attendance check-in and check-out.</string>
-	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>CRM Pro uses your location for attendance check-in and check-out.</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>CRM Pro needs photo library access so you can attach files to leave requests.</string>
-	<key>NSCameraUsageDescription</key>
-	<string>CRM Pro needs camera access when you choose to take a photo for an attachment.</string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>CRM Pro needs microphone access when you record a video attachment.</string>
-	<key>ITSAppUsesNonExemptEncryption</key>
-	<false/>
 </dict>
 </plist>

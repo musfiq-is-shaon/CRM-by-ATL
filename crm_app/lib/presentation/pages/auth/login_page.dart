@@ -37,6 +37,10 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     }
   }
 
+  void _onCredentialsChanged() {
+    ref.read(authProvider.notifier).clearError();
+  }
+
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
@@ -47,18 +51,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     final bgColor = AppThemeColors.backgroundColor(context);
     final textPrimary = AppThemeColors.textPrimaryColor(context);
     final textSecondary = AppThemeColors.textSecondaryColor(context);
-    final errorColor = colorScheme.error;
-
-    ref.listen<AuthState>(authProvider, (previous, next) {
-      if (next.error != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(next.error!),
-            backgroundColor: errorColor.withAlpha(200),
-          ),
-        );
-      }
-    });
+    final showLoginWarning =
+        authState.error != null && authState.status == AuthStatus.unauthenticated;
 
     return Scaffold(
       backgroundColor: bgColor,
@@ -152,6 +146,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                   keyboardType: TextInputType.emailAddress,
                   textInputAction: TextInputAction.next,
                   prefixIcon: const Icon(Icons.email_outlined),
+                  onChanged: (_) => _onCredentialsChanged(),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
                       return 'Please enter your email';
@@ -170,6 +165,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                   obscureText: _obscurePassword,
                   textInputAction: TextInputAction.done,
                   prefixIcon: const Icon(Icons.lock_outlined),
+                  onChanged: (_) => _onCredentialsChanged(),
                   suffixIcon: IconButton(
                     icon: Icon(
                       _obscurePassword
@@ -193,6 +189,41 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                   },
                   onSubmitted: (_) => _handleLogin(),
                 ),
+                if (showLoginWarning) ...[
+                  const SizedBox(height: 16),
+                  Material(
+                    color: colorScheme.errorContainer,
+                    borderRadius: BorderRadius.circular(12),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            Icons.warning_amber_rounded,
+                            color: colorScheme.onErrorContainer,
+                            size: 22,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              authState.error!.isNotEmpty
+                                  ? authState.error!
+                                  : 'Could not sign in. Check your email and password.',
+                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: colorScheme.onErrorContainer,
+                                    height: 1.35,
+                                  ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 12),
                 Align(
                   alignment: Alignment.centerRight,

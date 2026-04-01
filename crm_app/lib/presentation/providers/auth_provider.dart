@@ -57,9 +57,15 @@ class AuthNotifier extends StateNotifier<AuthState> {
     } catch (e) {
       state = AuthState(
         status: AuthStatus.unauthenticated,
-        error: e.toString(),
+        error: e.toString().replaceFirst('Exception: ', ''),
       );
     }
+  }
+
+  /// Clears [AuthState.error] (e.g. when the user edits credentials after a failed login).
+  void clearError() {
+    if (state.error == null) return;
+    state = state.copyWith(error: null);
   }
 
   Future<void> logout() async {
@@ -79,6 +85,27 @@ class AuthNotifier extends StateNotifier<AuthState> {
         user: state.user,
         error: 'Failed to delete account: ${e.toString()}',
       );
+    }
+  }
+
+  /// `POST /api/auth/change-password` — Postman: Change password.
+  Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    state = state.copyWith(error: null);
+    try {
+      await _authRepository.changePassword(
+        currentPassword: currentPassword,
+        newPassword: newPassword,
+      );
+    } catch (e) {
+      state = AuthState(
+        status: state.status,
+        user: state.user,
+        error: e.toString().replaceFirst('Exception: ', ''),
+      );
+      rethrow;
     }
   }
 
