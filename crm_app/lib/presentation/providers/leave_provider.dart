@@ -5,6 +5,19 @@ import 'auth_provider.dart';
 
 enum LeaveListScope { mine, team, all }
 
+/// Optional filters for `GET /api/leaves/all` (admin).
+class LeaveAdminAllFilters {
+  const LeaveAdminAllFilters({
+    this.startDate,
+    this.endDate,
+    this.userIds = '',
+  });
+
+  final DateTime? startDate;
+  final DateTime? endDate;
+  final String userIds;
+}
+
 class LeaveState {
   final List<LeaveEntry> leaves;
   final List<LeaveTypeOption> types;
@@ -14,6 +27,11 @@ class LeaveState {
   final LeaveListScope scope;
   final ReportingManagerInfo? reportingInfo;
   final bool reportingLoaded;
+  final LeaveAdminAllFilters adminAllFilters;
+  /// Current user's allocated balances (`GET /api/leaves/balances/:userId`).
+  final List<LeaveBalanceRow> myBalances;
+  final bool balancesLoading;
+  final String? balancesError;
 
   const LeaveState({
     this.leaves = const [],
@@ -24,6 +42,10 @@ class LeaveState {
     this.scope = LeaveListScope.mine,
     this.reportingInfo,
     this.reportingLoaded = false,
+    this.adminAllFilters = const LeaveAdminAllFilters(),
+    this.myBalances = const [],
+    this.balancesLoading = false,
+    this.balancesError,
   });
 
   LeaveState copyWith({
@@ -35,6 +57,10 @@ class LeaveState {
     LeaveListScope? scope,
     ReportingManagerInfo? reportingInfo,
     bool? reportingLoaded,
+    LeaveAdminAllFilters? adminAllFilters,
+    List<LeaveBalanceRow>? myBalances,
+    bool? balancesLoading,
+    Object? balancesError = _sentinel,
   }) {
     return LeaveState(
       leaves: leaves ?? this.leaves,
@@ -45,6 +71,12 @@ class LeaveState {
       scope: scope ?? this.scope,
       reportingInfo: reportingInfo ?? this.reportingInfo,
       reportingLoaded: reportingLoaded ?? this.reportingLoaded,
+      adminAllFilters: adminAllFilters ?? this.adminAllFilters,
+      myBalances: myBalances ?? this.myBalances,
+      balancesLoading: balancesLoading ?? this.balancesLoading,
+      balancesError: identical(balancesError, _sentinel)
+          ? this.balancesError
+          : balancesError as String?,
     );
   }
 }
@@ -74,6 +106,35 @@ class LeaveNotifier extends StateNotifier<LeaveState> {
     }
   }
 
+  /// Loads remaining days per leave type for the signed-in user.
+  Future<void> loadMyBalances() async {
+    final userId = ref.read(currentUserIdProvider);
+    if (userId == null) return;
+    state = state.copyWith(balancesLoading: true, balancesError: null);
+    try {
+      final result = await _repository.getLeaveBalances(userId);
+      final sorted = List<LeaveBalanceRow>.from(result.balances)
+        ..sort((a, b) {
+          final ac = a.isActive == false ? 1 : 0;
+          final bc = b.isActive == false ? 1 : 0;
+          if (ac != bc) return ac.compareTo(bc);
+          return (a.leaveTypeName ?? a.leaveTypeId)
+              .toLowerCase()
+              .compareTo((b.leaveTypeName ?? b.leaveTypeId).toLowerCase());
+        });
+      state = state.copyWith(
+        myBalances: sorted,
+        balancesLoading: false,
+        balancesError: null,
+      );
+    } catch (e) {
+      state = state.copyWith(
+        balancesLoading: false,
+        balancesError: e.toString().replaceFirst('Exception: ', ''),
+      );
+    }
+  }
+
   Future<void> loadLeaves() async {
     final userId = ref.read(currentUserIdProvider);
     if (userId == null) {
@@ -83,31 +144,35 @@ class LeaveNotifier extends StateNotifier<LeaveState> {
     state = state.copyWith(isLoading: true, error: null);
     try {
       final isAdmin = ref.read(isAdminProvider);
-      final scope = state.scope;
+      var scope = state.scope;
       if (scope == LeaveListScope.all && !isAdmin) {
-        state = state.copyWith(
-          isLoading: false,
-          error: 'Only admins can view all leave requests',
-        );
-        return;
+        // Account/scope may be stale after switching users; fall back quietly.
+        scope = LeaveListScope.mine;
+        state = state.copyWith(scope: scope, error: null);
       }
       if (scope == LeaveListScope.team) {
         final isMgr = state.reportingInfo?.isReportingManager ?? false;
         if (!isMgr && !isAdmin) {
-          state = state.copyWith(
-            isLoading: false,
-            error: 'You are not a reporting manager for any team',
-          );
-          return;
+          // Avoid noisy popup on account switch; show own leaves instead.
+          scope = LeaveListScope.mine;
+          state = state.copyWith(scope: scope, error: null);
         }
       }
 
       final list = switch (scope) {
         LeaveListScope.mine => await _repository.getMyLeaves(),
         LeaveListScope.team => await _repository.getTeamLeaves(),
-        LeaveListScope.all => await _repository.getAllLeaves(),
+        LeaveListScope.all => await _repository.getAllLeaves(
+            startDate: state.adminAllFilters.startDate,
+            endDate: state.adminAllFilters.endDate,
+            userIds: state.adminAllFilters.userIds.trim().isEmpty
+                ? null
+                : state.adminAllFilters.userIds.trim(),
+          ),
       };
       state = state.copyWith(leaves: list, isLoading: false, error: null);
+      // Always sync "your remaining leave" after leaves refresh (approve deducts on server).
+      await loadMyBalances();
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
@@ -218,6 +283,31 @@ class LeaveNotifier extends StateNotifier<LeaveState> {
 
   void clearError() {
     state = state.copyWith(error: null);
+  }
+
+  void patchAdminAllFilters({
+    DateTime? startDate,
+    DateTime? endDate,
+    String? userIds,
+    bool clearStart = false,
+    bool clearEnd = false,
+  }) {
+    final cur = state.adminAllFilters;
+    state = state.copyWith(
+      adminAllFilters: LeaveAdminAllFilters(
+        startDate: clearStart ? null : (startDate ?? cur.startDate),
+        endDate: clearEnd ? null : (endDate ?? cur.endDate),
+        userIds: userIds ?? cur.userIds,
+      ),
+    );
+  }
+
+  void clearAdminAllFilters() {
+    state = state.copyWith(adminAllFilters: const LeaveAdminAllFilters());
+  }
+
+  Future<void> applyAdminAllFiltersAndReload() async {
+    await loadLeaves();
   }
 }
 

@@ -4,7 +4,7 @@ import '../../core/theme/color_scheme_semantics.dart';
 
 class StatusBadge extends StatelessWidget {
   final String status;
-  final String type; // 'task', 'sale', 'category', or 'expense'
+  final String type; // 'task', 'sale', 'category', 'expense', or 'leave'
 
   const StatusBadge({super.key, required this.status, required this.type});
 
@@ -85,6 +85,23 @@ class StatusBadge extends StatelessWidget {
           default:
             return cs.onSurfaceVariant;
         }
+      case 'leave':
+        switch (status.toLowerCase()) {
+          case 'approved':
+          case 'accept':
+            return cs.tertiary;
+          case 'rejected':
+          case 'denied':
+            return cs.error;
+          case 'pending':
+          case 'submitted':
+            return cs.secondary;
+          case 'cancelled':
+          case 'canceled':
+            return cs.outline;
+          default:
+            return cs.onSurfaceVariant;
+        }
       default:
         return cs.onSurfaceVariant;
     }
@@ -106,6 +123,26 @@ class StatusBadge extends StatelessWidget {
   }
 
   String _getDisplayText() {
+    if (type == 'leave') {
+      switch (status.toLowerCase()) {
+        case 'approved':
+        case 'accept':
+          return 'Approved';
+        case 'rejected':
+        case 'denied':
+          return 'Rejected';
+        case 'submitted':
+          return 'Submitted';
+        case 'pending':
+          return 'Pending';
+        case 'cancelled':
+        case 'canceled':
+          return 'Cancelled';
+        default:
+          if (status.isEmpty) return status;
+          return status[0].toUpperCase() + status.substring(1).toLowerCase();
+      }
+    }
     switch (status.toLowerCase()) {
       case 'in_progress':
         return 'In Progress';

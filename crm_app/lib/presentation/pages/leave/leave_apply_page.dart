@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme_colors.dart';
 import '../../../data/models/leave_model.dart';
+import '../../../data/repositories/leave_repository.dart';
 import '../../providers/leave_provider.dart';
 import '../../widgets/celebration_shell.dart';
 
@@ -36,6 +37,9 @@ class _LeaveApplyPageState extends ConsumerState<LeaveApplyPage> {
   bool _workingDaysLoading = false;
   String? _attachmentFileName;
   String? _attachmentData;
+  bool _existingLeavesLoading = false;
+  String? _existingLeavesError;
+  List<LeaveEntry> _existingLeaves = const [];
 
   @override
   void dispose() {
@@ -51,13 +55,130 @@ class _LeaveApplyPageState extends ConsumerState<LeaveApplyPage> {
     _confettiController = ConfettiController(
       duration: const Duration(seconds: 3),
     );
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(leaveProvider.notifier).loadTypes();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await Future.wait([
+        ref.read(leaveProvider.notifier).loadTypes(),
+        ref.read(leaveProvider.notifier).loadMyBalances(),
+      ]);
+      await _loadExistingMyLeaves();
     });
   }
 
-  static DateTime _dateOnly(DateTime d) =>
-      DateTime(d.year, d.month, d.day);
+  Future<void> _loadExistingMyLeaves() async {
+    if (!mounted) return;
+    setState(() {
+      _existingLeavesLoading = true;
+      _existingLeavesError = null;
+    });
+    try {
+      final repo = ref.read(leaveRepositoryProvider);
+      final rows = await repo.getMyLeaves();
+      if (!mounted) return;
+      setState(() {
+        _existingLeaves = rows;
+        _existingLeavesLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _existingLeavesLoading = false;
+        _existingLeavesError = e.toString().replaceFirst('Exception: ', '');
+      });
+    }
+  }
+
+  static String _fmtBalance(double v) {
+    if (v == v.roundToDouble()) return v.round().toString();
+    return v.toStringAsFixed(1);
+  }
+
+  /// Remaining days for this leave type, or `null` if no balance row.
+  static double? _balanceForType(String typeId, List<LeaveBalanceRow> rows) {
+    for (final r in rows) {
+      if (r.leaveTypeId == typeId) return r.remainingDays;
+    }
+    return null;
+  }
+
+  bool _datesComplete() {
+    switch (_durationMode) {
+      case LeaveApplyDurationMode.singleDay:
+      case LeaveApplyDurationMode.halfDay:
+        return _leaveDate != null;
+      case LeaveApplyDurationMode.multipleDays:
+        return _rangeStart != null &&
+            _rangeEnd != null &&
+            !_rangeEnd!.isBefore(_rangeStart!);
+    }
+  }
+
+  /// Working days consumed by this request (0.5 per day for half-day mode).
+  double _requestedLeaveDays() {
+    if (_workingDays == null) return 0;
+    switch (_durationMode) {
+      case LeaveApplyDurationMode.halfDay:
+        return _workingDays! * 0.5;
+      case LeaveApplyDurationMode.singleDay:
+      case LeaveApplyDurationMode.multipleDays:
+        return _workingDays!.toDouble();
+    }
+  }
+
+  bool _canSubmit(LeaveState leaveState) {
+    if (_submitting || _celebrating) return false;
+    if (_existingLeavesLoading) return false;
+    if (_existingLeavesError != null) return false;
+    if (leaveState.balancesLoading) return false;
+    if (leaveState.balancesError != null) return false;
+    if (_hasDateOverlapWithExistingLeave() != null) return false;
+    if (_leaveTypeId == null || _leaveTypeId!.isEmpty) return false;
+    if (!_datesComplete()) return false;
+    if (_workingDays == null) return false;
+
+    return _requestedLeaveDays() > 0;
+  }
+
+  DateTimeRange? _selectedRange() {
+    switch (_durationMode) {
+      case LeaveApplyDurationMode.singleDay:
+      case LeaveApplyDurationMode.halfDay:
+        if (_leaveDate == null) return null;
+        final d = _dateOnly(_leaveDate!);
+        return DateTimeRange(start: d, end: d);
+      case LeaveApplyDurationMode.multipleDays:
+        if (_rangeStart == null || _rangeEnd == null) return null;
+        final s = _dateOnly(_rangeStart!);
+        final e = _dateOnly(_rangeEnd!);
+        if (e.isBefore(s)) return null;
+        return DateTimeRange(start: s, end: e);
+    }
+  }
+
+  bool _isBlockingLeaveStatus(String status) {
+    final s = status.trim().toLowerCase();
+    return s != 'rejected' && s != 'cancelled' && s != 'canceled' && s != 'withdrawn';
+  }
+
+  LeaveEntry? _hasDateOverlapWithExistingLeave() {
+    final selected = _selectedRange();
+    if (selected == null) return null;
+    for (final e in _existingLeaves) {
+      if (!_isBlockingLeaveStatus(e.status)) continue;
+      final s = e.startDate;
+      final en = e.endDate ?? e.startDate;
+      if (s == null || en == null) continue;
+      final a = _dateOnly(s);
+      final b = _dateOnly(en);
+      final rowStart = b.isBefore(a) ? b : a;
+      final rowEnd = b.isBefore(a) ? a : b;
+      final overlaps =
+          !selected.end.isBefore(rowStart) && !selected.start.isAfter(rowEnd);
+      if (overlaps) return e;
+    }
+    return null;
+  }
+
+  static DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
 
   String _formatDate(DateTime d) {
     final x = d.toLocal();
@@ -114,10 +235,9 @@ class _LeaveApplyPageState extends ConsumerState<LeaveApplyPage> {
       });
     }
     try {
-      final days = await ref.read(leaveProvider.notifier).calculateWorkingDays(
-            startDate: start,
-            endDate: end,
-          );
+      final days = await ref
+          .read(leaveProvider.notifier)
+          .calculateWorkingDays(startDate: start, endDate: end);
       if (mounted) {
         setState(() {
           _workingDays = days;
@@ -198,9 +318,74 @@ class _LeaveApplyPageState extends ConsumerState<LeaveApplyPage> {
     final messenger = ScaffoldMessenger.of(context);
     final nav = Navigator.of(context);
 
-    if (_leaveTypeId == null || _leaveTypeId!.isEmpty) {
+    final leaveState = ref.read(leaveProvider);
+    if (!_canSubmit(leaveState)) {
+      if (_existingLeavesLoading) {
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Checking your existing leave dates…')),
+        );
+        return;
+      }
+      if (_existingLeavesError != null) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              'Could not validate existing leave dates: $_existingLeavesError',
+            ),
+          ),
+        );
+        return;
+      }
+      final overlap = _hasDateOverlapWithExistingLeave();
+      if (overlap != null) {
+        final startTxt = overlap.startDate == null
+            ? ''
+            : _formatDate(_dateOnly(overlap.startDate!));
+        final endRaw = overlap.endDate ?? overlap.startDate;
+        final endTxt = endRaw == null ? '' : _formatDate(_dateOnly(endRaw));
+        final rangeText = startTxt.isEmpty
+            ? 'an existing leave'
+            : (startTxt == endTxt ? startTxt : '$startTxt to $endTxt');
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              'You already have a leave on $rangeText (${overlap.status}). '
+              'Choose different date(s).',
+            ),
+          ),
+        );
+        return;
+      }
+      if (leaveState.balancesLoading) {
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Loading your leave balance…')),
+        );
+        return;
+      }
+      if (leaveState.balancesError != null) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              'Could not verify leave balance: ${leaveState.balancesError}',
+            ),
+          ),
+        );
+        return;
+      }
+      if (_leaveTypeId == null || _leaveTypeId!.isEmpty) {
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text('Select a leave type.'),
+          ),
+        );
+        return;
+      }
       messenger.showSnackBar(
-        const SnackBar(content: Text('Select a leave type')),
+        const SnackBar(
+          content: Text(
+            'Select dates and wait for working days to finish calculating.',
+          ),
+        ),
       );
       return;
     }
@@ -237,9 +422,7 @@ class _LeaveApplyPageState extends ConsumerState<LeaveApplyPage> {
       end = _rangeEnd!;
       if (end.isBefore(start)) {
         messenger.showSnackBar(
-          const SnackBar(
-            content: Text('End date must be on or after start'),
-          ),
+          const SnackBar(content: Text('End date must be on or after start')),
         );
         return;
       }
@@ -249,7 +432,9 @@ class _LeaveApplyPageState extends ConsumerState<LeaveApplyPage> {
 
     setState(() => _submitting = true);
     try {
-      await ref.read(leaveProvider.notifier).applyLeave(
+      await ref
+          .read(leaveProvider.notifier)
+          .applyLeave(
             leaveTypeId: _leaveTypeId!,
             startDate: start,
             endDate: end,
@@ -292,8 +477,21 @@ class _LeaveApplyPageState extends ConsumerState<LeaveApplyPage> {
     final textPrimary = AppThemeColors.textPrimaryColor(context);
     final textSecondary = AppThemeColors.textSecondaryColor(context);
     final borderColor = AppThemeColors.borderColor(context);
-    final types = ref.watch(leaveProvider.select((s) => s.types));
-    final typesLoading = ref.watch(leaveProvider.select((s) => s.typesLoading));
+    final leaveState = ref.watch(leaveProvider);
+    final types = leaveState.types;
+    final typesLoading = leaveState.typesLoading;
+
+    ref.listen<LeaveState>(leaveProvider, (prev, next) {
+      if (prev?.balancesLoading == true && !next.balancesLoading && mounted) {
+        final id = _leaveTypeId;
+        if (id != null) {
+          final b = _balanceForType(id, next.myBalances);
+          if (b == null || b <= 0) {
+            setState(() => _leaveTypeId = null);
+          }
+        }
+      }
+    });
 
     return CelebrationShell(
       celebrating: _celebrating,
@@ -304,225 +502,362 @@ class _LeaveApplyPageState extends ConsumerState<LeaveApplyPage> {
       child: Scaffold(
         backgroundColor: bg,
         appBar: AppBar(
-          title: const Text('Apply for leave'),
+          title: Text('Apply for leave', style: TextStyle(color: textPrimary)),
           backgroundColor: surface,
           foregroundColor: textPrimary,
           elevation: 0,
         ),
         body: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          _sectionLabel('Leave type', textSecondary),
-          const SizedBox(height: 8),
-          if (typesLoading && types.isEmpty)
-            const Padding(
-              padding: EdgeInsets.all(16),
-              child: Center(child: CircularProgressIndicator()),
-            )
-          else if (types.isEmpty)
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'No leave types returned from the server.',
-                  style: TextStyle(color: textSecondary),
-                ),
-                TextButton(
-                  onPressed: () => ref.read(leaveProvider.notifier).loadTypes(),
-                  child: const Text('Retry'),
-                ),
-              ],
-            )
-          else
-            RadioGroup<String>(
-              groupValue: _leaveTypeId,
-              onChanged: (v) => setState(() => _leaveTypeId = v),
-              child: Column(
-                children: types
-                    .map(
-                      (t) => RadioListTile<String>(
-                        contentPadding: EdgeInsets.zero,
-                        value: t.id,
-                        title: Text(
-                          t.name,
-                          style: TextStyle(color: textPrimary),
+          padding: const EdgeInsets.all(20),
+          children: [
+            if (leaveState.balancesError != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Material(
+                  color: Theme.of(context).colorScheme.errorContainer,
+                  borderRadius: BorderRadius.circular(12),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          Icons.error_outline,
+                          color: Theme.of(context).colorScheme.onErrorContainer,
+                          size: 22,
                         ),
-                        activeColor: Theme.of(context).colorScheme.primary,
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            leaveState.balancesError!,
+                            style: TextStyle(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onErrorContainer,
+                              fontSize: 13,
+                              height: 1.35,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            _sectionLabel('Leave type', textSecondary),
+            const SizedBox(height: 8),
+            if (leaveState.balancesLoading && leaveState.myBalances.isEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: textSecondary,
                       ),
-                    )
-                    .toList(),
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      'Loading your balances…',
+                      style: TextStyle(fontSize: 13, color: textSecondary),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          if (types.isNotEmpty)
-            TextButton(
-              onPressed: () => ref.read(leaveProvider.notifier).loadTypes(),
-              child: const Text('Refresh leave types'),
-            ),
-          const SizedBox(height: 20),
-          _sectionLabel('Duration type', textSecondary),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: LeaveApplyDurationMode.values.map((m) {
-              return ChoiceChip(
-                label: Text(m.label),
-                selected: _durationMode == m,
-                onSelected: (selected) {
-                  if (selected) _onDurationModeChanged(m);
-                },
-              );
-            }).toList(),
-          ),
-          const SizedBox(height: 12),
-          if (_durationMode == LeaveApplyDurationMode.singleDay) ...[
-            _sectionLabel('Leave date', textSecondary),
-            const SizedBox(height: 8),
-            OutlinedButton.icon(
-              onPressed: _pickLeaveDate,
-              icon: const Icon(Icons.calendar_today, size: 18),
-              label: Text(
-                _leaveDate == null
-                    ? 'Select date'
-                    : _formatDate(_leaveDate!),
+            if (typesLoading && types.isEmpty)
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else if (types.isEmpty)
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'No leave types returned from the server.',
+                    style: TextStyle(color: textSecondary),
+                  ),
+                  TextButton(
+                    onPressed: () =>
+                        ref.read(leaveProvider.notifier).loadTypes(),
+                    child: const Text('Retry'),
+                  ),
+                ],
+              )
+            else
+              RadioGroup<String>(
+                groupValue: _leaveTypeId,
+                onChanged: (v) => setState(() => _leaveTypeId = v),
+                child: Column(
+                  children: types.map((t) {
+                    final bal = _balanceForType(t.id, leaveState.myBalances);
+                    final loadingBal = leaveState.balancesLoading;
+                    String subtitle;
+                    if (loadingBal && leaveState.myBalances.isEmpty) {
+                      subtitle = 'Loading balance…';
+                    } else if (bal == null) {
+                      subtitle = 'No balance row (will count as additional leave)';
+                    } else if (bal <= 0) {
+                      subtitle =
+                          'No days remaining (${_fmtBalance(bal)} d). Applies as additional leave.';
+                    } else {
+                      subtitle = 'Remaining: ${_fmtBalance(bal)} day(s)';
+                    }
+                    return RadioListTile<String>(
+                      contentPadding: EdgeInsets.zero,
+                      value: t.id,
+                      enabled: true,
+                      title: Text(
+                        t.name,
+                        style: TextStyle(color: textPrimary),
+                      ),
+                      subtitle: Text(
+                        subtitle,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: bal != null && bal > 0
+                              ? textSecondary
+                              : Colors.orange.shade800,
+                        ),
+                      ),
+                      activeColor: Theme.of(context).colorScheme.primary,
+                    );
+                  }).toList(),
+                ),
               ),
-            ),
-          ],
-          if (_durationMode == LeaveApplyDurationMode.halfDay) ...[
-            _sectionLabel('Leave date', textSecondary),
-            const SizedBox(height: 8),
-            OutlinedButton.icon(
-              onPressed: _pickLeaveDate,
-              icon: const Icon(Icons.calendar_today, size: 18),
-              label: Text(
-                _leaveDate == null
-                    ? 'Select date'
-                    : _formatDate(_leaveDate!),
-              ),
-            ),
-            const SizedBox(height: 16),
-            _sectionLabel('Session', textSecondary),
+            const SizedBox(height: 20),
+            _sectionLabel('Duration type', textSecondary),
             const SizedBox(height: 8),
             Wrap(
               spacing: 8,
               runSpacing: 8,
-              children: LeaveHalfDayPart.values.map((p) {
+              children: LeaveApplyDurationMode.values.map((m) {
                 return ChoiceChip(
-                  label: Text(p.label),
-                  selected: _halfDayPart == p,
+                  label: Text(m.label),
+                  selected: _durationMode == m,
                   onSelected: (selected) {
-                    if (selected) {
-                      setState(() => _halfDayPart = p);
-                    }
+                    if (selected) _onDurationModeChanged(m);
                   },
                 );
               }).toList(),
             ),
-          ],
-          if (_durationMode == LeaveApplyDurationMode.multipleDays) ...[
-            _sectionLabel('Date range', textSecondary),
-            const SizedBox(height: 8),
-            OutlinedButton.icon(
-              onPressed: _pickDateRange,
-              icon: const Icon(Icons.date_range, size: 18),
-              label: Text(
-                _rangeStart == null || _rangeEnd == null
-                    ? 'Select date range'
-                    : '${_formatDate(_rangeStart!)} → ${_formatDate(_rangeEnd!)}',
+            const SizedBox(height: 12),
+            if (_durationMode == LeaveApplyDurationMode.singleDay) ...[
+              _sectionLabel('Leave date', textSecondary),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: _pickLeaveDate,
+                icon: const Icon(Icons.calendar_today, size: 18),
+                label: Text(
+                  _leaveDate == null ? 'Select date' : _formatDate(_leaveDate!),
+                ),
               ),
-            ),
-          ],
-          const SizedBox(height: 12),
-          if (_workingDaysLoading)
-            Row(
-              children: [
-                SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: textSecondary,
+            ],
+            if (_durationMode == LeaveApplyDurationMode.halfDay) ...[
+              _sectionLabel('Leave date', textSecondary),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: _pickLeaveDate,
+                icon: const Icon(Icons.calendar_today, size: 18),
+                label: Text(
+                  _leaveDate == null ? 'Select date' : _formatDate(_leaveDate!),
+                ),
+              ),
+              const SizedBox(height: 16),
+              _sectionLabel('Session', textSecondary),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: LeaveHalfDayPart.values.map((p) {
+                  return ChoiceChip(
+                    label: Text(p.label),
+                    selected: _halfDayPart == p,
+                    onSelected: (selected) {
+                      if (selected) {
+                        setState(() => _halfDayPart = p);
+                      }
+                    },
+                  );
+                }).toList(),
+              ),
+            ],
+            if (_durationMode == LeaveApplyDurationMode.multipleDays) ...[
+              _sectionLabel('Date range', textSecondary),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: _pickDateRange,
+                icon: const Icon(Icons.date_range, size: 18),
+                label: Text(
+                  _rangeStart == null || _rangeEnd == null
+                      ? 'Select date range'
+                      : '${_formatDate(_rangeStart!)} → ${_formatDate(_rangeEnd!)}',
+                ),
+              ),
+            ],
+            const SizedBox(height: 12),
+            if (_workingDaysLoading)
+              Row(
+                children: [
+                  SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: textSecondary,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    'Calculating working days…',
+                    style: TextStyle(fontSize: 13, color: textSecondary),
+                  ),
+                ],
+              )
+            else if (_workingDays != null)
+              Text(
+                _durationMode == LeaveApplyDurationMode.halfDay
+                    ? 'Working days (leave): ${_formatHalfDayWorkingAmount(_workingDays!)}'
+                    : 'Working days in range: $_workingDays',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: textPrimary,
+                ),
+              ),
+            if (_existingLeavesError != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  'Could not validate overlap from previous leaves: $_existingLeavesError',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.orange.shade800,
                   ),
                 ),
-                const SizedBox(width: 10),
-                Text(
-                  'Calculating working days…',
-                  style: TextStyle(fontSize: 13, color: textSecondary),
+              ),
+            Builder(
+              builder: (context) {
+                final overlap = _hasDateOverlapWithExistingLeave();
+                if (overlap == null) return const SizedBox.shrink();
+                final startTxt = overlap.startDate == null
+                    ? ''
+                    : _formatDate(_dateOnly(overlap.startDate!));
+                final endRaw = overlap.endDate ?? overlap.startDate;
+                final endTxt =
+                    endRaw == null ? '' : _formatDate(_dateOnly(endRaw));
+                final rangeText = startTxt.isEmpty
+                    ? 'an existing leave period'
+                    : (startTxt == endTxt
+                          ? startTxt
+                          : '$startTxt to $endTxt');
+                return Padding(
+                  padding: const EdgeInsets.only(top: 10),
+                  child: Text(
+                    'Selected date(s) overlap with your existing leave ($rangeText, ${overlap.status}).',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.red.shade800,
+                      height: 1.35,
+                    ),
+                  ),
+                );
+              },
+            ),
+            if (leaveState.balancesError == null &&
+                !leaveState.balancesLoading &&
+                _leaveTypeId != null &&
+                _leaveTypeId!.isNotEmpty) ...[
+              Builder(
+                builder: (context) {
+                  final bal = _balanceForType(
+                    _leaveTypeId!,
+                    leaveState.myBalances,
+                  );
+                  if (bal == null) return const SizedBox.shrink();
+                  if (!_datesComplete() || _workingDays == null) {
+                    return const SizedBox.shrink();
+                  }
+                  final need = _requestedLeaveDays();
+                  if (need <= bal + 1e-9) return const SizedBox.shrink();
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 10),
+                    child: Text(
+                      'This request needs ${_fmtBalance(need)} day(s) and '
+                      'remaining is ${_fmtBalance(bal)}. The excess will be counted as additional leave.',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.orange.shade800,
+                        height: 1.35,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ],
+            const SizedBox(height: 20),
+            _sectionLabel('Reason for leave', textSecondary),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _reasonCtrl,
+              maxLines: 5,
+              decoration: InputDecoration(
+                filled: true,
+                fillColor: surface,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: borderColor),
                 ),
-              ],
-            )
-          else if (_workingDays != null)
-            Text(
-              _durationMode == LeaveApplyDurationMode.halfDay
-                  ? 'Working days (leave): ${_formatHalfDayWorkingAmount(_workingDays!)}'
-                  : 'Working days in range: $_workingDays',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: textPrimary,
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: borderColor),
+                ),
+                hintText: 'Describe why you need this leave…',
               ),
             ),
-          const SizedBox(height: 20),
-          _sectionLabel('Reason for leave', textSecondary),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _reasonCtrl,
-            maxLines: 5,
-            decoration: InputDecoration(
-              filled: true,
-              fillColor: surface,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: borderColor),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: borderColor),
-              ),
-              hintText: 'Describe why you need this leave…',
-            ),
-          ),
-          const SizedBox(height: 16),
-          OutlinedButton.icon(
-            onPressed: _pickAttachment,
-            icon: const Icon(Icons.attach_file, size: 18),
-            label: Text(
-              _attachmentFileName == null || _attachmentFileName!.isEmpty
-                  ? 'Attachment (optional)'
-                  : _attachmentFileName!,
-            ),
-          ),
-          const SizedBox(height: 28),
-          FilledButton(
-            onPressed: (_submitting || _celebrating) ? null : _submit,
-            style: FilledButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
+            const SizedBox(height: 16),
+            OutlinedButton.icon(
+              onPressed: _pickAttachment,
+              icon: const Icon(Icons.attach_file, size: 18),
+              label: Text(
+                _attachmentFileName == null || _attachmentFileName!.isEmpty
+                    ? 'Attachment (optional)'
+                    : _attachmentFileName!,
               ),
             ),
-            child: _submitting
-                ? const SizedBox(
-                    height: 22,
-                    width: 22,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Text('Submit request'),
-          ),
-        ],
+            const SizedBox(height: 28),
+            FilledButton(
+              onPressed:
+                  (_submitting || _celebrating || !_canSubmit(leaveState))
+                  ? null
+                  : _submit,
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: _submitting
+                  ? const SizedBox(
+                      height: 22,
+                      width: 22,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Submit request'),
+            ),
+          ],
+        ),
       ),
-    ),
     );
   }
 
   Widget _sectionLabel(String text, Color color) {
     return Text(
       text,
-      style: TextStyle(
-        fontSize: 13,
-        fontWeight: FontWeight.w600,
-        color: color,
-      ),
+      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: color),
     );
   }
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/json_parse.dart';
 import '../../core/services/notification_service.dart';
 import '../../core/network/storage_service.dart';
 import '../../data/models/task_model.dart';
@@ -24,8 +25,8 @@ class NotificationSettings {
 
   factory NotificationSettings.fromJson(Map<String, dynamic> json) {
     return NotificationSettings(
-      enabled: json['enabled'] ?? true,
-      daysBefore: json['daysBefore'] ?? 1,
+      enabled: parseOptionalBool(json['enabled']) ?? true,
+      daysBefore: parseOptionalInt(json['daysBefore']) ?? 1,
     );
   }
 }

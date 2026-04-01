@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme_colors.dart';
 import '../../../data/models/leave_model.dart';
 import '../../../data/repositories/leave_repository.dart';
@@ -21,6 +21,9 @@ class _LeaveDetailPageState extends ConsumerState<LeaveDetailPage> {
   LeaveEntry? _entry;
   bool _loading = true;
   String? _loadError;
+
+  static final _dateFmt = DateFormat('MMM d, y');
+  static final _appliedFmt = DateFormat("MMM d, y 'at' h:mm a");
 
   @override
   void initState() {
@@ -49,14 +52,6 @@ class _LeaveDetailPageState extends ConsumerState<LeaveDetailPage> {
           _loading = false;
         });
       }
-    }
-  }
-
-  Future<void> _openAttachmentUrl(String url) async {
-    final uri = Uri.tryParse(url);
-    if (uri == null) return;
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
     }
   }
 
@@ -154,10 +149,77 @@ class _LeaveDetailPageState extends ConsumerState<LeaveDetailPage> {
     }
   }
 
-  String _fmt(DateTime? d) {
-    if (d == null) return '—';
-    final x = d.toLocal();
-    return '${x.year}-${x.month.toString().padLeft(2, '0')}-${x.day.toString().padLeft(2, '0')}';
+  String _prettyStatus(String s) {
+    if (s.isEmpty) return '—';
+    return s
+        .split(RegExp(r'[\s_]+'))
+        .where((w) => w.isNotEmpty)
+        .map(
+          (w) =>
+              '${w[0].toUpperCase()}${w.substring(1).toLowerCase()}',
+        )
+        .join(' ');
+  }
+
+  String _durationTitle(LeaveEntry entry) {
+    final mode = LeaveApplyDurationMode.fromApiValue(entry.durationType);
+    if (mode != null) {
+      return switch (mode) {
+        LeaveApplyDurationMode.halfDay => 'Half Day',
+        LeaveApplyDurationMode.singleDay => 'Single Day',
+        LeaveApplyDurationMode.multipleDays => 'Multiple Days',
+      };
+    }
+    final raw = entry.durationType?.replaceAll('_', ' ').trim();
+    if (raw == null || raw.isEmpty) {
+      if (entry.isHalfDay == true) return 'Half Day';
+      return '—';
+    }
+    return raw.split(' ').map((w) {
+      if (w.isEmpty) return w;
+      return '${w[0].toUpperCase()}${w.substring(1).toLowerCase()}';
+    }).join(' ');
+  }
+
+  String? _durationSubtitle(LeaveEntry entry) {
+    final mode = LeaveApplyDurationMode.fromApiValue(entry.durationType);
+    final isHalf = mode == LeaveApplyDurationMode.halfDay || entry.isHalfDay == true;
+    if (!isHalf) return null;
+    final part = LeaveHalfDayPart.fromApiValue(entry.halfDayPart);
+    if (part != null) return part.label;
+    final raw = entry.halfDayPart?.replaceAll('_', ' ').trim();
+    if (raw == null || raw.isEmpty) return null;
+    return raw.split(' ').map((w) {
+      if (w.isEmpty) return w;
+      return '${w[0].toUpperCase()}${w.substring(1).toLowerCase()}';
+    }).join(' ');
+  }
+
+  String _dateLine(LeaveEntry entry) {
+    final a = entry.startDate;
+    final b = entry.endDate;
+    if (a == null && b == null) return '—';
+    if (a != null && b != null && a != b) {
+      return '${_dateFmt.format(a)} – ${_dateFmt.format(b)}';
+    }
+    final d = a ?? b;
+    return d != null ? _dateFmt.format(d) : '—';
+  }
+
+  String _leaveDaysLine(LeaveEntry entry) {
+    final n = entry.workingDays ?? entry.totalDays;
+    if (n == null) return '—';
+    final d = n.toDouble();
+    if (d == 0.5) return '0.5day';
+    if (d == 1) return '1day';
+    if (d == d.roundToDouble()) return '${d.round()}days';
+    return '${n}day';
+  }
+
+  String _appliedOnLine(LeaveEntry entry) {
+    final t = entry.createdAt ?? entry.updatedAt;
+    if (t == null) return '—';
+    return _appliedFmt.format(t.toLocal());
   }
 
   @override
@@ -166,6 +228,7 @@ class _LeaveDetailPageState extends ConsumerState<LeaveDetailPage> {
     final surface = AppThemeColors.surfaceColor(context);
     final textPrimary = AppThemeColors.textPrimaryColor(context);
     final textSecondary = AppThemeColors.textSecondaryColor(context);
+    final borderColor = AppThemeColors.borderColor(context);
     final scope = ref.watch(leaveProvider.select((s) => s.scope));
     final currentUserId = ref.watch(currentUserIdProvider);
     final isAdmin = ref.watch(isAdminProvider);
@@ -175,7 +238,10 @@ class _LeaveDetailPageState extends ConsumerState<LeaveDetailPage> {
     return Scaffold(
       backgroundColor: bg,
       appBar: AppBar(
-        title: const Text('Leave details'),
+        title: Text(
+          'Leave Request Details',
+          style: TextStyle(color: textPrimary),
+        ),
         backgroundColor: surface,
         foregroundColor: textPrimary,
         elevation: 0,
@@ -212,6 +278,7 @@ class _LeaveDetailPageState extends ConsumerState<LeaveDetailPage> {
                   textPrimary,
                   textSecondary,
                   surface,
+                  borderColor,
                   scope,
                   currentUserId,
                   isAdmin,
@@ -226,6 +293,7 @@ class _LeaveDetailPageState extends ConsumerState<LeaveDetailPage> {
     Color textPrimary,
     Color textSecondary,
     Color surface,
+    Color borderColor,
     LeaveListScope scope,
     String? currentUserId,
     bool isAdmin,
@@ -239,49 +307,97 @@ class _LeaveDetailPageState extends ConsumerState<LeaveDetailPage> {
         ((scope == LeaveListScope.team && (isReporting || isAdmin)) ||
             (scope == LeaveListScope.all && isAdmin));
 
+    final typeLabel =
+        (entry.leaveTypeName ?? entry.leaveTypeId)?.trim().isNotEmpty == true
+            ? (entry.leaveTypeName ?? entry.leaveTypeId)!.trim()
+            : '—';
+    final durationSub = _durationSubtitle(entry);
+    final st = entry.status.toLowerCase();
+    final approved = st == 'approved' || st == 'accept';
+    final rejected = st == 'rejected' || st == 'denied';
+
     return ListView(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
       children: [
-        Text(
-          entry.leaveTypeName ?? entry.leaveTypeId ?? 'Leave',
-          style: TextStyle(
-            fontSize: 22,
-            fontWeight: FontWeight.w700,
-            color: textPrimary,
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: borderColor),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Details',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: textPrimary,
+                ),
+              ),
+              const SizedBox(height: 16),
+              _field('Leave Type', typeLabel, textPrimary, textSecondary),
+              _divider(borderColor),
+              _field('Status', _prettyStatus(entry.status), textPrimary, textSecondary),
+              _divider(borderColor),
+              _field(
+                'Duration',
+                _durationTitle(entry),
+                textPrimary,
+                textSecondary,
+                extraValue: durationSub,
+              ),
+              _divider(borderColor),
+              _field('Date', _dateLine(entry), textPrimary, textSecondary),
+              _divider(borderColor),
+              _leaveCountField(entry, textPrimary, textSecondary),
+              _divider(borderColor),
+              _field(
+                'Reason',
+                entry.reason?.trim().isNotEmpty == true ? entry.reason!.trim() : '—',
+                textPrimary,
+                textSecondary,
+              ),
+              if (entry.rejectReason != null && entry.rejectReason!.trim().isNotEmpty) ...[
+                _divider(borderColor),
+                _field(
+                  'Rejection Reason',
+                  entry.rejectReason!.trim(),
+                  textPrimary,
+                  textSecondary,
+                ),
+              ],
+              _divider(borderColor),
+              _field('Applied On', _appliedOnLine(entry), textPrimary, textSecondary),
+              if (approved &&
+                  entry.approvedByName != null &&
+                  entry.approvedByName!.trim().isNotEmpty) ...[
+                _divider(borderColor),
+                _field(
+                  'Approved By',
+                  entry.approvedByName!.trim(),
+                  textPrimary,
+                  textSecondary,
+                ),
+              ],
+              if (rejected &&
+                  entry.rejectedByName != null &&
+                  entry.rejectedByName!.trim().isNotEmpty) ...[
+                _divider(borderColor),
+                _field(
+                  'Rejected By',
+                  entry.rejectedByName!.trim(),
+                  textPrimary,
+                  textSecondary,
+                ),
+              ],
+            ],
           ),
         ),
-        const SizedBox(height: 8),
-        Text('Status: ${entry.status}', style: TextStyle(color: textSecondary)),
-        if (entry.userName != null && entry.userName!.isNotEmpty) ...[
-          const SizedBox(height: 4),
-          Text('Employee: ${entry.userName}', style: TextStyle(color: textSecondary)),
-        ],
-        const SizedBox(height: 20),
-        _row(Icons.date_range, 'Dates', '${_fmt(entry.startDate)} → ${_fmt(entry.endDate)}', textPrimary, textSecondary),
-        if (entry.isHalfDay == true)
-          _row(Icons.wb_twilight, 'Half day', entry.halfDayPart ?? 'Yes', textPrimary, textSecondary),
-        if (entry.reason != null && entry.reason!.trim().isNotEmpty)
-          _row(Icons.notes, 'Reason', entry.reason!.trim(), textPrimary, textSecondary),
-        if (entry.rejectReason != null && entry.rejectReason!.trim().isNotEmpty)
-          _row(Icons.block, 'Rejection reason', entry.rejectReason!.trim(), textPrimary, textSecondary),
-        if (entry.attachmentFileName != null &&
-            entry.attachmentFileName!.isNotEmpty) ...[
-          const SizedBox(height: 12),
-          Text('Attachment', style: TextStyle(fontWeight: FontWeight.w600, color: textPrimary)),
-          const SizedBox(height: 6),
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.attach_file),
-            title: Text(entry.attachmentFileName!, style: TextStyle(color: textPrimary)),
-            subtitle: entry.attachmentUrl != null && entry.attachmentUrl!.startsWith('http')
-                ? TextButton(
-                    onPressed: () => _openAttachmentUrl(entry.attachmentUrl!),
-                    child: const Text('Open link'),
-                  )
-                : null,
-          ),
-        ],
-        const SizedBox(height: 28),
+        const SizedBox(height: 24),
         if (canEdit)
           FilledButton.icon(
             onPressed: () async {
@@ -320,25 +436,90 @@ class _LeaveDetailPageState extends ConsumerState<LeaveDetailPage> {
     );
   }
 
-  Widget _row(IconData icon, String label, String value, Color p, Color s) {
+  Widget _divider(Color borderColor) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 20, color: s),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(label, style: TextStyle(fontSize: 12, color: s)),
-                Text(value, style: TextStyle(fontSize: 15, color: p, height: 1.3)),
-              ],
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Divider(height: 1, thickness: 1, color: borderColor),
+    );
+  }
+
+  Widget _field(
+    String label,
+    String value,
+    Color textPrimary,
+    Color textSecondary, {
+    String? extraValue,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 13,
+            color: textSecondary,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 6),
+        SelectableText(
+          value,
+          style: TextStyle(
+            fontSize: 16,
+            color: textPrimary,
+            height: 1.35,
+          ),
+        ),
+        if (extraValue != null && extraValue.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Text(
+            extraValue,
+            style: TextStyle(
+              fontSize: 15,
+              color: textPrimary,
+              height: 1.35,
             ),
           ),
         ],
-      ),
+      ],
+    );
+  }
+
+  Widget _leaveCountField(
+    LeaveEntry entry,
+    Color textPrimary,
+    Color textSecondary,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Leave count',
+          style: TextStyle(
+            fontSize: 13,
+            color: textSecondary,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'Working days — weekends and company holidays excluded',
+          style: TextStyle(
+            fontSize: 12,
+            color: textSecondary,
+            height: 1.35,
+          ),
+        ),
+        const SizedBox(height: 6),
+        SelectableText(
+          _leaveDaysLine(entry),
+          style: TextStyle(
+            fontSize: 16,
+            color: textPrimary,
+            height: 1.35,
+          ),
+        ),
+      ],
     );
   }
 }

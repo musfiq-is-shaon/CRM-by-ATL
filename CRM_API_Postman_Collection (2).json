@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "CRM API",
-    "description": "Backend API for CRM (**Flask**). Set {{baseUrl}} (e.g. http://localhost:5000). Use **Login** to set {{token}} for authenticated requests.\n\n**Resources:** Auth, Users, Companies, Contacts, Tasks, Sales, Notifications, Shifts, **Attendance** (shift required for check-in/out), Leaves, HR, Status config, Company profile, Currencies, Expense purposes, Expenses (incl. bin/restore), Account particulars, Accounts, Departments, Designations.\n\n**Attendance:** Users must have **shiftId** on HR (`/api/shifts/assign` or shift create with employeeIds). Without a shift: `GET /api/attendance/today` returns `hasShiftAssigned: false` and `status: no_shift`; `POST` check-in/check-out return **422** with an error message.",
+    "description": "Backend API for CRM (**Flask**). Set {{baseUrl}} (e.g. http://localhost:5000). Use **Login** to set {{token}} for authenticated requests.\n\n**Resources:** Auth, Users, Companies, Contacts, Tasks, Sales, Notifications, Shifts, **Attendance** (shift required for check-in/out), **Leaves** (types, **employee balances** GET/PUT, apply with durationType, weekends/holidays, team approval), HR, Status config, Company profile, Currencies, Expense purposes, Expenses (incl. bin/restore), Account particulars, Accounts, Departments, Designations.\n\n**Leaves — balances:** `GET/PUT /api/leaves/balances/:userId` — allowed for **self**, **admin**, or the employee’s **reporting manager**.\n\n**Leaves — apply:** Body includes `durationType`: `single_day` | `half_day` | `multiple_day`; for `half_day` also send `halfDayPeriod`: `first_half` | `second_half`.\n\n**Attendance:** Users must have **shiftId** on HR (`/api/shifts/assign` or shift create with employeeIds). Without a shift: `GET /api/attendance/today` returns `hasShiftAssigned: false` and `status: no_shift`; `POST` check-in/check-out return **422** with an error message.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -622,7 +622,7 @@
             "method": "DELETE",
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
             "url": "{{baseUrl}}/api/shifts/{{shiftId}}",
-            "description": "Admin only. Delete a shift (only if no employees are assigned)."
+            "description": "Admin only. Deletes the shift and clears shift assignment for any employees on it."
           }
         },
         {
@@ -789,6 +789,31 @@
           }
         },
         {
+          "name": "Get employee leave balances",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/leaves/balances/{{userId}}",
+            "description": "Returns `{ userId, balances }` where each balance row has `leaveTypeId`, `leaveTypeName`, `isActive`, `balance` (allocated days per active leave type). Allowed: **self**, **admin**, or the employee’s **reporting manager**."
+          }
+        },
+        {
+          "name": "Set employee leave balances",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"balances\": [\n    {\n      \"leaveTypeId\": \"{{leaveTypeId}}\",\n      \"balance\": 10\n    }\n  ]\n}"
+            },
+            "url": "{{baseUrl}}/api/leaves/balances/{{userId}}",
+            "description": "Upsert per-leave-type day balances for an employee. Body: non-empty `balances` array of `{ leaveTypeId, balance }` (balance ≥ 0). Same auth as GET balances."
+          }
+        },
+        {
           "name": "Apply for leave",
           "request": {
             "method": "POST",
@@ -798,10 +823,10 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"leaveTypeId\": \"<type-id>\",\n  \"startDate\": \"2025-12-20\",\n  \"endDate\": \"2025-12-22\",\n  \"reason\": \"Medical appointment\",\n  \"attachmentFileName\": \"\",\n  \"attachmentData\": \"\"\n}"
+              "raw": "{\n  \"leaveTypeId\": \"{{leaveTypeId}}\",\n  \"durationType\": \"multiple_day\",\n  \"startDate\": \"2026-03-20\",\n  \"endDate\": \"2026-03-22\",\n  \"reason\": \"Medical appointment\",\n  \"attachmentFileName\": \"\",\n  \"attachmentData\": \"\"\n}"
             },
             "url": "{{baseUrl}}/api/leaves/apply",
-            "description": "Apply for a leave. Working days are calculated automatically."
+            "description": "Apply for leave. **durationType** (required): `single_day` | `half_day` | `multiple_day`. For `single_day`/`half_day` set `startDate` and same `endDate` if needed; for `multiple_day` set both dates. For **half_day** add `halfDayPeriod`: `first_half` | `second_half`. Conflicting dates return 400 with `conflicts`. Extra days beyond quota are stored as `additionalLeaveDays` on the leave."
           }
         },
         {
@@ -818,8 +843,8 @@
           "request": {
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
-            "url": "{{baseUrl}}/api/leaves/all",
-            "description": "Admin only. Get all leave requests."
+            "url": "{{baseUrl}}/api/leaves/all?startDate=&endDate=&userIds=",
+            "description": "Admin only. Optional query: **startDate**, **endDate** (YYYY-MM-DD) — leaves overlapping range; **userIds** — comma-separated user ids."
           }
         },
         {
@@ -850,7 +875,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"startDate\": \"2025-12-20\",\n  \"endDate\": \"2025-12-27\",\n  \"userId\": \"\"\n}"
+              "raw": "{\n  \"startDate\": \"2026-03-20\",\n  \"endDate\": \"2026-03-27\",\n  \"userId\": \"\"\n}"
             },
             "url": "{{baseUrl}}/api/leaves/calculate-days",
             "description": "Working days between startDate and endDate (excludes weekends/holidays per user shift rules). Optional userId: admin any user; manager only their reports; omit for current user."
@@ -887,7 +912,7 @@
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
             "url": "{{baseUrl}}/api/leaves/{{leaveId}}",
-            "description": "Get details of a specific leave request (includes attachment)."
+            "description": "Get details of a leave request (includes attachment data when applicable). **Applicant or admin only** (not reporting manager)."
           }
         },
         {
@@ -900,10 +925,10 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"leaveTypeId\": \"<type-id>\",\n  \"startDate\": \"2025-12-21\",\n  \"endDate\": \"2025-12-23\",\n  \"reason\": \"Updated reason\",\n  \"attachmentFileName\": \"\",\n  \"attachmentData\": \"\"\n}"
+              "raw": "{\n  \"leaveTypeId\": \"{{leaveTypeId}}\",\n  \"durationType\": \"multiple_day\",\n  \"startDate\": \"2026-03-21\",\n  \"endDate\": \"2026-03-23\",\n  \"reason\": \"Updated reason\",\n  \"attachmentFileName\": \"\",\n  \"attachmentData\": \"\",\n  \"halfDayPeriod\": \"first_half\"\n}"
             },
             "url": "{{baseUrl}}/api/leaves/{{leaveId}}",
-            "description": "Update a pending leave request."
+            "description": "Update a **pending** leave (owner only). Same fields as apply: `durationType`, dates, optional `halfDayPeriod` for half_day."
           }
         },
         {
@@ -959,10 +984,10 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"New Year\",\n  \"date\": \"2026-01-01\"\n}"
+              "raw": "{\n  \"name\": \"New Year\",\n  \"startDate\": \"2026-01-01\",\n  \"endDate\": \"2026-01-01\"\n}"
             },
             "url": "{{baseUrl}}/api/leaves/holidays",
-            "description": "Admin only. Add a holiday."
+            "description": "Admin only. Add a holiday (single or multi-day inclusive). **startDate** and **endDate** required (YYYY-MM-DD); use the same date for one day. Legacy **date** is also accepted as alias for both."
           }
         },
         {
@@ -975,10 +1000,10 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Updated New Year\",\n  \"date\": \"2026-01-01\"\n}"
+              "raw": "{\n  \"name\": \"Updated New Year\",\n  \"startDate\": \"2026-01-01\",\n  \"endDate\": \"2026-01-02\"\n}"
             },
             "url": "{{baseUrl}}/api/leaves/holidays/{{holidayId}}",
-            "description": "Admin only. Update a holiday."
+            "description": "Admin only. Update name and/or **startDate** / **endDate** range."
           }
         },
         {

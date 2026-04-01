@@ -18,8 +18,25 @@ class LeaveRepository {
     return _parseLeaveList(response.data);
   }
 
-  Future<List<LeaveEntry>> getAllLeaves() async {
-    final response = await _api.get(AppConstants.leavesAll);
+  Future<List<LeaveEntry>> getAllLeaves({
+    DateTime? startDate,
+    DateTime? endDate,
+    String? userIds,
+  }) async {
+    final qp = <String, dynamic>{};
+    if (startDate != null) {
+      qp['startDate'] = _dateOnlyIso(startDate);
+    }
+    if (endDate != null) {
+      qp['endDate'] = _dateOnlyIso(endDate);
+    }
+    if (userIds != null && userIds.trim().isNotEmpty) {
+      qp['userIds'] = userIds.trim();
+    }
+    final response = await _api.get(
+      AppConstants.leavesAll,
+      queryParameters: qp.isEmpty ? null : qp,
+    );
     return _parseLeaveList(response.data);
   }
 
@@ -183,6 +200,110 @@ class LeaveRepository {
     );
   }
 
+  Future<List<LeaveTypeOption>> getAllLeaveTypesAdmin() async {
+    final response = await _api.get(AppConstants.leavesTypesAll);
+    return _parseTypeList(response.data);
+  }
+
+  Future<void> createLeaveType(String name) async {
+    await _api.post(
+      AppConstants.leavesTypes,
+      data: {'name': name.trim()},
+    );
+  }
+
+  Future<void> updateLeaveType(
+    String leaveTypeId, {
+    String? name,
+    bool? isActive,
+  }) async {
+    final body = <String, dynamic>{};
+    if (name != null) body['name'] = name.trim();
+    if (isActive != null) body['isActive'] = isActive;
+    await _api.put(
+      AppConstants.leavesTypeById(leaveTypeId),
+      data: body,
+    );
+  }
+
+  Future<void> deleteLeaveType(String leaveTypeId) async {
+    await _api.delete(AppConstants.leavesTypeById(leaveTypeId));
+  }
+
+  Future<LeaveBalancesResult> getLeaveBalances(String userId) async {
+    final response = await _api.get(
+      AppConstants.leavesBalances(userId),
+      // Avoid any intermediary caching of GET; balances must reflect latest after approve.
+      queryParameters: {
+        '_': DateTime.now().millisecondsSinceEpoch.toString(),
+      },
+    );
+    return LeaveBalancesResult.fromResponse(response.data);
+  }
+
+  Future<void> setLeaveBalances(
+    String userId,
+    List<Map<String, dynamic>> balances,
+  ) async {
+    await _api.put(
+      AppConstants.leavesBalances(userId),
+      data: {'balances': balances},
+    );
+  }
+
+  Future<List<LeaveWeekend>> getWeekends() async {
+    final response = await _api.get(AppConstants.leavesWeekends);
+    return _parseWeekendList(response.data);
+  }
+
+  Future<void> createWeekend(int dayOfWeek) async {
+    await _api.post(
+      AppConstants.leavesWeekends,
+      data: {'dayOfWeek': dayOfWeek},
+    );
+  }
+
+  Future<void> deleteWeekend(String weekendId) async {
+    await _api.delete(AppConstants.leavesWeekendById(weekendId));
+  }
+
+  Future<List<LeaveHoliday>> getHolidays() async {
+    final response = await _api.get(AppConstants.leavesHolidays);
+    return _parseHolidayList(response.data);
+  }
+
+  Future<void> createHoliday({
+    required String name,
+    required DateTime startDate,
+    required DateTime endDate,
+  }) async {
+    await _api.post(
+      AppConstants.leavesHolidays,
+      data: {
+        'name': name.trim(),
+        'startDate': _dateOnlyIso(startDate),
+        'endDate': _dateOnlyIso(endDate),
+      },
+    );
+  }
+
+  Future<void> updateHoliday(
+    String holidayId, {
+    String? name,
+    DateTime? startDate,
+    DateTime? endDate,
+  }) async {
+    final body = <String, dynamic>{};
+    if (name != null) body['name'] = name.trim();
+    if (startDate != null) body['startDate'] = _dateOnlyIso(startDate);
+    if (endDate != null) body['endDate'] = _dateOnlyIso(endDate);
+    await _api.put(AppConstants.leavesHolidayById(holidayId), data: body);
+  }
+
+  Future<void> deleteHoliday(String holidayId) async {
+    await _api.delete(AppConstants.leavesHolidayById(holidayId));
+  }
+
   static String _dateOnlyIso(DateTime d) {
     final local = d.toLocal();
     final y = local.year.toString().padLeft(4, '0');
@@ -299,6 +420,53 @@ class LeaveRepository {
         .map(LeaveTypeOption.fromJson)
         .where((t) => t.id.isNotEmpty)
         .toList();
+  }
+
+  static List<LeaveWeekend> _parseWeekendList(dynamic body) {
+    final rows = _extractMapList(body, const ['weekends', 'data', 'items']);
+    return rows
+        .map((e) => LeaveWeekend.fromJson(Map<String, dynamic>.from(e)))
+        .where((w) => w.id.isNotEmpty)
+        .toList();
+  }
+
+  static List<LeaveHoliday> _parseHolidayList(dynamic body) {
+    final rows = _extractMapList(body, const ['holidays', 'data', 'items']);
+    return rows
+        .map((e) => LeaveHoliday.fromJson(Map<String, dynamic>.from(e)))
+        .where((h) => h.id.isNotEmpty)
+        .toList();
+  }
+
+  static List<Map<String, dynamic>> _extractMapList(
+    dynamic body,
+    List<String> arrayKeys,
+  ) {
+    if (body is List) {
+      return body.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+    }
+    if (body is! Map) return [];
+    final map = Map<String, dynamic>.from(body);
+    for (final key in arrayKeys) {
+      final v = map[key];
+      if (v is List) {
+        return v
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
+      }
+    }
+    final data = map['data'];
+    if (data is List) {
+      return data
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+    }
+    if (data is Map) {
+      return _extractMapList(data, arrayKeys);
+    }
+    return [];
   }
 }
 

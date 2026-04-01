@@ -47,8 +47,20 @@ class AppConstants {
   static const String leavesAll = '/api/leaves/all';
   static const String leavesApply = '/api/leaves/apply';
   static const String leavesTypes = '/api/leaves/types';
+  static const String leavesTypesAll = '/api/leaves/types/all';
   static const String leavesReportingManager = '/api/leaves/is-reporting-manager';
   static const String leavesCalculateDays = '/api/leaves/calculate-days';
+
+  static String leavesTypeById(String leaveTypeId) =>
+      '/api/leaves/types/$leaveTypeId';
+  static String leavesBalances(String userId) =>
+      '/api/leaves/balances/$userId';
+  static const String leavesWeekends = '/api/leaves/weekends';
+  static String leavesWeekendById(String weekendId) =>
+      '/api/leaves/weekends/$weekendId';
+  static const String leavesHolidays = '/api/leaves/holidays';
+  static String leavesHolidayById(String holidayId) =>
+      '/api/leaves/holidays/$holidayId';
 
   static String leavesById(String leaveId) => '/api/leaves/$leaveId';
   static String leavesApprove(String leaveId) => '/api/leaves/$leaveId/approve';

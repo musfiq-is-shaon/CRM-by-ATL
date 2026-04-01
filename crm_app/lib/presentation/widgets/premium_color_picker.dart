@@ -63,6 +63,7 @@ class _PremiumColorPickerBody extends StatefulWidget {
 class _PremiumColorPickerBodyState extends State<_PremiumColorPickerBody> {
   late HSVColor _hsv;
   late TextEditingController _hexCtrl;
+  late FocusNode _hexFocusNode;
   late TextEditingController _rCtrl;
   late TextEditingController _gCtrl;
   late TextEditingController _bCtrl;
@@ -76,6 +77,8 @@ class _PremiumColorPickerBodyState extends State<_PremiumColorPickerBody> {
     super.initState();
     _hsv = HSVColor.fromColor(widget.initialColor);
     _hexCtrl = TextEditingController();
+    _hexFocusNode = FocusNode();
+    _hexFocusNode.addListener(_onHexFocusChange);
     _rCtrl = TextEditingController();
     _gCtrl = TextEditingController();
     _bCtrl = TextEditingController();
@@ -85,8 +88,16 @@ class _PremiumColorPickerBodyState extends State<_PremiumColorPickerBody> {
     _syncFields();
   }
 
+  void _onHexFocusChange() {
+    if (!_hexFocusNode.hasFocus) {
+      _applyHex();
+    }
+  }
+
   @override
   void dispose() {
+    _hexFocusNode.removeListener(_onHexFocusChange);
+    _hexFocusNode.dispose();
     _hexCtrl.dispose();
     _rCtrl.dispose();
     _gCtrl.dispose();
@@ -187,13 +198,31 @@ class _PremiumColorPickerBodyState extends State<_PremiumColorPickerBody> {
     );
   }
 
-  void _applyHex() {
-    var s = _hexCtrl.text.trim();
+  /// Parses #RGB, #RRGGBB, RRGGBB, #AARRGGBB / AARRGGBB (no #). Rejects partial/invalid lengths.
+  Color? _tryParseUserHex(String raw) {
+    var s = raw.trim();
     if (s.startsWith('#')) s = s.substring(1);
-    if (s.length == 6) s = 'FF$s';
+    s = s.replaceAll(RegExp(r'[^0-9a-fA-F]'), '');
+    if (s.isEmpty) return null;
+    // CSS-style shorthand #RGB
+    if (s.length == 3) {
+      final chars = s.split('');
+      s = chars.map((c) => '$c$c').join();
+    }
+    if (s.length == 6) {
+      s = 'FF$s';
+    } else if (s.length != 8) {
+      return null;
+    }
     final v = int.tryParse(s, radix: 16);
-    if (v != null) {
-      _setFromHsv(HSVColor.fromColor(Color(v)));
+    if (v == null) return null;
+    return Color(v);
+  }
+
+  void _applyHex() {
+    final c = _tryParseUserHex(_hexCtrl.text);
+    if (c != null) {
+      _setFromHsv(HSVColor.fromColor(c));
     }
   }
 
@@ -219,6 +248,20 @@ class _PremiumColorPickerBodyState extends State<_PremiumColorPickerBody> {
     final l = double.tryParse(_lCtrl.text) ?? 0;
     final c = _hslToColor(h, s, l);
     _setFromHsv(HSVColor.fromColor(c));
+  }
+
+  void _commitActiveInput() {
+    switch (_inputTab) {
+      case 0:
+        _applyHex();
+        break;
+      case 1:
+        _applyRgb();
+        break;
+      case 2:
+        _applyHsl();
+        break;
+    }
   }
 
   String get _hexLabel {
@@ -386,17 +429,38 @@ class _PremiumColorPickerBodyState extends State<_PremiumColorPickerBody> {
                     if (_inputTab == 0)
                       TextField(
                         controller: _hexCtrl,
-                        decoration: const InputDecoration(
+                        focusNode: _hexFocusNode,
+                        style: tt.bodyLarge?.copyWith(
+                          color: cs.onSurface,
+                          fontFamily: 'monospace',
+                          letterSpacing: 0.2,
+                        ),
+                        cursorColor: cs.primary,
+                        autocorrect: false,
+                        enableSuggestions: false,
+                        textInputAction: TextInputAction.done,
+                        keyboardType: TextInputType.visiblePassword,
+                        decoration: InputDecoration(
                           labelText: 'HEX',
                           hintText: '#RRGGBB',
+                          labelStyle: TextStyle(color: cs.onSurfaceVariant),
+                          hintStyle: TextStyle(
+                            color: cs.onSurfaceVariant,
+                          ),
                         ),
                         inputFormatters: [
                           FilteringTextInputFormatter.allow(
                             RegExp(r'[0-9a-fA-F#]'),
                           ),
                         ],
-                        onSubmitted: (_) => _applyHex(),
-                        onEditingComplete: _applyHex,
+                        onSubmitted: (_) {
+                          _applyHex();
+                          FocusScope.of(context).unfocus();
+                        },
+                        onEditingComplete: () {
+                          _applyHex();
+                          FocusScope.of(context).unfocus();
+                        },
                       ),
                     if (_inputTab == 1)
                       Row(
@@ -542,7 +606,11 @@ class _PremiumColorPickerBodyState extends State<_PremiumColorPickerBody> {
                     Expanded(
                       flex: 2,
                       child: FilledButton(
-                        onPressed: () => Navigator.pop(context, _color),
+                        onPressed: () {
+                          FocusScope.of(context).unfocus();
+                          _commitActiveInput();
+                          Navigator.pop(context, _color);
+                        },
                         child: const Text('Apply color'),
                       ),
                     ),

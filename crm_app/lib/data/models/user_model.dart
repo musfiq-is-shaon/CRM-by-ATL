@@ -1,3 +1,5 @@
+import '../../core/json_parse.dart';
+
 class User {
   final String id;
   final String name;
@@ -24,7 +26,7 @@ class User {
       email: json['email'] ?? '',
       phone: json['phone'],
       role: json['role'],
-      isActive: json['isActive'],
+      isActive: parseOptionalBool(json['isActive'] ?? json['is_active']),
       createdAt: json['createdAt'] != null
           ? DateTime.tryParse(json['createdAt'].toString())
           : null,

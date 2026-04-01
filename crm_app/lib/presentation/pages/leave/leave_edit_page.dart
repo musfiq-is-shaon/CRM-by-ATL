@@ -261,7 +261,7 @@ class _LeaveEditPageState extends ConsumerState<LeaveEditPage> {
       return Scaffold(
         backgroundColor: bg,
         appBar: AppBar(
-          title: const Text('Edit leave'),
+          title: Text('Edit leave', style: TextStyle(color: textPrimary)),
           backgroundColor: surface,
           foregroundColor: textPrimary,
         ),
@@ -273,7 +273,7 @@ class _LeaveEditPageState extends ConsumerState<LeaveEditPage> {
       return Scaffold(
         backgroundColor: bg,
         appBar: AppBar(
-          title: const Text('Edit leave'),
+          title: Text('Edit leave', style: TextStyle(color: textPrimary)),
           backgroundColor: surface,
           foregroundColor: textPrimary,
         ),
@@ -307,7 +307,7 @@ class _LeaveEditPageState extends ConsumerState<LeaveEditPage> {
     return Scaffold(
       backgroundColor: bg,
       appBar: AppBar(
-        title: const Text('Edit leave'),
+        title: Text('Edit leave', style: TextStyle(color: textPrimary)),
         backgroundColor: surface,
         foregroundColor: textPrimary,
         elevation: 0,
