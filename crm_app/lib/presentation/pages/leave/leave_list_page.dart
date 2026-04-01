@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme_colors.dart';
+import '../../../core/theme/design_tokens.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/leave_provider.dart';
 import '../../../data/models/leave_model.dart';
 import '../../widgets/crm_card.dart';
+import '../../widgets/themed_panel.dart';
+import '../../widgets/app_semantic_pill.dart';
 import '../../widgets/status_badge.dart';
 import 'leave_apply_page.dart';
 import 'leave_balances_page.dart';
@@ -60,7 +63,6 @@ class _LeaveListPageState extends ConsumerState<LeaveListPage> {
     final state = ref.watch(leaveProvider);
     final isAdmin = ref.watch(isAdminProvider);
     final bg = AppThemeColors.backgroundColor(context);
-    final surface = AppThemeColors.surfaceColor(context);
     final textPrimary = AppThemeColors.textPrimaryColor(context);
     final textSecondary = AppThemeColors.textSecondaryColor(context);
     final borderColor = AppThemeColors.borderColor(context);
@@ -81,7 +83,7 @@ class _LeaveListPageState extends ConsumerState<LeaveListPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(next.error!),
-            backgroundColor: Colors.red.shade700,
+            backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
         ref.read(leaveProvider.notifier).clearError();
@@ -90,11 +92,9 @@ class _LeaveListPageState extends ConsumerState<LeaveListPage> {
 
     return Scaffold(
       backgroundColor: bg,
-      appBar: AppBar(
-        title: Text('Leave', style: TextStyle(color: textPrimary)),
-        backgroundColor: surface,
-        foregroundColor: textPrimary,
-        elevation: 0,
+      appBar: AppThemeColors.appBarTitle(
+        context,
+        'Leave',
         actions: [
           PopupMenuButton<String>(
             icon: const Icon(Icons.more_vert),
@@ -143,16 +143,11 @@ class _LeaveListPageState extends ConsumerState<LeaveListPage> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-            child: Container(
-              decoration: BoxDecoration(
-                color: cardFill,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: borderColor),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 10, 4, 12),
-                child: Column(
+            padding: AppThemeColors.pagePaddingTop,
+            child: ThemedPanel(
+              borderRadius: AppRadius.lg,
+              padding: const EdgeInsets.fromLTRB(12, 10, 8, 12),
+              child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
@@ -198,7 +193,7 @@ class _LeaveListPageState extends ConsumerState<LeaveListPage> {
                         state.balancesError!,
                         style: TextStyle(
                           fontSize: 13,
-                          color: Colors.red.shade700,
+                          color: AppThemeColors.errorForeground(context),
                           height: 1.3,
                         ),
                       ),
@@ -222,39 +217,23 @@ class _LeaveListPageState extends ConsumerState<LeaveListPage> {
                         width: double.infinity,
                         padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
                         decoration: BoxDecoration(
-                          color: surface,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: borderColor),
+                          color: Theme.of(context)
+                              .colorScheme
+                              .surfaceContainerLow,
+                          borderRadius: BorderRadius.circular(AppRadius.sm),
                         ),
                         child: Column(
                           children: [
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    'All values are in days',
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      color: textSecondary,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                'All values are in days',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: textSecondary,
+                                  fontWeight: FontWeight.w500,
                                 ),
-                                Icon(
-                                  Icons.warning_amber_rounded,
-                                  size: 12,
-                                  color: Theme.of(context).colorScheme.error,
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  'Additional is alert',
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    color: Theme.of(context).colorScheme.error,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
+                              ),
                             ),
                             const SizedBox(height: 8),
                             Row(
@@ -411,10 +390,9 @@ class _LeaveListPageState extends ConsumerState<LeaveListPage> {
                 ),
               ),
             ),
-          ),
           if (showTeamChip || showAllChip)
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+              padding: AppThemeColors.listPagePaddingTightTop,
               child: SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Row(
@@ -484,7 +462,7 @@ class _LeaveListPageState extends ConsumerState<LeaveListPage> {
             ),
           if (state.scope == LeaveListScope.all && isAdmin)
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+              padding: AppThemeColors.listPagePaddingTightTop,
               child: Container(
                 decoration: BoxDecoration(
                   color: cardFill,
@@ -658,7 +636,7 @@ class _LeaveListPageState extends ConsumerState<LeaveListPage> {
                     )
                   : ListView.builder(
                       physics: const AlwaysScrollableScrollPhysics(),
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 88),
+                      padding: AppThemeColors.listPagePaddingFab,
                       itemCount: state.leaves.length,
                       itemBuilder: (context, i) {
                         final entry = state.leaves[i];
@@ -801,7 +779,7 @@ class _LeaveListPageState extends ConsumerState<LeaveListPage> {
       ),
       body: Center(
         child: Padding(
-          padding: const EdgeInsets.all(24),
+          padding: AppThemeColors.pagePaddingAll,
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -963,25 +941,10 @@ class _LeaveTile extends StatelessWidget {
                     ),
                     if (_isAdditionalLeave) ...[
                       const SizedBox(height: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.tertiaryContainer.withValues(alpha: 0.65),
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: Text(
-                          'Additional leave (${_formatAdditionalDays(entry.additionalLeaveDays!)})',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: Theme.of(context).colorScheme.onTertiaryContainer,
-                          ),
-                        ),
+                      AppSemanticPill(
+                        label:
+                            'Additional leave (${_formatAdditionalDays(entry.additionalLeaveDays!)})',
+                        tone: AppSemanticTone.warning,
                       ),
                     ],
                     if (showApplicant &&

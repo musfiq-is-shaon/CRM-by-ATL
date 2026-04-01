@@ -32,21 +32,15 @@ class _AttendanceRecordsPageState extends ConsumerState<AttendanceRecordsPage> {
   Widget build(BuildContext context) {
     final state = ref.watch(attendanceProvider);
     final surfaceColor = AppThemeColors.surfaceColor(context);
-    final textPrimary = AppThemeColors.textPrimaryColor(context);
 
     return Scaffold(
       backgroundColor: surfaceColor,
-      appBar: AppBar(
-        title: const Text('Attendance Records'),
-        elevation: 0,
-        backgroundColor: surfaceColor,
-        foregroundColor: textPrimary,
-      ),
+      appBar: AppThemeColors.appBarTitle(context, 'Attendance Records'),
       body: RefreshIndicator(
         onRefresh: _refresh,
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(16),
+          padding: AppThemeColors.pagePaddingAll,
           child: RecordsList(state: state),
         ),
       ),

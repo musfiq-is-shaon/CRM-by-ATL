@@ -101,16 +101,13 @@ class _ShiftFormPageState extends ConsumerState<ShiftFormPage> {
   Widget build(BuildContext context) {
     final textPrimary = AppThemeColors.textPrimaryColor(context);
     final textSecondary = AppThemeColors.textSecondaryColor(context);
-    final surface = AppThemeColors.surfaceColor(context);
     final isEdit = widget.existing != null && widget.existing!.id.isNotEmpty;
 
     return Scaffold(
       backgroundColor: AppThemeColors.backgroundColor(context),
-      appBar: AppBar(
-        title: Text(isEdit ? 'Edit shift' : 'New shift'),
-        backgroundColor: surface,
-        foregroundColor: textPrimary,
-        elevation: 0,
+      appBar: AppThemeColors.appBarTitle(
+        context,
+        isEdit ? 'Edit shift' : 'New shift',
         actions: [
           if (_saving)
             const Center(
@@ -131,7 +128,7 @@ class _ShiftFormPageState extends ConsumerState<ShiftFormPage> {
         ],
       ),
       body: ListView(
-        padding: const EdgeInsets.all(20),
+        padding: AppThemeColors.pagePaddingAll,
         children: [
           TextField(
             controller: _name,

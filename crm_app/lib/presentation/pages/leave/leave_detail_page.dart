@@ -237,14 +237,9 @@ class _LeaveDetailPageState extends ConsumerState<LeaveDetailPage> {
 
     return Scaffold(
       backgroundColor: bg,
-      appBar: AppBar(
-        title: Text(
-          'Leave Request Details',
-          style: TextStyle(color: textPrimary),
-        ),
-        backgroundColor: surface,
-        foregroundColor: textPrimary,
-        elevation: 0,
+      appBar: AppThemeColors.appBarTitle(
+        context,
+        'Leave Request Details',
         actions: [
           if (!_loading && _entry != null)
             IconButton(
@@ -317,7 +312,7 @@ class _LeaveDetailPageState extends ConsumerState<LeaveDetailPage> {
     final rejected = st == 'rejected' || st == 'denied';
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+      padding: AppThemeColors.listPagePadding,
       children: [
         Container(
           width: double.infinity,

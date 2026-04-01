@@ -23,7 +23,6 @@ class MorePage extends ConsumerWidget {
     final isAdmin = ref.watch(isAdminProvider);
 
     final bgColor = AppThemeColors.backgroundColor(context);
-    final surfaceColor = AppThemeColors.surfaceColor(context);
     final textPrimary = AppThemeColors.textPrimaryColor(context);
     final textSecondary = AppThemeColors.textSecondaryColor(context);
     final textTertiary = AppThemeColors.textTertiaryColor(context);
@@ -33,12 +32,9 @@ class MorePage extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: bgColor,
-      appBar: AppBar(
-        backgroundColor: surfaceColor,
-        title: Text('More', style: TextStyle(color: textPrimary)),
-      ),
+      appBar: AppThemeColors.appBarTitle(context, 'More'),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: AppThemeColors.pagePaddingAll,
         children: [
           CRMCard(
             onTap: () {
@@ -115,7 +111,7 @@ class MorePage extends ConsumerWidget {
               ],
             ),
           ),
-          const SizedBox(height: 24),
+          SizedBox(height: AppThemeColors.sectionGap),
 
           _buildSection(
             title: 'Management',
@@ -214,7 +210,7 @@ class MorePage extends ConsumerWidget {
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: AppThemeColors.sectionGap),
 
           _buildSection(
             title: 'Account',
@@ -262,7 +258,7 @@ class MorePage extends ConsumerWidget {
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: AppThemeColors.sectionGap),
 
           _buildSection(
             textPrimary: textPrimary,
@@ -379,7 +375,7 @@ class MorePage extends ConsumerWidget {
               ),
             ],
           ),
-          const SizedBox(height: 32),
+          SizedBox(height: AppThemeColors.sectionGap),
 
           Center(
             child: Text(
@@ -406,7 +402,7 @@ class MorePage extends ConsumerWidget {
       children: [
         if (title != null) ...[
           Padding(
-            padding: const EdgeInsets.only(left: 4, bottom: 8),
+            padding: AppThemeColors.sectionHeaderLabelPadding,
             child: Text(
               title,
               style: TextStyle(
@@ -443,7 +439,7 @@ class MorePage extends ConsumerWidget {
     return InkWell(
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        padding: AppThemeColors.cardRowPadding,
         child: Row(
           children: [
             Container(

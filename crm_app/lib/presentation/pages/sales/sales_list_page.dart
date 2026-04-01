@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme_colors.dart';
+import '../../../core/theme/design_tokens.dart';
 import '../../../data/models/company_model.dart';
 import '../../../data/models/user_model.dart';
 import '../../providers/sale_provider.dart';
@@ -11,6 +12,7 @@ import '../../widgets/status_badge.dart';
 import '../../widgets/loading_widget.dart';
 import '../../widgets/error_widget.dart' as app_widgets;
 import '../../widgets/searchable_dropdown.dart';
+import '../../widgets/app_search_filter_bar.dart';
 import 'sale_detail_page.dart';
 
 class SalesListPage extends ConsumerStatefulWidget {
@@ -61,11 +63,7 @@ class _SalesListPageState extends ConsumerState<SalesListPage>
     final companiesState = ref.watch(companiesProvider);
     final usersState = ref.watch(usersProvider);
     final bgColor = AppThemeColors.backgroundColor(context);
-    final surfaceColor = AppThemeColors.surfaceColor(context);
-    final textPrimary = AppThemeColors.textPrimaryColor(context);
     final textSecondary = AppThemeColors.textSecondaryColor(context);
-    final textTertiary = AppThemeColors.textTertiaryColor(context);
-    final borderColor = AppThemeColors.borderColor(context);
     final primaryColor = Theme.of(context).colorScheme.primary;
 
     // Count active filters
@@ -91,126 +89,26 @@ class _SalesListPageState extends ConsumerState<SalesListPage>
 
     return Scaffold(
       backgroundColor: bgColor,
-      appBar: AppBar(
-        backgroundColor: surfaceColor,
-        title: Text('Deals', style: TextStyle(color: textPrimary)),
+      appBar: AppThemeColors.appBarTitle(
+        context,
+        'Deals',
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(118),
           child: Column(
             children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _searchController,
-                        style: TextStyle(color: textPrimary),
-                        decoration: InputDecoration(
-                          hintText: 'Search deals...',
-                          hintStyle: TextStyle(color: textTertiary),
-                          prefixIcon: Icon(Icons.search, color: textSecondary),
-                          suffixIcon: _searchController.text.isNotEmpty
-                              ? IconButton(
-                                  icon: Icon(Icons.clear, color: textSecondary),
-                                  onPressed: () {
-                                    _searchController.clear();
-                                    setState(() {});
-                                  },
-                                )
-                              : null,
-                          filled: true,
-                          fillColor: Theme.of(context)
-                              .colorScheme
-                              .surfaceContainerHighest,
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 12,
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(
-                              color: borderColor.withValues(alpha: 0.6),
-                            ),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(
-                              color: borderColor.withValues(alpha: 0.45),
-                            ),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(
-                              color: primaryColor,
-                              width: 2,
-                            ),
-                          ),
-                        ),
-                        onChanged: (value) => setState(() {}),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Material(
-                      color: Theme.of(context)
-                          .colorScheme
-                          .surfaceContainerHigh,
-                      borderRadius: BorderRadius.circular(12),
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(12),
-                        onTap: () => _showFilterDialog(
-                          context,
-                          companiesState,
-                          usersState,
-                        ),
-                        child: SizedBox(
-                          width: 48,
-                          height: 48,
-                          child: Stack(
-                            clipBehavior: Clip.none,
-                            children: [
-                              Center(
-                                child: Icon(
-                                  Icons.filter_list,
-                                  color: primaryColor,
-                                ),
-                              ),
-                              if (activeFilterCount > 0)
-                                Positioned(
-                                  right: 4,
-                                  top: 4,
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 5,
-                                      vertical: 2,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: primaryColor,
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    constraints: const BoxConstraints(
-                                      minWidth: 16,
-                                      minHeight: 14,
-                                    ),
-                                    child: Text(
-                                      '$activeFilterCount',
-                                      style: TextStyle(
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .onPrimary,
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                      textAlign: TextAlign.center,
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
+              AppSearchFilterBar(
+                controller: _searchController,
+                hintText: 'Search deals...',
+                activeFilterCount: activeFilterCount,
+                onChanged: (_) => setState(() {}),
+                onClear: () {
+                  _searchController.clear();
+                  setState(() {});
+                },
+                onFilterTap: () => _showFilterDialog(
+                  context,
+                  companiesState,
+                  usersState,
                 ),
               ),
               Divider(
@@ -415,7 +313,7 @@ class _SalesListPageState extends ConsumerState<SalesListPage>
     return RefreshIndicator(
       onRefresh: () => ref.read(salesProvider.notifier).loadSales(),
       child: ListView.builder(
-        padding: const EdgeInsets.all(16),
+        padding: AppThemeColors.pagePaddingAll,
         itemCount: sales.length,
         itemBuilder: (context, index) {
           final sale = sales[index];
@@ -519,10 +417,10 @@ class _SalesListPageState extends ConsumerState<SalesListPage>
     CompaniesState companiesState,
     UsersState usersState,
   ) {
+    final surfaceColor = AppThemeColors.surfaceColor(context);
     final textPrimary = AppThemeColors.textPrimaryColor(context);
     final textSecondary = AppThemeColors.textSecondaryColor(context);
-    final surfaceColor = AppThemeColors.surfaceColor(context);
-    final borderColor = AppThemeColors.borderColor(context);
+        final borderColor = AppThemeColors.borderColor(context);
     final primaryColor = Theme.of(context).colorScheme.primary;
 
     // Local state for the dialog
@@ -551,7 +449,7 @@ class _SalesListPageState extends ConsumerState<SalesListPage>
             child: SizedBox(
               width: dialogWidth > 400 ? 500 : dialogWidth * 0.95,
               child: Padding(
-                padding: const EdgeInsets.all(20),
+                padding: AppThemeColors.pagePaddingAll,
                 child: SingleChildScrollView(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -956,7 +854,7 @@ class _SalesListPageState extends ConsumerState<SalesListPage>
                           ),
                         ],
                       ),
-                      const SizedBox(height: 24),
+                      SizedBox(height: AppSpacing.lg),
 
                       Row(
                         children: [

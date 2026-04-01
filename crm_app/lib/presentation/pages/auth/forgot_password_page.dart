@@ -57,7 +57,7 @@ class _ForgotPasswordPageState extends ConsumerState<ForgotPasswordPage> {
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
+          padding: AppThemeColors.pagePaddingLoose,
           child: Form(
             key: _formKey,
             child: Column(

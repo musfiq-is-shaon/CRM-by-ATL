@@ -56,18 +56,12 @@ class _SaleDetailPageState extends ConsumerState<SaleDetailPage> {
     return saleAsync.when(
       loading: () => Scaffold(
         backgroundColor: bgColor,
-        appBar: AppBar(
-          backgroundColor: surfaceColor,
-          title: Text('Deal Details', style: TextStyle(color: textPrimary)),
-        ),
+        appBar: AppThemeColors.appBarTitle(context, 'Deal Details'),
         body: const Center(child: LoadingWidget()),
       ),
       error: (error, stack) => Scaffold(
         backgroundColor: bgColor,
-        appBar: AppBar(
-          backgroundColor: surfaceColor,
-          title: Text('Deal Details', style: TextStyle(color: textPrimary)),
-        ),
+        appBar: AppThemeColors.appBarTitle(context, 'Deal Details'),
         body: Center(
           child: Text('Error: $error', style: TextStyle(color: textPrimary)),
         ),
@@ -103,17 +97,18 @@ class _SaleDetailPageState extends ConsumerState<SaleDetailPage> {
     final cs = Theme.of(context).colorScheme;
     return Scaffold(
       backgroundColor: bgColor,
-      appBar: AppBar(
-        backgroundColor: surfaceColor,
-        elevation: 0,
+      appBar: AppThemeColors.appBarTitle(
+        context,
+        'Deal Details',
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: textPrimary),
+          tooltip: 'Back',
+          icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.pop(context),
         ),
-        title: Text('Deal Details', style: TextStyle(color: textPrimary)),
         actions: [
           IconButton(
-            icon: Icon(Icons.edit_outlined, color: textPrimary),
+            tooltip: 'Edit deal',
+            icon: const Icon(Icons.edit_outlined),
             onPressed: () {
               Navigator.push(
                 context,
@@ -124,13 +119,14 @@ class _SaleDetailPageState extends ConsumerState<SaleDetailPage> {
             },
           ),
           IconButton(
+            tooltip: 'Delete deal',
             icon: Icon(Icons.delete_outline, color: cs.error),
             onPressed: () => _showDeleteDialog(context, sale),
           ),
         ],
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
+        padding: AppThemeColors.pagePaddingAll,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -203,11 +199,10 @@ class _SaleDetailPageState extends ConsumerState<SaleDetailPage> {
             // Status Actions
             Text(
               'Change Status',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                color: textPrimary,
-              ),
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: textPrimary,
+                    fontWeight: FontWeight.w600,
+                  ),
             ),
             const SizedBox(height: 12),
             Wrap(
@@ -326,7 +321,7 @@ class _SaleDetailPageState extends ConsumerState<SaleDetailPage> {
             const SizedBox(height: 12),
             if (activities.isEmpty)
               Container(
-                padding: const EdgeInsets.all(20),
+                padding: AppThemeColors.pagePaddingAll,
                 decoration: BoxDecoration(
                   color: surfaceColor,
                   borderRadius: BorderRadius.circular(12),
@@ -1032,7 +1027,7 @@ class _SaleFormPageState extends ConsumerState<SaleFormPage> {
         ),
         body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
+          padding: AppThemeColors.pagePaddingAll,
           child: Form(
             key: _formKey,
             child: Column(

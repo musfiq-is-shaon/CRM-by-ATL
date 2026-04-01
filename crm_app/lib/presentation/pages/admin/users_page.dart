@@ -4,9 +4,9 @@ import '../../../core/theme/app_theme_colors.dart';
 import '../../../data/repositories/user_repository.dart';
 import '../../../data/models/user_model.dart';
 import '../../widgets/crm_card.dart';
-import '../../widgets/loading_widget.dart';
-import '../../widgets/error_widget.dart' as app_widgets;
 import '../../widgets/avatar_widget.dart';
+import '../../widgets/app_semantic_pill.dart';
+import '../../widgets/list_page_state.dart';
 
 final usersProvider = FutureProvider<List<User>>((ref) async {
   final repository = ref.watch(userRepositoryProvider);
@@ -31,12 +31,12 @@ class UsersPage extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: bgColor,
-      appBar: AppBar(
-        backgroundColor: surfaceColor,
-        title: Text('Users', style: TextStyle(color: textPrimary)),
+      appBar: AppThemeColors.appBarTitle(
+        context,
+        'Users',
         actions: [
           IconButton(
-            icon: Icon(Icons.add, color: textPrimary),
+            icon: const Icon(Icons.add),
             onPressed: () {
               _showCreateUserDialog(context);
             },
@@ -44,102 +44,102 @@ class UsersPage extends ConsumerWidget {
         ],
       ),
       body: usersAsync.when(
-        loading: () => const LoadingWidget(),
-        error: (error, stack) => app_widgets.ErrorWidget(
-          message: error.toString(),
+        loading: () => ListPageState(
+          isLoading: true,
+          error: null,
+          isEmpty: false,
           onRetry: () => ref.invalidate(usersProvider),
+          emptyTitle: '',
+          emptySubtitle: '',
+          emptyIcon: Icons.people_outline,
+          content: const SizedBox.shrink(),
+        ),
+        error: (error, stack) => ListPageState(
+          isLoading: false,
+          error: error.toString(),
+          isEmpty: false,
+          onRetry: () => ref.invalidate(usersProvider),
+          emptyTitle: '',
+          emptySubtitle: '',
+          emptyIcon: Icons.people_outline,
+          content: const SizedBox.shrink(),
         ),
         data: (users) {
-          if (users.isEmpty) {
-            return app_widgets.EmptyStateWidget(
-              title: 'No users found',
-              subtitle: 'Add your first user',
-              icon: Icons.people_outline,
-            );
-          }
-
-          return RefreshIndicator(
-            onRefresh: () async {
-              ref.invalidate(usersProvider);
-              await ref.read(usersProvider.future);
-            },
-            child: ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: users.length,
-              itemBuilder: (context, index) {
-                final user = users[index];
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: CRMCard(
-                    onTap: () {
-                      _showUserDetailsDialog(
-                        context,
-                        user,
-                        textPrimary,
-                        textSecondary,
-                        surfaceColor,
-                        primaryColor,
-                        accentColor,
-                      );
-                    },
-                    child: Row(
-                      children: [
-                        AvatarWidget(name: user.name, size: 50),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                user.name,
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                  color: textPrimary,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                user.email,
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: textSecondary,
-                                ),
-                              ),
-                              if (user.role != null) ...[
-                                const SizedBox(height: 4),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 2,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: user.role == 'admin'
-                                        ? cs.tertiaryContainer
-                                        : cs.primaryContainer,
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Text(
-                                    user.role!,
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w500,
-                                      color: user.role == 'admin'
-                                          ? cs.onTertiaryContainer
-                                          : cs.onPrimaryContainer,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                        Icon(Icons.chevron_right, color: textTertiary),
-                      ],
-                    ),
-                  ),
-                );
+          return ListPageState(
+            isLoading: false,
+            error: null,
+            isEmpty: users.isEmpty,
+            onRetry: () => ref.invalidate(usersProvider),
+            emptyTitle: 'No users found',
+            emptySubtitle: 'Add your first user',
+            emptyIcon: Icons.people_outline,
+            content: RefreshIndicator(
+              onRefresh: () async {
+                ref.invalidate(usersProvider);
+                await ref.read(usersProvider.future);
               },
+              child: ListView.builder(
+                padding: AppThemeColors.pagePaddingAll,
+                itemCount: users.length,
+                itemBuilder: (context, index) {
+                  final user = users[index];
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: CRMCard(
+                      onTap: () {
+                        _showUserDetailsDialog(
+                          context,
+                          user,
+                          textPrimary,
+                          textSecondary,
+                          surfaceColor,
+                          primaryColor,
+                          accentColor,
+                        );
+                      },
+                      child: Row(
+                        children: [
+                          AvatarWidget(name: user.name, size: 50),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  user.name,
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: textPrimary,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  user.email,
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: textSecondary,
+                                  ),
+                                ),
+                                if (user.role != null) ...[
+                                  const SizedBox(height: 4),
+                                  AppSemanticPill(
+                                    label: user.role!,
+                                    tone: user.role == 'admin'
+                                        ? AppSemanticTone.warning
+                                        : AppSemanticTone.info,
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                          Icon(Icons.chevron_right, color: textTertiary),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
             ),
           );
         },

@@ -501,14 +501,9 @@ class _LeaveApplyPageState extends ConsumerState<LeaveApplyPage> {
       icon: Icons.event_available_rounded,
       child: Scaffold(
         backgroundColor: bg,
-        appBar: AppBar(
-          title: Text('Apply for leave', style: TextStyle(color: textPrimary)),
-          backgroundColor: surface,
-          foregroundColor: textPrimary,
-          elevation: 0,
-        ),
+        appBar: AppThemeColors.appBarTitle(context, 'Apply for leave'),
         body: ListView(
-          padding: const EdgeInsets.all(20),
+          padding: AppThemeColors.pagePaddingAll,
           children: [
             if (leaveState.balancesError != null)
               Padding(

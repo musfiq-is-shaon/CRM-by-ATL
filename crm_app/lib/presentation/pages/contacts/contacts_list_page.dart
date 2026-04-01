@@ -10,6 +10,7 @@ import '../../widgets/avatar_widget.dart';
 import '../../widgets/loading_widget.dart';
 import '../../widgets/error_widget.dart' as app_widgets;
 import '../../widgets/searchable_dropdown.dart';
+import '../../widgets/app_search_filter_bar.dart';
 import 'contact_detail_page.dart';
 
 class ContactsListPage extends ConsumerStatefulWidget {
@@ -42,80 +43,31 @@ class _ContactsListPageState extends ConsumerState<ContactsListPage> {
     final contactsState = ref.watch(contactsProvider);
 
     final bgColor = AppThemeColors.backgroundColor(context);
-    final surfaceColor = AppThemeColors.surfaceColor(context);
     final textPrimary = AppThemeColors.textPrimaryColor(context);
     final textSecondary = AppThemeColors.textSecondaryColor(context);
     final textTertiary = AppThemeColors.textTertiaryColor(context);
-    final borderColor = AppThemeColors.borderColor(context);
     final cs = Theme.of(context).colorScheme;
     final primaryColor = cs.primary;
     final secondaryColor = cs.tertiary;
 
     return Scaffold(
       backgroundColor: bgColor,
-      appBar: AppBar(
-        backgroundColor: surfaceColor,
-        title: Text('Contacts', style: TextStyle(color: textPrimary)),
-      ),
+      appBar: AppThemeColors.appBarTitle(context, 'Contacts'),
       body: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _searchController,
-                    style: TextStyle(color: textPrimary),
-                    onChanged: (value) {
-                      ref.read(contactsProvider.notifier).setSearchQuery(value);
-                    },
-                    decoration: InputDecoration(
-                      hintText: 'Search contacts...',
-                      hintStyle: TextStyle(color: textTertiary),
-                      prefixIcon: Icon(Icons.search, color: textSecondary),
-                      suffixIcon: _searchController.text.isNotEmpty
-                          ? IconButton(
-                              icon: Icon(Icons.clear, color: textSecondary),
-                              onPressed: () {
-                                _searchController.clear();
-                                ref
-                                    .read(contactsProvider.notifier)
-                                    .setSearchQuery(null);
-                              },
-                            )
-                          : null,
-                      filled: true,
-                      fillColor: surfaceColor,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: borderColor),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: borderColor),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Container(
-                  decoration: BoxDecoration(
-                    color: surfaceColor,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: borderColor),
-                  ),
-                  child: IconButton(
-                    icon: Icon(Icons.filter_list, color: textPrimary),
-                    onPressed: () => _showFilterDialog(context),
-                  ),
-                ),
-              ],
-            ),
+          AppSearchFilterBar(
+            controller: _searchController,
+            hintText: 'Search contacts...',
+            padding: AppThemeColors.listHeaderPadding,
+            onChanged: (value) {
+              ref.read(contactsProvider.notifier).setSearchQuery(value);
+            },
+            onClear: () {
+              _searchController.clear();
+              ref.read(contactsProvider.notifier).setSearchQuery(null);
+              setState(() {});
+            },
+            onFilterTap: () => _showFilterDialog(context),
           ),
           Expanded(
             child: contactsState.isLoading
@@ -132,7 +84,7 @@ class _ContactsListPageState extends ConsumerState<ContactsListPage> {
                     onRefresh: () =>
                         ref.read(contactsProvider.notifier).loadContacts(),
                     child: ListView.builder(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      padding: AppThemeColors.pagePaddingHorizontal,
                       itemCount: contactsState.filteredContacts.length,
                       itemBuilder: (context, index) {
                         final contact = contactsState.filteredContacts[index];
@@ -231,10 +183,10 @@ class _ContactsListPageState extends ConsumerState<ContactsListPage> {
   void _showFilterDialog(BuildContext context) {
     final contactsState = ref.read(contactsProvider);
     final companiesState = ref.read(companiesProvider);
+    final surfaceColor = AppThemeColors.surfaceColor(context);
     final textPrimary = AppThemeColors.textPrimaryColor(context);
     final textSecondary = AppThemeColors.textSecondaryColor(context);
     final primaryColor = Theme.of(context).colorScheme.primary;
-    final surfaceColor = AppThemeColors.surfaceColor(context);
 
     String? selectedCompanyId = contactsState.companyIdFilter;
 

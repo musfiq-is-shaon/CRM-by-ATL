@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme_colors.dart';
+import '../../../core/theme/design_tokens.dart';
 import '../../providers/sale_provider.dart';
 import '../../providers/task_provider.dart';
 import '../../providers/contact_provider.dart';
@@ -84,7 +85,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
               // App Bar
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.all(20),
+                  padding: AppThemeColors.pagePaddingAll,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -189,7 +190,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                 // KPI Cards
                 SliverToBoxAdapter(
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    padding: AppThemeColors.pagePaddingHorizontal,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -204,11 +205,11 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                         const SizedBox(height: 16),
                         SizedBox(
                           height:
-                              (MediaQuery.of(context).size.width - 40) /
+                              (MediaQuery.of(context).size.width - 32) /
                                   2 /
                                   1.4 *
                                   2 +
-                              40,
+                              32,
                           child: GridView.count(
                             crossAxisCount: 2,
                             shrinkWrap: true,
@@ -249,13 +250,13 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                     ),
                   ),
                 ),
-                const SliverToBoxAdapter(child: SizedBox(height: 24)),
+                SliverToBoxAdapter(child: SizedBox(height: AppSpacing.lg)),
               ],
 
               // Quick Actions
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  padding: AppThemeColors.pagePaddingHorizontal,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -409,21 +410,21 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                 ),
               ),
 
-              const SliverToBoxAdapter(child: SizedBox(height: 28)),
+              SliverToBoxAdapter(child: SizedBox(height: AppSpacing.lg)),
 
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                  padding: AppThemeColors.pagePaddingHorizontalBottomXs,
                   child: const TodayAttendanceCardWidget(),
                 ),
               ),
 
               // Pending Tasks for non-admin (after Quick Actions + attendance)
               if (!isAdmin) ...[
-                const SliverToBoxAdapter(child: SizedBox(height: 20)),
+                SliverToBoxAdapter(child: SizedBox(height: AppSpacing.md)),
                 SliverToBoxAdapter(
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    padding: AppThemeColors.pagePaddingHorizontal,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -459,7 +460,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                 if (userPendingTasksSorted.isEmpty)
                   SliverToBoxAdapter(
                     child: Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 4),
+                      padding: AppThemeColors.pagePaddingHorizontalBottomTight,
                       child: Text(
                         'No pending tasks',
                         style: TextStyle(
@@ -481,8 +482,8 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                         final accent = cs.secondary;
                         final chipBg = accent.withValues(alpha: 0.12);
                         return Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 20,
+                          padding: EdgeInsets.symmetric(
+                            horizontal: AppSpacing.md,
                             vertical: 6,
                           ),
                           child: CRMCard(
@@ -571,12 +572,12 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
               ],
 
               if (isAdmin) ...[
-                const SliverToBoxAdapter(child: SizedBox(height: 24)),
+                SliverToBoxAdapter(child: SizedBox(height: AppSpacing.lg)),
 
                 // Recent Tasks
                 SliverToBoxAdapter(
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    padding: AppThemeColors.pagePaddingHorizontal,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -614,14 +615,14 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                 if (tasksState.isLoading)
                   const SliverToBoxAdapter(
                     child: Padding(
-                      padding: EdgeInsets.all(20),
+                      padding: AppThemeColors.pagePaddingAll,
                       child: LoadingWidget(),
                     ),
                   )
                 else if (userFilteredTasks.isEmpty)
                   SliverToBoxAdapter(
                     child: Padding(
-                      padding: const EdgeInsets.all(20),
+                      padding: AppThemeColors.pagePaddingAll,
                       child: app_widgets.EmptyStateWidget(
                         title: 'No tasks yet',
                         subtitle: 'Create your first task to get started',
@@ -636,8 +637,8 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                         if (index >= 5) return null;
                         final task = userFilteredTasks[index];
                         return Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 20,
+                          padding: EdgeInsets.symmetric(
+                            horizontal: AppSpacing.md,
                             vertical: 6,
                           ),
                           child: CRMCard(

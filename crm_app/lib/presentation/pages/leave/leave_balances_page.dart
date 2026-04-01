@@ -136,7 +136,7 @@ class _LeaveBalancesPageState extends ConsumerState<LeaveBalancesPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(e.toString().replaceFirst('Exception: ', '')),
-          backgroundColor: Colors.red.shade700,
+          backgroundColor: Theme.of(context).colorScheme.error,
         ),
       );
     } finally {
@@ -147,7 +147,6 @@ class _LeaveBalancesPageState extends ConsumerState<LeaveBalancesPage> {
   @override
   Widget build(BuildContext context) {
     final bg = AppThemeColors.backgroundColor(context);
-    final surface = AppThemeColors.surfaceColor(context);
     final textPrimary = AppThemeColors.textPrimaryColor(context);
     final textSecondary = AppThemeColors.textSecondaryColor(context);
     final borderColor = AppThemeColors.borderColor(context);
@@ -156,17 +155,9 @@ class _LeaveBalancesPageState extends ConsumerState<LeaveBalancesPage> {
 
     return Scaffold(
       backgroundColor: bg,
-      appBar: AppBar(
-        title: Text(
-          'Leave balances',
-          style: TextStyle(color: textPrimary),
-        ),
-        backgroundColor: surface,
-        foregroundColor: textPrimary,
-        elevation: 0,
-      ),
+      appBar: AppThemeColors.appBarTitle(context, 'Leave balances'),
       body: ListView(
-        padding: const EdgeInsets.all(20),
+        padding: AppThemeColors.pagePaddingAll,
         children: [
           Text(
             'View or update allocated days per leave type. Access follows the API (self, admin, or reporting manager).',

@@ -42,16 +42,14 @@ class _ExpensesListPageState extends ConsumerState<ExpensesListPage>
     final expensesState = ref.watch(expensesProvider);
 
     final bgColor = AppThemeColors.backgroundColor(context);
-    final surfaceColor = AppThemeColors.surfaceColor(context);
-    final textPrimary = AppThemeColors.textPrimaryColor(context);
     final textSecondary = AppThemeColors.textSecondaryColor(context);
     final primaryColor = Theme.of(context).colorScheme.primary;
 
     return Scaffold(
       backgroundColor: bgColor,
-      appBar: AppBar(
-        backgroundColor: surfaceColor,
-        title: Text('Expenses', style: TextStyle(color: textPrimary)),
+      appBar: AppThemeColors.appBarTitle(
+        context,
+        'Expenses',
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(49),
           child: Column(
@@ -68,7 +66,7 @@ class _ExpensesListPageState extends ConsumerState<ExpensesListPage>
               TabBar(
                 controller: _tabController,
                 isScrollable: false,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
+                padding: AppThemeColors.pagePaddingHorizontal,
                 automaticIndicatorColorAdjustment: false,
                 labelColor: primaryColor,
                 unselectedLabelColor: textSecondary,
@@ -157,7 +155,7 @@ class _ExpensesListPageState extends ConsumerState<ExpensesListPage>
     return RefreshIndicator(
       onRefresh: () => ref.read(expensesProvider.notifier).loadExpenses(),
       child: ListView.builder(
-        padding: const EdgeInsets.all(16),
+        padding: AppThemeColors.pagePaddingAll,
         itemCount: expenses.length,
         itemBuilder: (context, index) {
           final expense = expenses[index];

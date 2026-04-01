@@ -118,7 +118,12 @@ class _ExpenseFormPageState extends ConsumerState<ExpenseFormPage> {
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: Text('Create Company', style: TextStyle(color: textPrimary)),
+          title: Text(
+            'Create Company',
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              color: textPrimary,
+            ),
+          ),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -376,32 +381,29 @@ class _ExpenseFormPageState extends ConsumerState<ExpenseFormPage> {
       icon: Icons.receipt_long_rounded,
       child: Scaffold(
         backgroundColor: bgColor,
-        appBar: AppBar(
-          backgroundColor: surfaceColor,
-          elevation: 0,
+        appBar: AppThemeColors.appBarTitle(
+          context,
+          widget.expenseId == null ? 'New Expense' : 'Edit Expense',
           leading: IconButton(
-            icon: Icon(Icons.close, color: textPrimary),
+            tooltip: 'Close',
+            icon: const Icon(Icons.close),
             onPressed: _celebrating ? null : () => Navigator.pop(context),
-          ),
-          title: Text(
-            widget.expenseId == null ? 'New Expense' : 'Edit Expense',
-            style: TextStyle(color: textPrimary),
           ),
           actions: [
             TextButton(
               onPressed: (_isLoading || _celebrating) ? null : _saveExpense,
-            child: _isLoading
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Text('Save'),
-          ),
-        ],
-      ),
+              child: _isLoading
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Save'),
+            ),
+          ],
+        ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
+        padding: AppThemeColors.pagePaddingAll,
         child: Form(
           key: _formKey,
           child: Column(

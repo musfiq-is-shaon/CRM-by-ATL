@@ -21,7 +21,6 @@ class SettingsPage extends ConsumerWidget {
     final amoledBlack = ref.watch(amoledDarkProvider);
 
     final bgColor = AppThemeColors.backgroundColor(context);
-    final surfaceColor = AppThemeColors.surfaceColor(context);
     final textPrimary = AppThemeColors.textPrimaryColor(context);
     final textSecondary = AppThemeColors.textSecondaryColor(context);
     final textTertiary = AppThemeColors.textTertiaryColor(context);
@@ -29,12 +28,9 @@ class SettingsPage extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: bgColor,
-      appBar: AppBar(
-        backgroundColor: surfaceColor,
-        title: Text('Settings', style: TextStyle(color: textPrimary)),
-      ),
+      appBar: AppThemeColors.appBarTitle(context, 'Settings'),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: AppThemeColors.pagePaddingAll,
         children: [
           CRMCard(
             child: Column(
@@ -48,7 +44,7 @@ class SettingsPage extends ConsumerWidget {
                     color: textPrimary,
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 12),
                 _buildSettingItem(
                   context,
                   icon: Icons.notifications_outlined,
@@ -167,7 +163,7 @@ class SettingsPage extends ConsumerWidget {
               ],
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
 
           CRMCard(
             child: Column(
@@ -181,7 +177,7 @@ class SettingsPage extends ConsumerWidget {
                     color: textPrimary,
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 12),
                 _buildSettingItem(
                   context,
                   icon: Icons.info_outline,
@@ -217,7 +213,7 @@ class SettingsPage extends ConsumerWidget {
               ],
             ),
           ),
-          const SizedBox(height: 32),
+          const SizedBox(height: 12),
         ],
       ),
     );
@@ -276,7 +272,7 @@ class SettingsPage extends ConsumerWidget {
       ),
       builder: (context) => StatefulBuilder(
         builder: (context, setModalState) => Container(
-          padding: const EdgeInsets.all(24),
+          padding: AppThemeColors.pagePaddingAll,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -289,12 +285,12 @@ class SettingsPage extends ConsumerWidget {
                   color: textPrimary,
                 ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 16),
               Text(
                 'Get notified when a task deadline is approaching:',
                 style: TextStyle(fontSize: 14, color: textSecondary),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
               _buildDaysOption(
                 title: 'On due date',
                 value: 0,
@@ -335,7 +331,7 @@ class SettingsPage extends ConsumerWidget {
                   setModalState(() => selectedDays = value);
                 },
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 24),
               SizedBox(
                 width: double.infinity,
                 child: FilledButton(

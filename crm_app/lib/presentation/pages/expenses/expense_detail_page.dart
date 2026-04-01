@@ -30,13 +30,14 @@ class ExpenseDetailPage extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: bgColor,
-      appBar: AppBar(
-        backgroundColor: surfaceColor,
-        title: Text('Expense Details', style: TextStyle(color: textPrimary)),
+      appBar: AppThemeColors.appBarTitle(
+        context,
+        'Expense Details',
         actions: [
           if (isAdmin)
             IconButton(
-              icon: Icon(Icons.edit, color: textPrimary),
+              tooltip: 'Edit expense',
+              icon: const Icon(Icons.edit),
               onPressed: () {
                 Navigator.push(
                   context,
@@ -47,6 +48,7 @@ class ExpenseDetailPage extends ConsumerWidget {
               },
             ),
           IconButton(
+            tooltip: 'Delete expense',
             icon: Icon(Icons.delete, color: errorColor),
             onPressed: () => _showDeleteDialog(context, ref),
           ),
@@ -54,14 +56,14 @@ class ExpenseDetailPage extends ConsumerWidget {
       ),
       body: expenseAsync.when(
         data: (expense) => SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
+          padding: AppThemeColors.pagePaddingAll,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Header Card
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.all(20),
+                padding: AppThemeColors.pagePaddingAll,
                 decoration: BoxDecoration(
                   color: surfaceColor,
                   borderRadius: BorderRadius.circular(16),
@@ -121,11 +123,10 @@ class ExpenseDetailPage extends ConsumerWidget {
                   children: [
                     Text(
                       'Details',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: textPrimary,
-                      ),
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            color: textPrimary,
+                            fontWeight: FontWeight.w600,
+                          ),
                     ),
                     const SizedBox(height: 16),
                     _buildDetailRow(
@@ -212,11 +213,10 @@ class ExpenseDetailPage extends ConsumerWidget {
                     children: [
                       Text(
                         'Purpose',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: textPrimary,
-                        ),
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              color: textPrimary,
+                              fontWeight: FontWeight.w600,
+                            ),
                       ),
                       const SizedBox(height: 12),
                       Text(

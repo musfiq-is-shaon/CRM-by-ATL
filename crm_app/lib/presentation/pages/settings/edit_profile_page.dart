@@ -70,15 +70,12 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
 
   @override
   Widget build(BuildContext context) {
-    final textPrimary = AppThemeColors.textPrimaryColor(context);
-    final surface = AppThemeColors.surfaceColor(context);
-
+        
     return Scaffold(
       backgroundColor: AppThemeColors.backgroundColor(context),
-      appBar: AppBar(
-        backgroundColor: surface,
-        foregroundColor: textPrimary,
-        title: const Text('Edit profile'),
+      appBar: AppThemeColors.appBarTitle(
+        context,
+        'Edit profile',
         actions: [
           if (_saving)
             const Center(
@@ -96,7 +93,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
         ],
       ),
       body: ListView(
-        padding: const EdgeInsets.all(20),
+        padding: AppThemeColors.pagePaddingAll,
         children: [
           TextField(
             controller: _name,

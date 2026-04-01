@@ -260,11 +260,7 @@ class _LeaveEditPageState extends ConsumerState<LeaveEditPage> {
     if (_loading) {
       return Scaffold(
         backgroundColor: bg,
-        appBar: AppBar(
-          title: Text('Edit leave', style: TextStyle(color: textPrimary)),
-          backgroundColor: surface,
-          foregroundColor: textPrimary,
-        ),
+        appBar: AppThemeColors.appBarTitle(context, 'Edit leave'),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
@@ -272,14 +268,10 @@ class _LeaveEditPageState extends ConsumerState<LeaveEditPage> {
     if (_loadError != null) {
       return Scaffold(
         backgroundColor: bg,
-        appBar: AppBar(
-          title: Text('Edit leave', style: TextStyle(color: textPrimary)),
-          backgroundColor: surface,
-          foregroundColor: textPrimary,
-        ),
+        appBar: AppThemeColors.appBarTitle(context, 'Edit leave'),
         body: Center(
           child: Padding(
-            padding: const EdgeInsets.all(24),
+            padding: AppThemeColors.pagePaddingAll,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -306,14 +298,9 @@ class _LeaveEditPageState extends ConsumerState<LeaveEditPage> {
 
     return Scaffold(
       backgroundColor: bg,
-      appBar: AppBar(
-        title: Text('Edit leave', style: TextStyle(color: textPrimary)),
-        backgroundColor: surface,
-        foregroundColor: textPrimary,
-        elevation: 0,
-      ),
+      appBar: AppThemeColors.appBarTitle(context, 'Edit leave'),
       body: ListView(
-        padding: const EdgeInsets.all(20),
+        padding: AppThemeColors.pagePaddingAll,
         children: [
           _sectionLabel('Leave type', textSecondary),
           const SizedBox(height: 8),

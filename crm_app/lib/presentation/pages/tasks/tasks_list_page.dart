@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme_colors.dart';
+import '../../../core/theme/design_tokens.dart';
 import '../../../data/models/user_model.dart';
 import '../../../data/models/task_model.dart';
 import '../../providers/task_provider.dart';
@@ -11,6 +12,7 @@ import '../../widgets/status_badge.dart';
 import '../../widgets/loading_widget.dart';
 import '../../widgets/error_widget.dart' as app_widgets;
 import '../../widgets/searchable_dropdown.dart';
+import '../../widgets/app_search_filter_bar.dart';
 import 'task_detail_page.dart';
 
 class TasksListPage extends ConsumerStatefulWidget {
@@ -50,104 +52,31 @@ class _TasksListPageState extends ConsumerState<TasksListPage>
     final userFilteredTasks = ref.watch(userFilteredTasksProvider);
 
     final bgColor = AppThemeColors.backgroundColor(context);
-    final surfaceColor = AppThemeColors.surfaceColor(context);
-    final textPrimary = AppThemeColors.textPrimaryColor(context);
     final textSecondary = AppThemeColors.textSecondaryColor(context);
-    final textTertiary = AppThemeColors.textTertiaryColor(context);
-    final borderColor = AppThemeColors.borderColor(context);
     final primaryColor = Theme.of(context).colorScheme.primary;
 
     return Scaffold(
       backgroundColor: bgColor,
-      appBar: AppBar(
-        backgroundColor: surfaceColor,
-        title: Text('Tasks', style: TextStyle(color: textPrimary)),
+      appBar: AppThemeColors.appBarTitle(
+        context,
+        'Tasks',
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(108),
           child: Column(
             children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _searchController,
-                        style: TextStyle(color: textPrimary),
-                        decoration: InputDecoration(
-                          hintText: 'Search tasks...',
-                          hintStyle: TextStyle(color: textTertiary),
-                          prefixIcon: Icon(Icons.search, color: textSecondary),
-                          suffixIcon: _searchController.text.isNotEmpty
-                              ? IconButton(
-                                  icon: Icon(Icons.clear, color: textSecondary),
-                                  onPressed: () {
-                                    _searchController.clear();
-                                    ref
-                                        .read(tasksProvider.notifier)
-                                        .setSearchQuery(null);
-                                    setState(() {});
-                                  },
-                                )
-                              : null,
-                          filled: true,
-                          fillColor: Theme.of(context)
-                              .colorScheme
-                              .surfaceContainerHighest,
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 12,
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(
-                              color: borderColor.withValues(alpha: 0.6),
-                            ),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(
-                              color: borderColor.withValues(alpha: 0.45),
-                            ),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(
-                              color: primaryColor,
-                              width: 2,
-                            ),
-                          ),
-                        ),
-                        onChanged: (value) {
-                          setState(() {});
-                          ref
-                              .read(tasksProvider.notifier)
-                              .setSearchQuery(value);
-                        },
-                      ),
-                    ),
-                    if (isAdmin) ...[
-                      const SizedBox(width: 8),
-                      Material(
-                        color: Theme.of(context)
-                            .colorScheme
-                            .surfaceContainerHigh,
-                        borderRadius: BorderRadius.circular(12),
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(12),
-                          onTap: () => _showFilterDialog(context),
-                          child: Padding(
-                            padding: const EdgeInsets.all(10),
-                            child: Icon(
-                              Icons.filter_list,
-                              color: primaryColor,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
+              AppSearchFilterBar(
+                controller: _searchController,
+                hintText: 'Search tasks...',
+                onChanged: (value) {
+                  setState(() {});
+                  ref.read(tasksProvider.notifier).setSearchQuery(value);
+                },
+                onClear: () {
+                  _searchController.clear();
+                  ref.read(tasksProvider.notifier).setSearchQuery(null);
+                  setState(() {});
+                },
+                onFilterTap: isAdmin ? () => _showFilterDialog(context) : null,
               ),
               Divider(
                 height: 1,
@@ -317,7 +246,7 @@ class _TasksListPageState extends ConsumerState<TasksListPage>
     return RefreshIndicator(
       onRefresh: () => ref.read(tasksProvider.notifier).loadTasks(),
       child: ListView.builder(
-        padding: const EdgeInsets.all(16),
+        padding: AppThemeColors.pagePaddingAll,
         itemCount: tasks.length,
         itemBuilder: (context, index) {
           final task = tasks[index];
@@ -455,10 +384,10 @@ class _TasksListPageState extends ConsumerState<TasksListPage>
   void _showFilterDialog(BuildContext context) {
     final tasksState = ref.read(tasksProvider);
     final usersState = ref.read(usersProvider);
+    final surfaceColor = AppThemeColors.surfaceColor(context);
     final textPrimary = AppThemeColors.textPrimaryColor(context);
     final textSecondary = AppThemeColors.textSecondaryColor(context);
     final primaryColor = Theme.of(context).colorScheme.primary;
-    final surfaceColor = AppThemeColors.surfaceColor(context);
     final borderColor = AppThemeColors.borderColor(context);
 
     String? selectedAssigneeId = tasksState.assignToUserIdFilter;
@@ -475,10 +404,10 @@ class _TasksListPageState extends ConsumerState<TasksListPage>
       builder: (context) => StatefulBuilder(
         builder: (context, setModalState) => Container(
           padding: EdgeInsets.only(
-            left: 24,
-            right: 24,
-            top: 24,
-            bottom: 24 + MediaQuery.of(context).viewInsets.bottom,
+            left: AppSpacing.md,
+            right: AppSpacing.md,
+            top: AppSpacing.md,
+            bottom: AppSpacing.md + MediaQuery.of(context).viewInsets.bottom,
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -513,7 +442,7 @@ class _TasksListPageState extends ConsumerState<TasksListPage>
                   ),
                 ],
               ),
-              const SizedBox(height: 24),
+              SizedBox(height: AppSpacing.md),
 
               // Assignee Dropdown with Search
               Text(
@@ -524,7 +453,7 @@ class _TasksListPageState extends ConsumerState<TasksListPage>
                   color: textSecondary,
                 ),
               ),
-              const SizedBox(height: 8),
+              SizedBox(height: AppSpacing.xs),
               Container(
                 decoration: BoxDecoration(
                   color: surfaceColor,
@@ -549,7 +478,7 @@ class _TasksListPageState extends ConsumerState<TasksListPage>
                   },
                 ),
               ),
-              const SizedBox(height: 20),
+              SizedBox(height: AppSpacing.md),
 
               // Date Range
               Text(
@@ -560,7 +489,7 @@ class _TasksListPageState extends ConsumerState<TasksListPage>
                   color: textSecondary,
                 ),
               ),
-              const SizedBox(height: 8),
+              SizedBox(height: AppSpacing.xs),
               Row(
                 children: [
                   Expanded(
@@ -614,7 +543,7 @@ class _TasksListPageState extends ConsumerState<TasksListPage>
                   ),
                 ],
               ),
-              const SizedBox(height: 32),
+              SizedBox(height: AppSpacing.lg),
 
               // Apply Button
               SizedBox(
@@ -654,7 +583,10 @@ class _TasksListPageState extends ConsumerState<TasksListPage>
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.sm,
+        ),
         decoration: BoxDecoration(
           color: surfaceColor,
           borderRadius: BorderRadius.circular(12),

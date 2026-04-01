@@ -8,6 +8,7 @@ import '../../providers/currency_provider.dart';
 import '../../widgets/crm_card.dart';
 import '../../widgets/loading_widget.dart';
 import '../../widgets/error_widget.dart' as app_widgets;
+import '../../widgets/app_search_filter_bar.dart';
 import 'company_detail_page.dart';
 
 class CompaniesListPage extends ConsumerStatefulWidget {
@@ -49,70 +50,38 @@ class _CompaniesListPageState extends ConsumerState<CompaniesListPage> {
     final companiesState = ref.watch(companiesProvider);
 
     final bgColor = AppThemeColors.backgroundColor(context);
-    final surfaceColor = AppThemeColors.surfaceColor(context);
     final textPrimary = AppThemeColors.textPrimaryColor(context);
     final textSecondary = AppThemeColors.textSecondaryColor(context);
     final textTertiary = AppThemeColors.textTertiaryColor(context);
-    final borderColor = AppThemeColors.borderColor(context);
     final primaryColor = Theme.of(context).colorScheme.primary;
 
     return Scaffold(
       backgroundColor: bgColor,
-      appBar: AppBar(
-        backgroundColor: surfaceColor,
-        title: Text('Companies', style: TextStyle(color: textPrimary)),
+      appBar: AppThemeColors.appBarTitle(
+        context,
+        'Companies',
         actions: [
           IconButton(
-            icon: Icon(Icons.add, color: textPrimary),
+            icon: const Icon(Icons.add),
             onPressed: () => _showCreateCompanyDialog(context),
           ),
         ],
       ),
       body: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _searchController,
-                    style: TextStyle(color: textPrimary),
-                    decoration: InputDecoration(
-                      hintText: 'Search companies...',
-                      hintStyle: TextStyle(color: textTertiary),
-                      prefixIcon: Icon(Icons.search, color: textSecondary),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: borderColor),
-                      ),
-                      filled: true,
-                      fillColor: surfaceColor,
-                    ),
-                    onChanged: (value) {
-                      ref
-                          .read(companiesProvider.notifier)
-                          .setSearchQuery(value);
-                    },
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Container(
-                  decoration: BoxDecoration(
-                    color: surfaceColor,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: borderColor),
-                  ),
-                  child: IconButton(
-                    icon: Icon(Icons.filter_list, color: textPrimary),
-                    onPressed: () => _showFilterDialog(context),
-                  ),
-                ),
-              ],
-            ),
+          AppSearchFilterBar(
+            controller: _searchController,
+            hintText: 'Search companies...',
+            padding: AppThemeColors.listHeaderPadding,
+            onChanged: (value) {
+              ref.read(companiesProvider.notifier).setSearchQuery(value);
+            },
+            onClear: () {
+              _searchController.clear();
+              ref.read(companiesProvider.notifier).setSearchQuery(null);
+              setState(() {});
+            },
+            onFilterTap: () => _showFilterDialog(context),
           ),
           Expanded(
             child: companiesState.isLoading
@@ -136,7 +105,7 @@ class _CompaniesListPageState extends ConsumerState<CompaniesListPage> {
                           .loadCompanies();
                     },
                     child: ListView.builder(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      padding: AppThemeColors.pagePaddingHorizontal,
                       itemCount: companiesState.filteredCompanies.length,
                       itemBuilder: (context, index) {
                         final company = companiesState.filteredCompanies[index];
@@ -246,7 +215,7 @@ class _CompaniesListPageState extends ConsumerState<CompaniesListPage> {
       ),
       builder: (context) => StatefulBuilder(
         builder: (context, setModalState) => Padding(
-          padding: const EdgeInsets.all(20),
+          padding: AppThemeColors.pagePaddingAll,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,

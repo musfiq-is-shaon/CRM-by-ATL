@@ -25,21 +25,20 @@ class ContactDetailPage extends ConsumerWidget {
         .firstOrNull;
 
     final bgColor = AppThemeColors.backgroundColor(context);
-    final surfaceColor = AppThemeColors.surfaceColor(context);
     final textPrimary = AppThemeColors.textPrimaryColor(context);
-    final textSecondary = AppThemeColors.textSecondaryColor(context);
+            final textSecondary = AppThemeColors.textSecondaryColor(context);
     final primaryColor = Theme.of(context).colorScheme.primary;
 
     return Scaffold(
       backgroundColor: bgColor,
-      appBar: AppBar(
-        backgroundColor: surfaceColor,
-        elevation: 0,
+      appBar: AppThemeColors.appBarTitle(
+        context,
+        'Contact Details',
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: textPrimary),
+          tooltip: 'Back',
+          icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.pop(context),
         ),
-        title: Text('Contact Details', style: TextStyle(color: textPrimary)),
         actions: [
           IconButton(
             icon: Icon(Icons.edit_outlined, color: textPrimary),
@@ -57,7 +56,7 @@ class ContactDetailPage extends ConsumerWidget {
       body: contact == null
           ? const Center(child: LoadingWidget())
           : SingleChildScrollView(
-              padding: const EdgeInsets.all(20),
+              padding: AppThemeColors.pagePaddingAll,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -401,11 +400,11 @@ class _ContactFormPageState extends ConsumerState<ContactFormPage> {
     final usersState = ref.read(usersProvider);
     final currenciesState = ref.read(currenciesProvider);
     final authState = ref.read(authProvider);
+    final surfaceColor = AppThemeColors.surfaceColor(context);
     final textPrimary = AppThemeColors.textPrimaryColor(context);
     final textSecondary = AppThemeColors.textSecondaryColor(context);
     final borderColor = AppThemeColors.borderColor(context);
     final primaryColor = Theme.of(context).colorScheme.primary;
-    final surfaceColor = AppThemeColors.surfaceColor(context);
 
     final nameController = TextEditingController();
     final locationController = TextEditingController();
@@ -655,16 +654,13 @@ class _ContactFormPageState extends ConsumerState<ContactFormPage> {
 
     return Scaffold(
       backgroundColor: bgColor,
-      appBar: AppBar(
-        backgroundColor: surfaceColor,
-        elevation: 0,
+      appBar: AppThemeColors.appBarTitle(
+        context,
+        widget.contact == null ? 'New Contact' : 'Edit Contact',
         leading: IconButton(
-          icon: Icon(Icons.close, color: textPrimary),
+          tooltip: 'Close',
+          icon: const Icon(Icons.close),
           onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(
-          widget.contact == null ? 'New Contact' : 'Edit Contact',
-          style: TextStyle(color: textPrimary),
         ),
         actions: [
           TextButton(
@@ -681,7 +677,7 @@ class _ContactFormPageState extends ConsumerState<ContactFormPage> {
       ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
+          padding: AppThemeColors.pagePaddingAll,
           child: Form(
             key: _formKey,
             child: Column(

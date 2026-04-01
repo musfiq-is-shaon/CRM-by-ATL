@@ -167,7 +167,7 @@ class _TodayAttendanceCardWidgetState
     });
 
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: AppThemeColors.pagePaddingAll,
       decoration: BoxDecoration(
         color: surfaceColor,
         borderRadius: BorderRadius.circular(16),

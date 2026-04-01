@@ -9,18 +9,11 @@ class ProfilePage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final textPrimary = AppThemeColors.textPrimaryColor(context);
-    final surfaceColor = AppThemeColors.surfaceColor(context);
-
     return Scaffold(
       backgroundColor: AppThemeColors.backgroundColor(context),
-      appBar: AppBar(
-        backgroundColor: surfaceColor,
-        foregroundColor: textPrimary,
-        title: Text('Profile', style: TextStyle(color: textPrimary)),
-      ),
+      appBar: AppThemeColors.appBarTitle(context, 'Profile'),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: AppThemeColors.pagePaddingAll,
         children: const [
           ProfileOverviewBody(),
         ],

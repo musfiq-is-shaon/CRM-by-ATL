@@ -16,22 +16,15 @@ class NotificationSettingsPage extends ConsumerWidget {
     final tasksState = ref.watch(tasksProvider);
 
     final bgColor = AppThemeColors.backgroundColor(context);
-    final surfaceColor = AppThemeColors.surfaceColor(context);
     final textPrimary = AppThemeColors.textPrimaryColor(context);
     final textSecondary = AppThemeColors.textSecondaryColor(context);
     final primaryColor = Theme.of(context).colorScheme.primary;
 
     return Scaffold(
       backgroundColor: bgColor,
-      appBar: AppBar(
-        backgroundColor: surfaceColor,
-        title: Text(
-          'Notification Settings',
-          style: TextStyle(color: textPrimary),
-        ),
-      ),
+      appBar: AppThemeColors.appBarTitle(context, 'Notification Settings'),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: AppThemeColors.pagePaddingAll,
         children: [
           // Enable/Disable Notifications Section
           _buildSection(
@@ -40,10 +33,7 @@ class NotificationSettingsPage extends ConsumerWidget {
             textSecondary: textSecondary,
             children: [
               Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
-                ),
+                padding: AppThemeColors.cardRowPadding,
                 child: Row(
                   children: [
                     Container(
@@ -97,7 +87,7 @@ class NotificationSettingsPage extends ConsumerWidget {
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: AppThemeColors.sectionGap),
 
           // Notification Timing Section
           _buildSection(
@@ -174,12 +164,12 @@ class NotificationSettingsPage extends ConsumerWidget {
               ),
             ],
           ),
-          const SizedBox(height: 24),
+          SizedBox(height: AppThemeColors.sectionGap),
 
           // Info Card
           CRMCard(
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: AppThemeColors.cardInsetPadding,
               child: Row(
                 children: [
                   Icon(Icons.info_outline, color: primaryColor, size: 20),
@@ -194,7 +184,7 @@ class NotificationSettingsPage extends ConsumerWidget {
               ),
             ),
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: AppThemeColors.sectionGap),
 
           // Test Notification Button
           SizedBox(
@@ -237,7 +227,7 @@ class NotificationSettingsPage extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.only(left: 4, bottom: 8),
+          padding: AppThemeColors.sectionHeaderLabelPadding,
           child: Text(
             title,
             style: TextStyle(
@@ -270,7 +260,7 @@ class NotificationSettingsPage extends ConsumerWidget {
     return InkWell(
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        padding: AppThemeColors.cardRowPadding,
         child: Row(
           children: [
             Expanded(

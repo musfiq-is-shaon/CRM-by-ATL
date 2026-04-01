@@ -51,9 +51,8 @@ class _LeaveHrAdminPageState extends ConsumerState<LeaveHrAdminPage>
   @override
   Widget build(BuildContext context) {
     final bg = AppThemeColors.backgroundColor(context);
-    final surface = AppThemeColors.surfaceColor(context);
     final textPrimary = AppThemeColors.textPrimaryColor(context);
-    final textSecondary = AppThemeColors.textSecondaryColor(context);
+            final textSecondary = AppThemeColors.textSecondaryColor(context);
     final primaryColor = Theme.of(context).colorScheme.primary;
 
     ref.listen<LeaveHrAdminState>(leaveHrAdminProvider, (prev, next) {
@@ -72,14 +71,9 @@ class _LeaveHrAdminPageState extends ConsumerState<LeaveHrAdminPage>
 
     return Scaffold(
       backgroundColor: bg,
-      appBar: AppBar(
-        title: Text(
-          'Leave HR (admin)',
-          style: TextStyle(color: textPrimary),
-        ),
-        backgroundColor: surface,
-        foregroundColor: textPrimary,
-        elevation: 0,
+      appBar: AppThemeColors.appBarTitle(
+        context,
+        'Leave HR (admin)',
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(49),
           child: Column(
@@ -141,7 +135,7 @@ class _TypesTab extends ConsumerWidget {
             onRefresh: n.loadTypes,
             child: ListView.builder(
               physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.all(16),
+              padding: AppThemeColors.pagePaddingAll,
               itemCount: s.types.length + 1,
               itemBuilder: (context, i) {
                 if (i == 0) {
@@ -302,7 +296,7 @@ class _WeekendsTab extends ConsumerWidget {
             onRefresh: n.loadWeekends,
             child: ListView.builder(
               physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.all(16),
+              padding: AppThemeColors.pagePaddingAll,
               itemCount: s.weekends.length + 1,
               itemBuilder: (context, i) {
                 if (i == 0) {
@@ -413,7 +407,7 @@ class _HolidaysTab extends ConsumerWidget {
             onRefresh: n.loadHolidays,
             child: ListView.builder(
               physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.all(16),
+              padding: AppThemeColors.pagePaddingAll,
               itemCount: s.holidays.length + 1,
               itemBuilder: (context, i) {
                 if (i == 0) {

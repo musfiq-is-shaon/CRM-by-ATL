@@ -151,14 +151,13 @@ class _ShiftsAdminPageState extends ConsumerState<ShiftsAdminPage> {
     final state = ref.watch(shiftProvider);
     final textPrimary = AppThemeColors.textPrimaryColor(context);
     final textSecondary = AppThemeColors.textSecondaryColor(context);
-    final surface = AppThemeColors.surfaceColor(context);
 
     if (!isAdmin) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Shifts')),
+        appBar: AppThemeColors.appBarTitle(context, 'Shifts'),
         body: Center(
           child: Padding(
-            padding: const EdgeInsets.all(24),
+            padding: AppThemeColors.pagePaddingAll,
             child: Text(
               'Only administrators can manage shifts.',
               textAlign: TextAlign.center,
@@ -171,11 +170,9 @@ class _ShiftsAdminPageState extends ConsumerState<ShiftsAdminPage> {
 
     return Scaffold(
       backgroundColor: AppThemeColors.backgroundColor(context),
-      appBar: AppBar(
-        title: const Text('Shifts'),
-        backgroundColor: surface,
-        foregroundColor: textPrimary,
-        elevation: 0,
+      appBar: AppThemeColors.appBarTitle(
+        context,
+        'Shifts',
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -204,7 +201,7 @@ class _ShiftsAdminPageState extends ConsumerState<ShiftsAdminPage> {
             : state.error != null && state.shifts.isEmpty
                 ? ListView(
                     physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.all(24),
+                    padding: AppThemeColors.pagePaddingAll,
                     children: [
                       Text(
                         state.error!,
@@ -234,7 +231,7 @@ class _ShiftsAdminPageState extends ConsumerState<ShiftsAdminPage> {
                         ],
                       )
                     : ListView.builder(
-                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 88),
+                        padding: AppThemeColors.listPagePaddingFab,
                         itemCount: state.shifts.length,
                         itemBuilder: (context, i) {
                           final s = state.shifts[i];

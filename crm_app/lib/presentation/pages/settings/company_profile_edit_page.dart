@@ -111,9 +111,7 @@ class _CompanyProfileEditPageState extends ConsumerState<CompanyProfileEditPage>
 
   @override
   Widget build(BuildContext context) {
-    final textPrimary = AppThemeColors.textPrimaryColor(context);
-    final surface = AppThemeColors.surfaceColor(context);
-
+        
     InputDecoration deco(String label) => InputDecoration(
           labelText: label,
           border: const OutlineInputBorder(),
@@ -121,10 +119,9 @@ class _CompanyProfileEditPageState extends ConsumerState<CompanyProfileEditPage>
 
     return Scaffold(
       backgroundColor: AppThemeColors.backgroundColor(context),
-      appBar: AppBar(
-        backgroundColor: surface,
-        foregroundColor: textPrimary,
-        title: const Text('Company profile'),
+      appBar: AppThemeColors.appBarTitle(
+        context,
+        'Company profile',
         actions: [
           if (_saving)
             const Center(
@@ -142,7 +139,7 @@ class _CompanyProfileEditPageState extends ConsumerState<CompanyProfileEditPage>
         ],
       ),
       body: ListView(
-        padding: const EdgeInsets.all(20),
+        padding: AppThemeColors.pagePaddingAll,
         children: [
           Text(
             'All fields match the backend. Logo: base64 data URL or leave empty (Postman).',

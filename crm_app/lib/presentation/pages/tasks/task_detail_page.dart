@@ -58,7 +58,6 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
     final isAdmin = ref.watch(isAdminProvider);
 
     final bgColor = AppThemeColors.backgroundColor(context);
-    final surfaceColor = AppThemeColors.surfaceColor(context);
     final textPrimary = AppThemeColors.textPrimaryColor(context);
     final textSecondary = AppThemeColors.textSecondaryColor(context);
     final primaryColor = Theme.of(context).colorScheme.primary;
@@ -71,40 +70,45 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
       icon: Icons.task_alt_rounded,
       child: Scaffold(
         backgroundColor: bgColor,
-        appBar: AppBar(
-          backgroundColor: surfaceColor,
-          elevation: 0,
+        appBar: AppThemeColors.appBarTitle(
+          context,
+          'Task Details',
           leading: IconButton(
-            icon: Icon(Icons.arrow_back, color: textPrimary),
+            tooltip: 'Back',
+            icon: const Icon(Icons.arrow_back),
             onPressed: _celebrating ? null : () => Navigator.pop(context),
           ),
-        title: Text('Task Details', style: TextStyle(color: textPrimary)),
-        actions: [
-          if (isAdmin)
-            IconButton(
-              icon: Icon(Icons.edit_outlined, color: textPrimary),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => TaskFormPage(task: task),
-                  ),
-                );
-              },
-            ),
-          if (isAdmin)
-            IconButton(
-              icon: Icon(Icons.delete_outline, color: Colors.red),
-              onPressed: task != null
-                  ? () => _showDeleteConfirmation(context, task)
-                  : null,
-            ),
-        ],
-      ),
+          actions: [
+            if (isAdmin)
+              IconButton(
+                tooltip: 'Edit task',
+                icon: const Icon(Icons.edit_outlined),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => TaskFormPage(task: task),
+                    ),
+                  );
+                },
+              ),
+            if (isAdmin)
+              IconButton(
+                tooltip: 'Delete task',
+                icon: Icon(
+                  Icons.delete_outline,
+                  color: Theme.of(context).colorScheme.error,
+                ),
+                onPressed: task != null
+                    ? () => _showDeleteConfirmation(context, task)
+                    : null,
+              ),
+          ],
+        ),
       body: task == null
           ? const Center(child: LoadingWidget())
           : SingleChildScrollView(
-              padding: const EdgeInsets.all(20),
+              padding: AppThemeColors.pagePaddingAll,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -173,10 +177,9 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
                   // Status Actions
                   Text(
                     'Change Status',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       color: textPrimary,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -725,16 +728,13 @@ class _TaskFormPageState extends ConsumerState<TaskFormPage> {
 
     return Scaffold(
       backgroundColor: bgColor,
-      appBar: AppBar(
-        backgroundColor: surfaceColor,
-        elevation: 0,
+      appBar: AppThemeColors.appBarTitle(
+        context,
+        widget.task == null ? 'New Task' : 'Edit Task',
         leading: IconButton(
-          icon: Icon(Icons.close, color: textPrimary),
+          tooltip: 'Close',
+          icon: const Icon(Icons.close),
           onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(
-          widget.task == null ? 'New Task' : 'Edit Task',
-          style: TextStyle(color: textPrimary),
         ),
         actions: [
           TextButton(
@@ -750,7 +750,7 @@ class _TaskFormPageState extends ConsumerState<TaskFormPage> {
         ],
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
+        padding: AppThemeColors.pagePaddingAll,
         child: Form(
           key: _formKey,
           child: Column(
