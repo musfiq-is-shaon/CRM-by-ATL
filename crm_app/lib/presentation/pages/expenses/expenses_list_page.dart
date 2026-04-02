@@ -204,7 +204,9 @@ class _ExpensesListPageState extends ConsumerState<ExpensesListPage>
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              expense.purpose ?? 'No description',
+                              expense.purposeSummaryLine.isEmpty
+                                  ? 'No description'
+                                  : expense.purposeSummaryLine,
                               style: TextStyle(
                                 fontSize: 14,
                                 color: textSecondary,

@@ -12,6 +12,9 @@ class Expense {
   final String? fromLocation;
   final String? toLocation;
   final String? purposeId;
+  /// Catalog label from `/api/expense-purposes` when the expense is linked.
+  final String? purposeName;
+  /// Free-form notes (Postman: e.g. transport or extra detail alongside [purposeId]).
   final String? purpose;
   final String? tripType;
   final String status;
@@ -30,6 +33,7 @@ class Expense {
     this.fromLocation,
     this.toLocation,
     this.purposeId,
+    this.purposeName,
     this.purpose,
     this.tripType,
     this.status = 'unpaid',
@@ -57,8 +61,9 @@ class Expense {
           : null,
       fromLocation: json['fromLocation'],
       toLocation: json['toLocation'],
-      purposeId: json['purposeId']?.toString(),
-      purpose: json['purpose'],
+      purposeId: _nonEmptyString(json['purposeId']),
+      purposeName: _nonEmptyString(json['purposeName']),
+      purpose: json['purpose']?.toString(),
       tripType: json['tripType'],
       status: json['status'] ?? 'unpaid',
       createdByUserId: json['createdByUserId']?.toString(),
@@ -74,6 +79,20 @@ class Expense {
     );
   }
 
+  /// Line for list tiles: catalog name + optional notes.
+  String get purposeSummaryLine {
+    final cat = purposeName?.trim();
+    final note = purpose?.trim();
+    if (cat != null && cat.isNotEmpty) {
+      if (note != null && note.isNotEmpty && note != cat) {
+        return '$cat · $note';
+      }
+      return cat;
+    }
+    if (note != null && note.isNotEmpty) return note;
+    return '';
+  }
+
   Map<String, dynamic> toJson() {
     return {
       'id': id,
@@ -84,6 +103,7 @@ class Expense {
       'fromLocation': fromLocation,
       'toLocation': toLocation,
       'purposeId': purposeId,
+      'purposeName': purposeName,
       'purpose': purpose,
       'tripType': tripType,
       'status': status,
@@ -104,6 +124,12 @@ class Expense {
       '${AppConstants.currencySymbol}${amount.toStringAsFixed(2)}';
   String get formattedTotalAmount =>
       '${AppConstants.currencySymbol}${totalAmount.toStringAsFixed(2)}';
+}
+
+String? _nonEmptyString(dynamic value) {
+  if (value == null) return null;
+  final s = value.toString().trim();
+  return s.isEmpty ? null : s;
 }
 
 class ExpensePurpose {

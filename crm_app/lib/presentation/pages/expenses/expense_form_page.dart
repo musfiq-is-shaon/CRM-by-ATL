@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme_colors.dart';
+import '../../../data/models/expense_model.dart';
 import '../../providers/expense_provider.dart';
 import '../../providers/company_provider.dart';
 import '../../providers/auth_provider.dart';
@@ -26,9 +27,12 @@ class _ExpenseFormPageState extends ConsumerState<ExpenseFormPage> {
   late TextEditingController _amountController;
   late TextEditingController _fromLocationController;
   late TextEditingController _toLocationController;
-  late TextEditingController _purposeController;
+  late TextEditingController _notesController;
 
   String? _selectedCompanyId;
+  String? _selectedPurposeId;
+  /// When editing an expense whose purpose id is missing from the loaded catalog.
+  String? _orphanPurposeLabel;
   String? _selectedTripType;
   String? _selectedStatus;
   DateTime? _selectedDate;
@@ -45,7 +49,7 @@ class _ExpenseFormPageState extends ConsumerState<ExpenseFormPage> {
     _amountController = TextEditingController();
     _fromLocationController = TextEditingController();
     _toLocationController = TextEditingController();
-    _purposeController = TextEditingController();
+    _notesController = TextEditingController();
     _selectedTripType = 'single_trip';
     _selectedStatus = 'unpaid';
 
@@ -53,6 +57,7 @@ class _ExpenseFormPageState extends ConsumerState<ExpenseFormPage> {
       ref.read(companiesProvider.notifier).loadCompanies();
       ref.read(usersProvider.notifier).loadUsers();
       ref.read(currenciesProvider.notifier).loadCurrencies();
+      ref.read(expensePurposesProvider.future);
 
       // If editing, load the expense data
       if (widget.expenseId != null) {
@@ -70,7 +75,11 @@ class _ExpenseFormPageState extends ConsumerState<ExpenseFormPage> {
         _amountController.text = expenseAsync.amount.toString();
         _fromLocationController.text = expenseAsync.fromLocation ?? '';
         _toLocationController.text = expenseAsync.toLocation ?? '';
-        _purposeController.text = expenseAsync.purpose ?? '';
+        _notesController.text = expenseAsync.purpose ?? '';
+        _selectedPurposeId = expenseAsync.purposeId;
+        _orphanPurposeLabel = expenseAsync.purposeName?.trim().isNotEmpty == true
+            ? expenseAsync.purposeName!.trim()
+            : null;
         _selectedCompanyId = expenseAsync.companyId;
         _selectedTripType = expenseAsync.tripType ?? 'single_trip';
         _selectedStatus = expenseAsync.status;
@@ -85,7 +94,7 @@ class _ExpenseFormPageState extends ConsumerState<ExpenseFormPage> {
     _amountController.dispose();
     _fromLocationController.dispose();
     _toLocationController.dispose();
-    _purposeController.dispose();
+    _notesController.dispose();
     super.dispose();
   }
 
@@ -285,6 +294,31 @@ class _ExpenseFormPageState extends ConsumerState<ExpenseFormPage> {
     }
   }
 
+  List<ExpensePurpose> _purposesForDropdown(List<ExpensePurpose> api) {
+    final active = api.where((p) => p.isActive).toList()
+      ..sort((a, b) {
+        final ao = a.sortOrder ?? 999;
+        final bo = b.sortOrder ?? 999;
+        if (ao != bo) return ao.compareTo(bo);
+        return a.name.compareTo(b.name);
+      });
+    final pid = _selectedPurposeId;
+    if (pid != null &&
+        pid.isNotEmpty &&
+        !active.any((p) => p.id == pid)) {
+      return [
+        ExpensePurpose(
+          id: pid,
+          name: _orphanPurposeLabel ?? 'Previous selection',
+          sortOrder: -1,
+          isActive: true,
+        ),
+        ...active,
+      ];
+    }
+    return active;
+  }
+
   Future<void> _selectDate() async {
     final DateTime? picked = await showDatePicker(
       context: context,
@@ -316,6 +350,18 @@ class _ExpenseFormPageState extends ConsumerState<ExpenseFormPage> {
       return;
     }
 
+    if (_selectedPurposeId == null || _selectedPurposeId!.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select an expense purpose from the list'),
+        ),
+      );
+      return;
+    }
+
+    final notes = _notesController.text.trim();
+    final purposeNotes = notes.isEmpty ? null : notes;
+
     setState(() => _isLoading = true);
 
     try {
@@ -339,9 +385,8 @@ class _ExpenseFormPageState extends ConsumerState<ExpenseFormPage> {
               toLocation: _toLocationController.text.isEmpty
                   ? null
                   : _toLocationController.text,
-              purpose: _purposeController.text.isEmpty
-                  ? null
-                  : _purposeController.text,
+              purposeId: _selectedPurposeId!.trim(),
+              purpose: purposeNotes,
               tripType: _selectedTripType,
               status: _selectedStatus,
               createdByUserId: currentUserId,
@@ -373,9 +418,8 @@ class _ExpenseFormPageState extends ConsumerState<ExpenseFormPage> {
               toLocation: _toLocationController.text.isEmpty
                   ? null
                   : _toLocationController.text,
-              purpose: _purposeController.text.isEmpty
-                  ? null
-                  : _purposeController.text,
+              purposeId: _selectedPurposeId!.trim(),
+              purpose: purposeNotes,
               tripType: _selectedTripType,
               status: _selectedStatus,
             );
@@ -653,17 +697,74 @@ class _ExpenseFormPageState extends ConsumerState<ExpenseFormPage> {
               ),
               const SizedBox(height: 16),
 
-              // Purpose
+              // Purpose (catalog) + optional notes — API: purposeId + purpose
+              Consumer(
+                builder: (context, ref, _) {
+                  final asyncPurposes = ref.watch(expensePurposesProvider);
+                  return asyncPurposes.when(
+                    data: (purposes) {
+                      final items = _purposesForDropdown(purposes);
+                      if (items.isEmpty) {
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 16),
+                          child: Text(
+                            'No expense purposes are available. Add them via the API or ask an admin.',
+                            style: TextStyle(color: textSecondary, fontSize: 14),
+                          ),
+                        );
+                      }
+                      return SearchableDropdown<String>(
+                        items: items.map((p) => p.id).toList(),
+                        value: _selectedPurposeId,
+                        hintText: 'Select expense purpose',
+                        labelText: 'Purpose *',
+                        itemLabelBuilder: (id) {
+                          final p = items.firstWhere((e) => e.id == id);
+                          return p.name;
+                        },
+                        dropdownColor: surfaceColor,
+                        textColor: textPrimary,
+                        hintColor: textSecondary,
+                        required: true,
+                        onChanged: (value) {
+                          setState(() {
+                            _selectedPurposeId = value;
+                          });
+                        },
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Select a purpose';
+                          }
+                          return null;
+                        },
+                      );
+                    },
+                    loading: () => const Padding(
+                      padding: EdgeInsets.only(bottom: 16),
+                      child: LinearProgressIndicator(),
+                    ),
+                    error: (e, _) => Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: Text(
+                        'Could not load expense purposes. Pull to retry or reopen.',
+                        style: TextStyle(color: textSecondary, fontSize: 14),
+                      ),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 16),
+
               TextFormField(
-                controller: _purposeController,
+                controller: _notesController,
                 style: TextStyle(color: textPrimary),
                 decoration: InputDecoration(
-                  labelText: 'Purpose',
+                  labelText: 'Notes (optional)',
                   labelStyle: TextStyle(color: textSecondary),
-                  hintText: 'Enter purpose of expense',
+                  hintText: 'e.g. transport, client name',
                   hintStyle: TextStyle(color: textSecondary.withValues(alpha: 0.6)),
                   prefixIcon: Icon(
-                    Icons.description_outlined,
+                    Icons.notes_outlined,
                     color: textSecondary,
                   ),
                 ),

@@ -201,8 +201,11 @@ class ExpenseDetailPage extends ConsumerWidget {
               ),
               const SizedBox(height: 16),
 
-              // Purpose Card
-              if (expense.purpose != null && expense.purpose!.isNotEmpty)
+              // Purpose: API catalog name + optional notes (purpose field)
+              if ((expense.purposeName != null &&
+                      expense.purposeName!.trim().isNotEmpty) ||
+                  (expense.purpose != null &&
+                      expense.purpose!.trim().isNotEmpty))
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(16),
@@ -222,10 +225,44 @@ class ExpenseDetailPage extends ConsumerWidget {
                             ),
                       ),
                       const SizedBox(height: 12),
-                      Text(
-                        expense.purpose!,
-                        style: TextStyle(fontSize: 14, color: textSecondary),
-                      ),
+                      if (expense.purposeName != null &&
+                          expense.purposeName!.trim().isNotEmpty)
+                        Text(
+                          expense.purposeName!.trim(),
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w500,
+                            color: textPrimary,
+                          ),
+                        ),
+                      if (expense.purpose != null &&
+                          expense.purpose!.trim().isNotEmpty) ...[
+                        if (expense.purposeName != null &&
+                            expense.purposeName!.trim().isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: Text(
+                              'Notes',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: textTertiary,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        Padding(
+                          padding: EdgeInsets.only(
+                            top: expense.purposeName != null &&
+                                    expense.purposeName!.trim().isNotEmpty
+                                ? 4
+                                : 0,
+                          ),
+                          child: Text(
+                            expense.purpose!.trim(),
+                            style: TextStyle(fontSize: 14, color: textSecondary),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),

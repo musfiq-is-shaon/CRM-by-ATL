@@ -32,22 +32,26 @@ class ExpenseRepository {
     String? status,
     String? createdByUserId,
   }) async {
-    final response = await _apiClient.post(
-      AppConstants.expenses,
-      data: {
-        'companyId': companyId,
-        'date': date.toIso8601String().split('T')[0],
-        'amount': amount,
-        'amountReturn': amountReturn,
-        'fromLocation': fromLocation,
-        'toLocation': toLocation,
-        'purposeId': purposeId,
-        'purpose': purpose,
-        'tripType': tripType,
-        'status': status ?? 'unpaid',
-        'createdByUserId': createdByUserId,
-      },
-    );
+    final data = <String, dynamic>{
+      'companyId': companyId,
+      'date': date.toIso8601String().split('T')[0],
+      'amount': amount,
+      'status': status ?? 'unpaid',
+    };
+    if (amountReturn != null) data['amountReturn'] = amountReturn;
+    final fl = fromLocation?.trim();
+    if (fl != null && fl.isNotEmpty) data['fromLocation'] = fl;
+    final tl = toLocation?.trim();
+    if (tl != null && tl.isNotEmpty) data['toLocation'] = tl;
+    final pid = purposeId?.trim();
+    if (pid != null && pid.isNotEmpty) data['purposeId'] = pid;
+    final pn = purpose?.trim();
+    if (pn != null && pn.isNotEmpty) data['purpose'] = pn;
+    if (tripType != null) data['tripType'] = tripType;
+    final cb = createdByUserId?.trim();
+    if (cb != null && cb.isNotEmpty) data['createdByUserId'] = cb;
+
+    final response = await _apiClient.post(AppConstants.expenses, data: data);
     return Expense.fromJson(response.data);
   }
 
@@ -73,8 +77,9 @@ class ExpenseRepository {
         'amountReturn': amountReturn,
         'fromLocation': fromLocation,
         'toLocation': toLocation,
-        'purposeId': purposeId,
-        'purpose': purpose,
+        if (purposeId != null && purposeId.trim().isNotEmpty)
+          'purposeId': purposeId.trim(),
+        if (purpose != null && purpose.trim().isNotEmpty) 'purpose': purpose.trim(),
         'tripType': tripType,
         'status': status,
       },
