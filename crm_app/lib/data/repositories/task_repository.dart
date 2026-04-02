@@ -101,13 +101,14 @@ class TaskRepository {
     String? note,
     String? actorUserId,
   }) async {
+    final data = <String, dynamic>{'status': status};
+    if (note != null) data['note'] = note;
+    if (actorUserId != null && actorUserId.isNotEmpty) {
+      data['actorUserId'] = actorUserId;
+    }
     final response = await _apiClient.patch(
       '${AppConstants.tasks}/$id/status',
-      data: {
-        'status': status,
-        if (note != null) 'note': note,
-        if (actorUserId != null && actorUserId.isNotEmpty) 'actorUserId': actorUserId,
-      },
+      data: data,
     );
     return Task.fromJson(response.data);
   }
