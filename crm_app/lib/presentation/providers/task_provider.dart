@@ -476,8 +476,21 @@ class TasksNotifier extends StateNotifier<TasksState> {
     required String id,
     required String status,
     String? note,
+    required bool isAdmin,
   }) async {
+    final existing = state.tasks.where((t) => t.id == id).firstOrNull;
+    if (existing != null &&
+        existing.status == 'completed' &&
+        !isAdmin &&
+        status != existing.status) {
+      state = state.copyWith(
+        error: 'Only an admin can change the status of a completed task.',
+      );
+      return;
+    }
+
     try {
+      state = state.copyWith(error: null);
       final rawTask = await _taskRepository.changeTaskStatus(
         id: id,
         status: status,

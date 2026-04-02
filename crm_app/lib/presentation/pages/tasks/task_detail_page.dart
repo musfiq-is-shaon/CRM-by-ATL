@@ -182,6 +182,17 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
                       fontWeight: FontWeight.w600,
                     ),
                   ),
+                  if (task.status == 'completed' && !isAdmin) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      'Only an admin can change status after a task is completed.',
+                      style: TextStyle(
+                        color: textSecondary,
+                        fontSize: 13,
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   Wrap(
                     spacing: 8,
@@ -193,6 +204,7 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
                         'pending',
                         primaryColor,
                         textPrimary,
+                        isAdmin,
                       ),
                       _buildStatusButton(
                         context,
@@ -200,6 +212,7 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
                         'in_progress',
                         primaryColor,
                         textPrimary,
+                        isAdmin,
                       ),
                       _buildStatusButton(
                         context,
@@ -207,6 +220,7 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
                         'completed',
                         primaryColor,
                         textPrimary,
+                        isAdmin,
                       ),
                       _buildStatusButton(
                         context,
@@ -214,6 +228,7 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
                         'cancelled',
                         primaryColor,
                         textPrimary,
+                        isAdmin,
                       ),
                     ],
                   ),
@@ -255,68 +270,86 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
     String status,
     Color primaryColor,
     Color textPrimary,
+    bool isAdmin,
   ) {
     final isSelected = task.status == status;
     final cs = Theme.of(context).colorScheme;
+    final completedLocked = task.status == 'completed' && !isAdmin;
+    final isOtherWhileCompleted = completedLocked && status != 'completed';
 
-    return Container(
-      decoration: BoxDecoration(
-        color: isSelected ? primaryColor : cs.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: isSelected
-              ? primaryColor
-              : cs.outlineVariant.withValues(alpha: 0.55),
-          width: 1,
-        ),
-        boxShadow: isSelected
-            ? [
-                BoxShadow(
-                  color: primaryColor.withValues(alpha: 0.3),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ]
-            : null,
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
+    return Opacity(
+      opacity: isOtherWhileCompleted ? 0.45 : 1,
+      child: Container(
+        decoration: BoxDecoration(
+          color: isSelected ? primaryColor : cs.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(20),
-          onTap: isSelected
-              ? null
-              : () async {
-                  await ref
-                      .read(tasksProvider.notifier)
-                      .changeTaskStatus(id: task.id, status: status);
-
-                  if (!context.mounted) return;
-                  if (status == 'completed') {
-                    HapticFeedback.mediumImpact();
-                    setState(() => _celebrating = true);
-                    _confettiController.play();
-                    await Future.delayed(const Duration(milliseconds: 2800));
-                    if (mounted) setState(() => _celebrating = false);
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          'Status updated to ${status.replaceAll('_', ' ').toUpperCase()}',
+          border: Border.all(
+            color: isSelected
+                ? primaryColor
+                : cs.outlineVariant.withValues(alpha: 0.55),
+            width: 1,
+          ),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: primaryColor.withValues(alpha: 0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(20),
+            onTap: isSelected
+                ? null
+                : () async {
+                    if (isOtherWhileCompleted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Only an admin can change the status of a completed task.',
+                          ),
                         ),
-                        backgroundColor: Colors.green,
-                        duration: const Duration(seconds: 2),
-                      ),
-                    );
-                  }
-                },
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Text(
-              status.replaceAll('_', ' ').toUpperCase(),
-              style: TextStyle(
-                color: isSelected ? cs.onPrimary : textPrimary,
-                fontWeight: FontWeight.w500,
-                fontSize: 13,
+                      );
+                      return;
+                    }
+                    await ref.read(tasksProvider.notifier).changeTaskStatus(
+                          id: task.id,
+                          status: status,
+                          isAdmin: isAdmin,
+                        );
+
+                    if (!context.mounted) return;
+                    if (status == 'completed') {
+                      HapticFeedback.mediumImpact();
+                      setState(() => _celebrating = true);
+                      _confettiController.play();
+                      await Future.delayed(const Duration(milliseconds: 2800));
+                      if (mounted) setState(() => _celebrating = false);
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            'Status updated to ${status.replaceAll('_', ' ').toUpperCase()}',
+                          ),
+                          backgroundColor: Colors.green,
+                          duration: const Duration(seconds: 2),
+                        ),
+                      );
+                    }
+                  },
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Text(
+                status.replaceAll('_', ' ').toUpperCase(),
+                style: TextStyle(
+                  color: isSelected ? cs.onPrimary : textPrimary,
+                  fontWeight: FontWeight.w500,
+                  fontSize: 13,
+                ),
               ),
             ),
           ),
