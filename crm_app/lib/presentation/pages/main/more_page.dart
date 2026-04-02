@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/constants/rbac_page_keys.dart';
 import '../../../core/theme/app_theme_colors.dart';
 import '../../../core/theme/design_tokens.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/rbac_provider.dart';
 import '../../providers/notifications_provider.dart';
 import '../../widgets/crm_card.dart';
 import '../settings/change_password_page.dart';
@@ -20,6 +22,10 @@ class MorePage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final authState = ref.watch(authProvider);
     final user = authState.user;
+    final me = ref.watch(rbacMeProvider);
+    final showAttendance = me != null &&
+        (me.hasNav(RbacPageKey.attendance) || me.hasNav(RbacPageKey.hr));
+    final showLeave = me?.hasNav(RbacPageKey.leaves) ?? false;
 
     final bgColor = AppThemeColors.backgroundColor(context);
     final textPrimary = AppThemeColors.textPrimaryColor(context);
@@ -119,40 +125,42 @@ class MorePage extends ConsumerWidget {
             textTertiary: textTertiary,
             primaryColor: primaryColor,
             children: [
-              _buildMenuItem(context,
-                icon: Icons.access_time_outlined,
-                title: 'Attendance Records',
-                subtitle: 'View attendance history',
-                textPrimary: textPrimary,
-                textSecondary: textSecondary,
-                textTertiary: textTertiary,
-                primaryColor: primaryColor,
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const AttendanceRecordsPage(),
-                    ),
-                  );
-                },
-              ),
-              _buildMenuItem(context,
-                icon: Icons.event_note_outlined,
-                title: 'Leave',
-                subtitle: 'Apply and track leave requests',
-                textPrimary: textPrimary,
-                textSecondary: textSecondary,
-                textTertiary: textTertiary,
-                primaryColor: primaryColor,
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const LeaveListPage(),
-                    ),
-                  );
-                },
-              ),
+              if (showAttendance)
+                _buildMenuItem(context,
+                  icon: Icons.access_time_outlined,
+                  title: 'Attendance Records',
+                  subtitle: 'View attendance history',
+                  textPrimary: textPrimary,
+                  textSecondary: textSecondary,
+                  textTertiary: textTertiary,
+                  primaryColor: primaryColor,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const AttendanceRecordsPage(),
+                      ),
+                    );
+                  },
+                ),
+              if (showLeave)
+                _buildMenuItem(context,
+                  icon: Icons.event_note_outlined,
+                  title: 'Leave',
+                  subtitle: 'Apply and track leave requests',
+                  textPrimary: textPrimary,
+                  textSecondary: textSecondary,
+                  textTertiary: textTertiary,
+                  primaryColor: primaryColor,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const LeaveListPage(),
+                      ),
+                    );
+                  },
+                ),
               _buildMenuItem(context,
                 icon: Icons.settings_outlined,
                 title: 'Settings',

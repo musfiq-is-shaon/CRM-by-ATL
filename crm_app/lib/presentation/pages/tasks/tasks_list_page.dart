@@ -4,6 +4,8 @@ import '../../../core/theme/app_theme_colors.dart';
 import '../../../core/theme/design_tokens.dart';
 import '../../../data/models/user_model.dart';
 import '../../../data/models/task_model.dart';
+import '../../providers/rbac_prefetch.dart';
+import '../../providers/rbac_provider.dart';
 import '../../providers/task_provider.dart';
 import '../../providers/user_provider.dart';
 import '../../providers/auth_provider.dart';
@@ -33,7 +35,7 @@ class _TasksListPageState extends ConsumerState<TasksListPage>
     _tabController = TabController(length: 3, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(tasksProvider.notifier).loadTasks();
-      ref.read(usersProvider.notifier).loadUsers();
+      prefetchCrmLookupData(ref, ref.read(rbacMeProvider));
     });
   }
 

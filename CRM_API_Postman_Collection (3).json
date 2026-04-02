@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "CRM API",
-    "description": "Backend API for CRM (**Flask**). Set {{baseUrl}} (e.g. http://localhost:5000). Use **Login** to set {{token}} for authenticated requests.\n\n**Resources:** Auth, Users, Companies, Contacts, Tasks, Sales, Notifications, Shifts, **Attendance** (shift required for check-in/out), **Leaves** (types, **employee balances** GET/PUT, apply with durationType, weekends/holidays, team approval), HR, Status config, Company profile, Currencies, Expense purposes, Expenses (incl. bin/restore), Account particulars, Accounts, Departments, Designations.\n\n**Leaves — balances:** `GET/PUT /api/leaves/balances/:userId` — allowed for **self**, **admin**, or the employee’s **reporting manager**.\n\n**Leaves — apply:** Body includes `durationType`: `single_day` | `half_day` | `multiple_day`; for `half_day` also send `halfDayPeriod`: `first_half` | `second_half`.\n\n**Attendance:** Users must have **shiftId** on HR (`/api/shifts/assign` or shift create with employeeIds). Without a shift: `GET /api/attendance/today` returns `hasShiftAssigned: false` and `status: no_shift`; `POST` check-in/check-out return **422** with an error message.",
+    "description": "Backend API for CRM (**Flask**). Set {{baseUrl}} (e.g. http://localhost:5000). Use **Login** to set {{token}}; send **Authorization: Bearer {{token}}** on protected routes.\n\n## RBAC\n- **Global role `admin`**: full JWT access to most routes; **sidebar/nav** still uses **explicit RBAC** (`GET /api/rbac/me` → `navPageKeys`) except global admins see all modules.\n- **Per-module access** (`sales`, `tasks`, `leaves`, …): enforced per endpoint. Typical scopes:\n  - **Sales** (`pageKey: sales`): **full scope** = global admin *or* RBAC **admin** column for Sales → all funnel deals, orders, renewals. **User scope** = funnel/renewals where **company KAM** is you; **orders** only if **assignTo** or **forwardedTo** is you.\n  - **Leaves** (`pageKey: leaves`): RBAC **admin** vs **user** treated the same for data scope; **extra visibility** via **HR module** (`can_access_page(hr)`) or **reporting manager** (`/api/leaves/team`, approve/reject).\n- **RBAC API** (`/api/rbac/*`): most routes require **global admin** (`require_admin`), not only a matrix cell.\n\n## Resources\nAuth, **RBAC**, Users, Companies, Contacts, Tasks, **Sales** (funnel), **Orders**, **Renewals**, Notifications, Shifts, **Attendance**, **Leaves**, HR, Status config, Company profile, Currencies, Expense purposes, Expenses (bin/restore), Account particulars, Accounts, Departments, Designations.\n\n## Leaves\n- **Balances** `GET/PUT /api/leaves/balances/:userId`: **self**, **HR module access**, or employee’s **reporting manager** (not global-admin-only).\n- **Apply**: `durationType`: `single_day` | `half_day` | `multiple_day`; `half_day` needs `halfDayPeriod`: `first_half` | `second_half`.\n- **All leaves** `GET /api/leaves/all`: **global admin OR HR module access** (HR calendar).\n- **Approve / reject**: **HR** or **reporting manager** for that employee (not global admin alone).\n- **Leave types / weekends / holidays** (mutations): **global admin OR HR module access** (`require_admin_or_hr_access`).\n\n## Attendance\nUsers need **shift** on HR. Without shift: `GET /api/attendance/today` may return `hasShiftAssigned: false`; check-in/out can return **422**.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -26,7 +26,9 @@
     { "key": "holidayId", "value": "" },
     { "key": "hrEntryId", "value": "" },
     { "key": "departmentId", "value": "" },
-    { "key": "designationId", "value": "" }
+    { "key": "designationId", "value": "" },
+    { "key": "orderId", "value": "" },
+    { "key": "renewalId", "value": "" }
   ],
   "item": [
     {
@@ -83,6 +85,114 @@
             },
             "url": "{{baseUrl}}/api/auth/change-password",
             "description": "Logged-in user changes own password. Requires Bearer token."
+          }
+        }
+      ]
+    },
+    {
+      "name": "RBAC",
+      "description": "Per-module permissions. **Most routes require global JWT role `admin`.** Authenticated users may call **GET /pages** and **GET /me**.",
+      "item": [
+        {
+          "name": "List page definitions",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/rbac/pages",
+            "description": "Canonical `pageKey` + label list for Settings / clients. Requires authentication."
+          }
+        },
+        {
+          "name": "Get my effective RBAC",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/rbac/me",
+            "description": "Returns `effective` (pageKey → access: none|user|admin) and `navPageKeys` for sidebar. Global admin: all modules in nav."
+          }
+        },
+        {
+          "name": "Get assignment matrix (admin)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/rbac/assignment-matrix",
+            "description": "Global admin. Module × user grid of explicit assignments."
+          }
+        },
+        {
+          "name": "Post user assignment (admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"{{userId}}\",\n  \"pageKey\": \"sales\",\n  \"accessType\": \"user\"\n}"
+            },
+            "url": "{{baseUrl}}/api/rbac/assignments",
+            "description": "Upsert one assignment. `accessType`: `admin` | `user`. Returns updated assignment matrix."
+          }
+        },
+        {
+          "name": "Get role defaults bundle (admin)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/rbac/role-defaults",
+            "description": "Global admin. Pages list + default matrix for roles `admin` and `user`."
+          }
+        },
+        {
+          "name": "Put role defaults bundle (admin)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"matrix\": {\n    \"admin\": [{ \"pageKey\": \"sales\", \"accessType\": \"admin\" }],\n    \"user\": [{ \"pageKey\": \"tasks\", \"accessType\": \"user\" }]\n  }\n}"
+            },
+            "url": "{{baseUrl}}/api/rbac/role-defaults",
+            "description": "Replace role template defaults. `matrix.admin` / `matrix.user`: arrays of { pageKey, accessType }."
+          }
+        },
+        {
+          "name": "Get user RBAC summary (admin)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/rbac/users/{{userId}}",
+            "description": "Global admin. Effective permissions + explicit overrides for one user."
+          }
+        },
+        {
+          "name": "Put user RBAC overrides (admin)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"permissions\": [\n    { \"pageKey\": \"sales\", \"accessType\": \"admin\" },\n    { \"pageKey\": \"leaves\", \"accessType\": \"user\" }\n  ]\n}"
+            },
+            "url": "{{baseUrl}}/api/rbac/users/{{userId}}",
+            "description": "Replace per-user overrides (full list). accessType: none | user | admin."
+          }
+        },
+        {
+          "name": "Delete user page permission (admin)",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/rbac/users/{{userId}}/pages/sales",
+            "description": "Remove explicit override for one pageKey (example URL uses `sales`). Global admin."
           }
         }
       ]
@@ -393,6 +503,7 @@
     },
     {
       "name": "Sales",
+      "description": "Funnel deals. Requires **Sales** module access (`401`/`403` if missing). **Full scope**: all deals. **User scope**: companies where **you are KAM**. `createdByUserId` on create is set from JWT.",
       "item": [
         {
           "name": "List sales",
@@ -400,7 +511,7 @@
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
             "url": "{{baseUrl}}/api/sales?status=&companyId=&category=&createdByUserId=&search=",
-            "description": "Query params: status, companyId, category, createdByUserId, search (optional)."
+            "description": "Query: status, companyId, category, createdByUserId, search. User scope pre-filters to your KAM companies."
           }
         },
         {
@@ -413,10 +524,10 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"companyId\": \"<company-id>\",\n  \"prospect\": \"Jane Smith\",\n  \"category\": \"warm\",\n  \"expectedClosingDate\": \"2025-12-31\",\n  \"expectedRevenue\": 50000,\n  \"status\": \"lead\",\n  \"createdByUserId\": \"<user-id>\"\n}"
+              "raw": "{\n  \"companyId\": \"<company-id>\",\n  \"prospect\": \"Jane Smith\",\n  \"category\": \"warm\",\n  \"expectedClosingDate\": \"2026-12-31\",\n  \"expectedRevenue\": 50000,\n  \"status\": \"lead\",\n  \"nextAction\": \"\",\n  \"nextActionDate\": null\n}"
             },
             "url": "{{baseUrl}}/api/sales",
-            "description": "companyId, prospect, expectedClosingDate required. category: hot|warm|cold. status: lead|prospect|negotiation|closed|disqualified."
+            "description": "companyId, prospect, expectedClosingDate required. You must be **KAM** on the company unless full Sales scope. Server sets createdByUserId."
           }
         },
         {
@@ -526,6 +637,143 @@
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
             "url": "{{baseUrl}}/api/sales/{{saleId}}",
             "description": "Replace {{saleId}}."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Orders",
+      "description": "Sales orders. Requires **Sales module** access (`403` if none). **Full scope** (global admin or Sales RBAC admin): all orders + filters. **User scope**: only orders where you are **assignTo** or **forwardedTo**.",
+      "item": [
+        {
+          "name": "List orders",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/orders?companyId=&salesId=&assignToUserId=&assignTo=&status=&nextAction=&deliveryDateFrom=&deliveryDateTo=&nextActionDateFrom=&nextActionDateTo=",
+            "description": "Query: companyId, salesId, status, nextAction, deliveryDateFrom/To, nextActionDateFrom/To. Full scope only: assignToUserId (or legacy assignTo) filter."
+          }
+        },
+        {
+          "name": "Create order",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"companyId\": \"{{companyId}}\",\n  \"salesId\": \"{{saleId}}\",\n  \"orderDetails\": \"PO details\",\n  \"revenue\": 10000,\n  \"orderConfirmationDate\": \"2026-04-01\",\n  \"deliveryDate\": \"2026-05-01\",\n  \"assignTo\": \"{{userId}}\",\n  \"attachments\": [],\n  \"finalizeCloseWon\": false,\n  \"closedWonStatus\": \"\",\n  \"statusChangeNote\": \"\",\n  \"changedByUserId\": null\n}"
+            },
+            "url": "{{baseUrl}}/api/orders",
+            "description": "Requires company **KAM** = you unless full Sales scope. `createdByUserId` set by server. Optional `finalizeCloseWon` + `closedWonStatus` to close the linked deal. `attachments`: array of { fileName, data } data URLs."
+          }
+        },
+        {
+          "name": "Patch order",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"pending\",\n  \"nextAction\": \"follow_up\",\n  \"nextActionDate\": \"2026-04-15\",\n  \"forwardedTo\": \"\"\n}"
+            },
+            "url": "{{baseUrl}}/api/orders/{{orderId}}",
+            "description": "Update status / next to do / next action date / forward. Values must match active Status config. **forwardedTo**: full scope, assignee, or current forward target only."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Renewals",
+      "description": "Renewal pipeline. Same **Sales** RBAC as funnel (`403` without Sales). **Full scope**: all renewals. **User scope**: rows where **kamUserId** snapshot = you.",
+      "item": [
+        {
+          "name": "List renewals",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/renewals?companyId=&kamUserId=&source=&search=",
+            "description": "Optional filters. User scope ignores other users’ rows."
+          }
+        },
+        {
+          "name": "Create renewal",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"companyId\": \"{{companyId}}\",\n  \"productDetails\": \"Contract renewal\",\n  \"renewalType\": \"existing\",\n  \"source\": \"\",\n  \"renewalDate\": \"2026-12-01\"\n}"
+            },
+            "url": "{{baseUrl}}/api/renewals",
+            "description": "Company must be one you can access as **KAM** (unless full scope). `kamUserId` stored from company."
+          }
+        },
+        {
+          "name": "Get renewal",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/renewals/{{renewalId}}",
+            "description": "Replace {{renewalId}}."
+          }
+        },
+        {
+          "name": "Update renewal",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"companyId\": \"{{companyId}}\",\n  \"productDetails\": \"Updated details\",\n  \"renewalType\": \"potential\",\n  \"source\": \"\",\n  \"renewalDate\": \"2026-12-15\"\n}"
+            },
+            "url": "{{baseUrl}}/api/renewals/{{renewalId}}",
+            "description": "Full payload like create."
+          }
+        },
+        {
+          "name": "Delete renewal (soft)",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/renewals/{{renewalId}}",
+            "description": "Soft-delete (bin)."
+          }
+        },
+        {
+          "name": "List renewals (bin)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/renewals/bin",
+            "description": "Soft-deleted renewals visible to you by scope."
+          }
+        },
+        {
+          "name": "Restore renewals",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ids\": [\"{{renewalId}}\"]\n}"
+            },
+            "url": "{{baseUrl}}/api/renewals/restore",
+            "description": "Body: `ids` array of renewal ids. Restores rows you may access."
           }
         }
       ]
@@ -728,6 +976,7 @@
     },
     {
       "name": "Leaves",
+      "description": "Authenticated users on most routes. See collection **info** for balances, `/all`, approve/reject, and HR vs global admin.",
       "item": [
         {
           "name": "List active leave types",
@@ -744,7 +993,7 @@
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
             "url": "{{baseUrl}}/api/leaves/types/all",
-            "description": "Admin only. Get all leave types (including inactive)."
+            "description": "Global **admin** or **HR module** access. Inactive types included."
           }
         },
         {
@@ -760,7 +1009,7 @@
               "raw": "{\n  \"name\": \"Sick Leave\"\n}"
             },
             "url": "{{baseUrl}}/api/leaves/types",
-            "description": "Admin only. Create a new leave type."
+            "description": "Global admin or HR module access."
           }
         },
         {
@@ -776,7 +1025,7 @@
               "raw": "{\n  \"name\": \"Updated Sick Leave\",\n  \"isActive\": true\n}"
             },
             "url": "{{baseUrl}}/api/leaves/types/{{leaveTypeId}}",
-            "description": "Admin only. Update a leave type."
+            "description": "Global admin or HR module access."
           }
         },
         {
@@ -785,7 +1034,7 @@
             "method": "DELETE",
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
             "url": "{{baseUrl}}/api/leaves/types/{{leaveTypeId}}",
-            "description": "Admin only. Delete a leave type (only if not used)."
+            "description": "Global admin or HR module access. Cannot delete if used by requests."
           }
         },
         {
@@ -794,7 +1043,7 @@
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
             "url": "{{baseUrl}}/api/leaves/balances/{{userId}}",
-            "description": "Returns `{ userId, balances }` where each balance row has `leaveTypeId`, `leaveTypeName`, `isActive`, `balance` (allocated days per active leave type). Allowed: **self**, **admin**, or the employee’s **reporting manager**."
+            "description": "Returns `{ userId, balances }` with credited/remaining fields. Allowed: **self**, **HR module access**, or the employee’s **reporting manager**."
           }
         },
         {
@@ -839,12 +1088,12 @@
           }
         },
         {
-          "name": "All leaves (admin)",
+          "name": "All leaves (admin or HR)",
           "request": {
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
             "url": "{{baseUrl}}/api/leaves/all?startDate=&endDate=&userIds=",
-            "description": "Admin only. Optional query: **startDate**, **endDate** (YYYY-MM-DD) — leaves overlapping range; **userIds** — comma-separated user ids."
+            "description": "**Global admin OR HR module access** (not Sales). Query: **startDate**, **endDate** (YYYY-MM-DD), **userIds** (comma-separated)."
           }
         },
         {
@@ -878,20 +1127,20 @@
               "raw": "{\n  \"startDate\": \"2026-03-20\",\n  \"endDate\": \"2026-03-27\",\n  \"userId\": \"\"\n}"
             },
             "url": "{{baseUrl}}/api/leaves/calculate-days",
-            "description": "Working days between startDate and endDate (excludes weekends/holidays per user shift rules). Optional userId: admin any user; manager only their reports; omit for current user."
+            "description": "Working days (weekends/holidays per shift). Optional **userId**: **HR** any user; **reporting manager** only direct reports; same user always; global admin alone is **not** enough unless HR."
           }
         },
         {
-          "name": "Approve leave (admin/manager)",
+          "name": "Approve leave (HR or reporting manager)",
           "request": {
             "method": "POST",
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
             "url": "{{baseUrl}}/api/leaves/{{leaveId}}/approve",
-            "description": "Approve a leave request."
+            "description": "**HR module access** or **reporting manager** for that employee. Not global-admin-only."
           }
         },
         {
-          "name": "Reject leave (admin/manager)",
+          "name": "Reject leave (HR or reporting manager)",
           "request": {
             "method": "POST",
             "header": [
@@ -903,7 +1152,7 @@
               "raw": "{\n  \"reason\": \"Insufficient staffing during this period\"\n}"
             },
             "url": "{{baseUrl}}/api/leaves/{{leaveId}}/reject",
-            "description": "Reject a leave request with a reason."
+            "description": "Reason required. Same auth as approve."
           }
         },
         {
@@ -912,7 +1161,7 @@
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
             "url": "{{baseUrl}}/api/leaves/{{leaveId}}",
-            "description": "Get details of a leave request (includes attachment data when applicable). **Applicant or admin only** (not reporting manager)."
+            "description": "**Applicant**, **HR**, or **reporting manager** for that employee. Includes attachment data when applicable."
           }
         },
         {
@@ -953,7 +1202,7 @@
               "raw": "{\n  \"dayOfWeek\": 5\n}"
             },
             "url": "{{baseUrl}}/api/leaves/weekends",
-            "description": "Admin only. Add a global weekend day (0=Mon, 6=Sun)."
+            "description": "Global admin or HR module access. `dayOfWeek` 0=Mon … 6=Sun."
           }
         },
         {
@@ -962,7 +1211,7 @@
             "method": "DELETE",
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
             "url": "{{baseUrl}}/api/leaves/weekends/{{weekendId}}",
-            "description": "Admin only. Remove a global weekend day."
+            "description": "Global admin or HR module access."
           }
         },
         {
@@ -987,7 +1236,7 @@
               "raw": "{\n  \"name\": \"New Year\",\n  \"startDate\": \"2026-01-01\",\n  \"endDate\": \"2026-01-01\"\n}"
             },
             "url": "{{baseUrl}}/api/leaves/holidays",
-            "description": "Admin only. Add a holiday (single or multi-day inclusive). **startDate** and **endDate** required (YYYY-MM-DD); use the same date for one day. Legacy **date** is also accepted as alias for both."
+            "description": "Global admin or HR module access. **startDate** / **endDate** (YYYY-MM-DD)."
           }
         },
         {
@@ -1003,7 +1252,7 @@
               "raw": "{\n  \"name\": \"Updated New Year\",\n  \"startDate\": \"2026-01-01\",\n  \"endDate\": \"2026-01-02\"\n}"
             },
             "url": "{{baseUrl}}/api/leaves/holidays/{{holidayId}}",
-            "description": "Admin only. Update name and/or **startDate** / **endDate** range."
+            "description": "Global admin or HR module access."
           }
         },
         {
@@ -1012,13 +1261,14 @@
             "method": "DELETE",
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
             "url": "{{baseUrl}}/api/leaves/holidays/{{holidayId}}",
-            "description": "Admin only. Remove a holiday."
+            "description": "Global admin or HR module access."
           }
         }
       ]
     },
     {
       "name": "HR",
+      "description": "All routes use **global admin OR HR module access** (`require_admin_or_hr_access`).",
       "item": [
         {
           "name": "Get HR info (admin)",
@@ -1026,7 +1276,7 @@
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
             "url": "{{baseUrl}}/api/hr/info/{{userId}}",
-            "description": "Admin only. Get full HR info for a user (includes history, certs, contacts)."
+            "description": "Full HR info for a user (history, certs, contacts)."
           }
         },
         {
@@ -1042,7 +1292,7 @@
               "raw": "{\n  \"birthDate\": \"1990-01-01\",\n  \"nid\": \"123456789\",\n  \"department\": \"Engineering\",\n  \"designation\": \"Senior Dev\",\n  \"religion\": \"\",\n  \"bloodGroup\": \"O+\",\n  \"officeMail\": \"user@company.com\",\n  \"personalMail\": \"user@gmail.com\",\n  \"maritalStatus\": \"Single\",\n  \"gender\": \"Male\",\n  \"employeeType\": \"Full-time\",\n  \"joiningDate\": \"2020-01-01\",\n  \"reportingManagerId\": \"\",\n  \"presentAddress\": \"\",\n  \"permanentAddress\": \"\",\n  \"mobile\": \"\",\n  \"employeeId\": \"EMP001\",\n  \"profilePicture\": null\n}"
             },
             "url": "{{baseUrl}}/api/hr/info/{{userId}}",
-            "description": "Admin only. Update HR info for a user."
+            "description": "Update HR info for a user."
           }
         },
         {
@@ -1058,7 +1308,7 @@
               "raw": "{\n  \"hrInfoId\": \"<hr-info-id>\",\n  \"activity\": \"Joined\",\n  \"appraisalDate\": \"2020-01-01\",\n  \"nextActivity\": \"Appraisal\",\n  \"nextActivityDate\": \"2021-01-01\",\n  \"remarks\": \"\"\n}"
             },
             "url": "{{baseUrl}}/api/hr/employment-history",
-            "description": "Admin only. Create employment history entry."
+            "description": "Create employment history entry."
           }
         },
         {
@@ -1074,7 +1324,7 @@
               "raw": "{\n  \"activity\": \"Promotion\",\n  \"appraisalDate\": \"2021-01-01\",\n  \"nextActivity\": \"Appraisal\",\n  \"nextActivityDate\": \"2022-01-01\",\n  \"remarks\": \"Promoted to Senior\"\n}"
             },
             "url": "{{baseUrl}}/api/hr/employment-history/{{hrEntryId}}",
-            "description": "Admin only. Update employment history entry."
+            "description": "Update employment history entry."
           }
         },
         {
@@ -1083,7 +1333,7 @@
             "method": "DELETE",
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
             "url": "{{baseUrl}}/api/hr/employment-history/{{hrEntryId}}",
-            "description": "Admin only. Delete employment history entry."
+            "description": "Delete employment history entry."
           }
         },
         {
@@ -1099,7 +1349,7 @@
               "raw": "{\n  \"hrInfoId\": \"<hr-info-id>\",\n  \"degree\": \"BSc in CS\",\n  \"institute\": \"University Name\",\n  \"grade\": \"3.8\",\n  \"year\": \"2012\",\n  \"attachmentFileName\": \"\",\n  \"attachmentData\": \"\"\n}"
             },
             "url": "{{baseUrl}}/api/hr/academic-certification",
-            "description": "Admin only. Create academic certification entry."
+            "description": "Create academic certification entry."
           }
         },
         {
@@ -1115,7 +1365,7 @@
               "raw": "{\n  \"degree\": \"MSc in CS\",\n  \"institute\": \"University Name\",\n  \"grade\": \"3.9\",\n  \"year\": \"2014\",\n  \"attachmentFileName\": \"\",\n  \"attachmentData\": \"\"\n}"
             },
             "url": "{{baseUrl}}/api/hr/academic-certification/{{hrEntryId}}",
-            "description": "Admin only. Update academic certification entry."
+            "description": "Update academic certification entry."
           }
         },
         {
@@ -1124,7 +1374,7 @@
             "method": "DELETE",
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
             "url": "{{baseUrl}}/api/hr/academic-certification/{{hrEntryId}}",
-            "description": "Admin only. Delete academic certification entry."
+            "description": "Delete academic certification entry."
           }
         },
         {
@@ -1140,7 +1390,7 @@
               "raw": "{\n  \"hrInfoId\": \"<hr-info-id>\",\n  \"name\": \"Emergency Contact\",\n  \"phone\": \"+123456789\",\n  \"relation\": \"Spouse\",\n  \"address\": \"\"\n}"
             },
             "url": "{{baseUrl}}/api/hr/emergency-contact",
-            "description": "Admin only. Create emergency contact entry."
+            "description": "Create emergency contact entry."
           }
         },
         {
@@ -1156,7 +1406,7 @@
               "raw": "{\n  \"name\": \"Updated Contact\",\n  \"phone\": \"+987654321\",\n  \"relation\": \"Parent\",\n  \"address\": \"\"\n}"
             },
             "url": "{{baseUrl}}/api/hr/emergency-contact/{{hrEntryId}}",
-            "description": "Admin only. Update emergency contact entry."
+            "description": "Update emergency contact entry."
           }
         },
         {
@@ -1165,21 +1415,22 @@
             "method": "DELETE",
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
             "url": "{{baseUrl}}/api/hr/emergency-contact/{{hrEntryId}}",
-            "description": "Admin only. Delete emergency contact entry."
+            "description": "Delete emergency contact entry."
           }
         }
       ]
     },
     {
       "name": "Status config",
+      "description": "GET is public. POST/PATCH/DELETE require **global JWT admin**.",
       "item": [
         {
           "name": "Get status config",
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "header": [],
             "url": "{{baseUrl}}/api/status-config",
-            "description": "Returns taskStatuses, salesCategories, salesStatuses. No auth required."
+            "description": "Returns taskStatuses, salesCategories, salesStatuses (strings), **orderStatuses** and **orderNextTodos** as `{ value, isActive }[]`. No auth."
           }
         },
         {
@@ -1195,7 +1446,23 @@
               "raw": "{\n  \"group\": \"taskStatuses\",\n  \"value\": \"on_hold\"\n}"
             },
             "url": "{{baseUrl}}/api/status-config",
-            "description": "Admin only. group: taskStatuses | salesCategories | salesStatuses. value stored lower-case, spaces→underscores."
+            "description": "Global admin. **group**: taskStatuses | salesCategories | salesStatuses | **orderStatuses** | **orderNextTodos**. value: lower-case, spaces→underscores."
+          }
+        },
+        {
+          "name": "Patch order status options (admin)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"group\": \"orderStatuses\",\n  \"value\": \"pending\",\n  \"isActive\": false\n}"
+            },
+            "url": "{{baseUrl}}/api/status-config",
+            "description": "Toggle **isActive** for **orderStatuses** or **orderNextTodos** only. Body: group, value, isActive."
           }
         },
         {
@@ -1211,7 +1478,7 @@
               "raw": "{\n  \"group\": \"taskStatuses\",\n  \"value\": \"on_hold\"\n}"
             },
             "url": "{{baseUrl}}/api/status-config",
-            "description": "Admin only. Must leave at least one value per group."
+            "description": "Global admin. **group** + **value** in body. For task/sales groups, cannot delete last item in group."
           }
         }
       ]

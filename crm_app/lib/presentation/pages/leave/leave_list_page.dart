@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/constants/rbac_page_keys.dart';
 import '../../../core/theme/app_theme_colors.dart';
 import '../../../core/theme/design_tokens.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/rbac_provider.dart';
 import '../../providers/leave_provider.dart';
 import '../../../data/models/leave_model.dart';
 import '../../widgets/crm_card.dart';
@@ -62,6 +64,9 @@ class _LeaveListPageState extends ConsumerState<LeaveListPage> {
 
     final state = ref.watch(leaveProvider);
     final isAdmin = ref.watch(isAdminProvider);
+    final me = ref.watch(rbacMeProvider);
+    final hasHrModule = me?.hasNav(RbacPageKey.hr) ?? false;
+    final showHrAdminEntry = isAdmin || hasHrModule;
     final bg = AppThemeColors.backgroundColor(context);
     final textPrimary = AppThemeColors.textPrimaryColor(context);
     final textSecondary = AppThemeColors.textSecondaryColor(context);
@@ -106,7 +111,7 @@ class _LeaveListPageState extends ConsumerState<LeaveListPage> {
                     builder: (_) => const LeaveBalancesPage(),
                   ),
                 );
-              } else if (value == 'hr_admin' && isAdmin) {
+              } else if (value == 'hr_admin' && showHrAdminEntry) {
                 Navigator.push<void>(
                   context,
                   MaterialPageRoute<void>(
@@ -120,7 +125,7 @@ class _LeaveListPageState extends ConsumerState<LeaveListPage> {
                 value: 'balances',
                 child: Text('Leave balances'),
               ),
-              if (isAdmin)
+              if (showHrAdminEntry)
                 const PopupMenuItem(
                   value: 'hr_admin',
                   child: Text('HR: types, weekends, holidays'),

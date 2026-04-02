@@ -1,21 +1,27 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/constants/app_constants.dart';
+import '../../../core/constants/rbac_page_keys.dart';
+import '../../../core/theme/app_theme_colors.dart';
+import '../../providers/attendance_provider.dart';
+import '../../providers/contact_provider.dart';
+import '../../providers/notifications_provider.dart';
+import '../../providers/rbac_prefetch.dart';
+import '../../providers/rbac_provider.dart' show rbacProvider, RbacState, RbacLoadStatus;
 import '../../providers/sale_provider.dart';
 import '../../providers/task_provider.dart';
-import '../../providers/contact_provider.dart';
-import '../../providers/attendance_provider.dart';
-import '../../providers/notifications_provider.dart';
-import '../dashboard/dashboard_page.dart';
-import '../sales/sales_list_page.dart';
-import '../expenses/expenses_list_page.dart';
 import '../contacts/contacts_list_page.dart';
-import '../../../core/theme/app_theme_colors.dart';
+import '../dashboard/dashboard_page.dart';
+import '../expenses/expenses_list_page.dart';
+import '../sales/sales_list_page.dart';
 import 'more_page.dart';
 
 final selectedTabProvider = StateProvider<int>((ref) => 0);
 
-// Track which tabs have been loaded
-final loadedTabsProvider = StateProvider<Set<int>>((ref) => {});
+/// Which shell tabs have had data loaded at least once (by tab id).
+final loadedTabsProvider = StateProvider<Set<String>>((ref) => {});
 
 class ShellPage extends ConsumerStatefulWidget {
   const ShellPage({super.key});
@@ -26,20 +32,46 @@ class ShellPage extends ConsumerStatefulWidget {
 
 class _ShellPageState extends ConsumerState<ShellPage>
     with WidgetsBindingObserver {
+  static const _kDashboard = 'dashboard';
+  static const _kSales = 'sales';
+  static const _kExpenses = 'expenses';
+  static const _kContacts = 'contacts';
+  static const _kMore = 'more';
+
+  Timer? _rbacForegroundPollTimer;
+
+  void _startRbacForegroundPolling() {
+    _rbacForegroundPollTimer?.cancel();
+    _rbacForegroundPollTimer = Timer.periodic(
+      AppConstants.rbacForegroundPollInterval,
+      (_) {
+        if (!mounted) return;
+        ref.read(rbacProvider.notifier).load();
+      },
+    );
+  }
+
+  void _stopRbacForegroundPolling() {
+    _rbacForegroundPollTimer?.cancel();
+    _rbacForegroundPollTimer = null;
+  }
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    // Load dashboard data immediately after login
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      // Always land on Dashboard (IndexedStack can keep another tab from last session).
       ref.read(selectedTabProvider.notifier).state = 0;
-      _loadTabData(0);
+      final rbac = ref.read(rbacProvider);
+      final ids = _tabIds(rbac);
+      _loadTabData(ids, 0);
+      _startRbacForegroundPolling();
     });
   }
 
   @override
   void dispose() {
+    _stopRbacForegroundPolling();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -47,66 +79,186 @@ class _ShellPageState extends ConsumerState<ShellPage>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
-    if (state == AppLifecycleState.resumed) {
-      // Pick up check-in/out done on another device (same account) from API.
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        ref.read(attendanceProvider.notifier).loadToday();
-      });
+    switch (state) {
+      case AppLifecycleState.paused:
+      case AppLifecycleState.detached:
+        _stopRbacForegroundPolling();
+      case AppLifecycleState.resumed:
+        _startRbacForegroundPolling();
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
+          if (!mounted) return;
+          // Permissions may change on the server while the app is backgrounded.
+          await ref.read(rbacProvider.notifier).load();
+          if (!mounted) return;
+          final rbac = ref.read(rbacProvider);
+          final ids = _tabIds(rbac);
+          final idx = ref.read(selectedTabProvider).clamp(0, ids.length - 1);
+          _loadTabData(ids, idx);
+        });
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.hidden:
+        break;
     }
   }
 
-  void _loadTabData(int index) {
-    // Always reload dashboard data when switching to dashboard tab
-    // Other tabs load once for performance
-    if (index == 0) {
-      ref.read(salesProvider.notifier).loadSales();
-      ref.read(tasksProvider.notifier).loadTasks();
-      ref.read(contactsProvider.notifier).loadContacts();
-      ref.read(attendanceProvider.notifier).loadToday();
+  List<String> _tabIds(RbacState rbac) {
+    final me = rbac.me;
+    final ids = <String>[_kDashboard];
+    if (me != null) {
+      if (me.hasNav(RbacPageKey.sales)) ids.add(_kSales);
+      if (me.hasNav(RbacPageKey.expenses)) ids.add(_kExpenses);
+      if (me.canNavContacts) ids.add(_kContacts);
+    }
+    ids.add(_kMore);
+    return ids;
+  }
+
+  List<Widget> _tabPages(List<String> ids) {
+    return ids.map((id) {
+      switch (id) {
+        case _kDashboard:
+          return const DashboardPage();
+        case _kSales:
+          return const SalesListPage();
+        case _kExpenses:
+          return const ExpensesListPage();
+        case _kContacts:
+          return const ContactsListPage();
+        case _kMore:
+          return const MorePage();
+        default:
+          return const SizedBox.shrink();
+      }
+    }).toList();
+  }
+
+  List<NavigationDestination> _destinations(List<String> ids) {
+    return ids.map((id) {
+      switch (id) {
+        case _kDashboard:
+          return const NavigationDestination(
+            icon: Icon(Icons.dashboard_outlined),
+            selectedIcon: Icon(Icons.dashboard),
+            label: 'Dashboard',
+          );
+        case _kSales:
+          return const NavigationDestination(
+            icon: Icon(Icons.trending_up_outlined),
+            selectedIcon: Icon(Icons.trending_up),
+            label: 'Deals',
+          );
+        case _kExpenses:
+          return const NavigationDestination(
+            icon: Icon(Icons.receipt_long_outlined),
+            selectedIcon: Icon(Icons.receipt_long),
+            label: 'Expense',
+          );
+        case _kContacts:
+          return const NavigationDestination(
+            icon: Icon(Icons.people_outline),
+            selectedIcon: Icon(Icons.people),
+            label: 'Contacts',
+          );
+        case _kMore:
+          return const NavigationDestination(
+            icon: Icon(Icons.menu_outlined),
+            selectedIcon: Icon(Icons.menu),
+            label: 'More',
+          );
+        default:
+          return const NavigationDestination(
+            icon: Icon(Icons.circle_outlined),
+            label: '',
+          );
+      }
+    }).toList();
+  }
+
+  void _loadTabData(List<String> tabIds, int index) {
+    if (index < 0 || index >= tabIds.length) return;
+    final id = tabIds[index];
+    final me = ref.read(rbacProvider).me;
+
+    if (id == _kDashboard) {
+      prefetchCrmLookupData(ref, me);
       ref.read(notificationsProvider.notifier).load(silent: true);
+      if (me == null) return;
+      if (me.hasNav(RbacPageKey.sales)) {
+        ref.read(salesProvider.notifier).loadSales();
+      }
+      if (me.hasNav(RbacPageKey.tasks)) {
+        ref.read(tasksProvider.notifier).loadTasks();
+      }
+      if (me.canNavContacts) {
+        ref.read(contactsProvider.notifier).loadContacts();
+      }
+      if (me.hasNav(RbacPageKey.attendance) || me.hasNav(RbacPageKey.hr)) {
+        ref.read(attendanceProvider.notifier).loadToday();
+      }
       return;
     }
 
-    final loadedTabs = ref.read(loadedTabsProvider);
-    if (!loadedTabs.contains(index)) {
-      // Mark tab as loaded
-      ref
-          .read(loadedTabsProvider.notifier)
-          .update((state) => {...state, index});
+    if (id == _kMore) {
+      // Refetch every visit; `loadedTabs` must not skip this.
+      ref.read(rbacProvider.notifier).load();
+      return;
+    }
 
-      // Load data for the selected tab
-      switch (index) {
-        case 1: // Sales
-          ref.read(salesProvider.notifier).loadSales();
-          break;
-        case 2: // Expenses
-          // Load expenses if needed
-          break;
-        case 3: // Contacts
-        case 4: // More (may open contact-related screens)
-          ref.read(contactsProvider.notifier).loadContacts();
-          break;
-      }
+    final loaded = ref.read(loadedTabsProvider);
+    if (loaded.contains(id)) return;
+
+    ref.read(loadedTabsProvider.notifier).update((s) => {...s, id});
+
+    switch (id) {
+      case _kSales:
+        ref.read(salesProvider.notifier).loadSales();
+        break;
+      case _kContacts:
+        ref.read(contactsProvider.notifier).loadContacts();
+        break;
+      case _kExpenses:
+        break;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final selectedTab = ref.watch(selectedTabProvider);
+    final rbacState = ref.watch(rbacProvider);
+    final tabIds = _tabIds(rbacState);
+    final pages = _tabPages(tabIds);
+    final destinations = _destinations(tabIds);
 
-    // Load data when tab changes
-    ref.listen<int>(selectedTabProvider, (previous, next) {
-      _loadTabData(next);
+    ref.listen<RbacState>(rbacProvider, (previous, next) {
+      final prevIds = _tabIds(previous ?? RbacState.empty);
+      final nextIds = _tabIds(next);
+      final nextIdSet = nextIds.toSet();
+      ref.read(loadedTabsProvider.notifier).update(
+            (s) => s.intersection(nextIdSet),
+          );
+      if (prevIds.length != nextIds.length) {
+        final cur = ref.read(selectedTabProvider);
+        if (cur >= nextIds.length) {
+          ref.read(selectedTabProvider.notifier).state = 0;
+        }
+      }
+      if (next.status == RbacLoadStatus.loaded && next.me != null) {
+        prefetchCrmLookupData(ref, next.me);
+      }
     });
 
-    final pages = [
-      const DashboardPage(),
-      const SalesListPage(),
-      const ExpensesListPage(),
-      const ContactsListPage(),
-      const MorePage(),
-    ];
+    final rawIndex = ref.watch(selectedTabProvider);
+    final selectedTab = rawIndex.clamp(0, tabIds.length - 1);
+    if (rawIndex != selectedTab) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ref.read(selectedTabProvider.notifier).state = selectedTab;
+      });
+    }
+
+    ref.listen<int>(selectedTabProvider, (previous, next) {
+      final clamped = next.clamp(0, tabIds.length - 1);
+      _loadTabData(tabIds, clamped);
+    });
 
     return Scaffold(
       backgroundColor: AppThemeColors.backgroundColor(context),
@@ -115,35 +267,9 @@ class _ShellPageState extends ConsumerState<ShellPage>
         selectedIndex: selectedTab,
         onDestinationSelected: (index) {
           ref.read(selectedTabProvider.notifier).state = index;
-          _loadTabData(index);
+          _loadTabData(tabIds, index);
         },
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.dashboard_outlined),
-            selectedIcon: Icon(Icons.dashboard),
-            label: 'Dashboard',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.trending_up_outlined),
-            selectedIcon: Icon(Icons.trending_up),
-            label: 'Deals',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.receipt_long_outlined),
-            selectedIcon: Icon(Icons.receipt_long),
-            label: 'Expense',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.people_outline),
-            selectedIcon: Icon(Icons.people),
-            label: 'Contacts',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.menu_outlined),
-            selectedIcon: Icon(Icons.menu),
-            label: 'More',
-          ),
-        ],
+        destinations: destinations,
       ),
     );
   }

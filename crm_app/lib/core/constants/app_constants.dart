@@ -24,6 +24,14 @@ class AppConstants {
   static const String companyProfile = '/api/company-profile';
   static const String currencies = '/api/currencies';
   static const String expenses = '/api/expenses';
+
+  /// RBAC — effective permissions + nav keys for the signed-in user.
+  static const String rbacMe = '/api/rbac/me';
+  static const String rbacPages = '/api/rbac/pages';
+
+  /// Foreground poll for [rbacMe]. True instant updates need a server push (FCM/WebSocket);
+  /// this is the tightest practical client-only interval without hammering the API.
+  static const Duration rbacForegroundPollInterval = Duration(milliseconds: 500);
   static const String expensePurposes = '/api/expense-purposes';
   static const String notifications = '/api/notifications';
   static const String notificationsReadAll = '/api/notifications/read-all';

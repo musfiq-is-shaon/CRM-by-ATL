@@ -87,7 +87,9 @@ class CompaniesNotifier extends StateNotifier<CompaniesState> {
   Future<void> loadCompanies() async {
     state = state.copyWith(isLoading: true, error: null);
     try {
-      final companies = await _companyRepository.getCompanies();
+      final companies = await _companyRepository.getCompanies(
+        forceRefresh: true,
+      );
 
       // Fetch users to get KAM data
       List<User> users = [];

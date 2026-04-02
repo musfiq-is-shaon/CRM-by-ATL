@@ -5,9 +5,12 @@ import 'core/theme/app_theme.dart';
 import 'presentation/providers/accent_color_provider.dart';
 import 'presentation/providers/amoled_provider.dart';
 import 'presentation/providers/auth_provider.dart';
+import 'presentation/providers/rbac_provider.dart';
 import 'presentation/providers/theme_provider.dart';
+import 'data/repositories/company_repository.dart';
+import 'data/repositories/user_repository.dart';
 import 'presentation/pages/auth/login_page.dart';
-import 'presentation/pages/main/shell_page.dart';
+import 'presentation/pages/main/shell_page.dart' show ShellPage, loadedTabsProvider, selectedTabProvider;
 import 'presentation/widgets/loading_widget.dart';
 
 class CRMApp extends ConsumerStatefulWidget {
@@ -32,6 +35,18 @@ class _CRMAppState extends ConsumerState<CRMApp> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<AuthState>(authProvider, (previous, next) {
+      if (next.status == AuthStatus.authenticated) {
+        ref.read(rbacProvider.notifier).load();
+      } else if (next.status == AuthStatus.unauthenticated) {
+        ref.read(rbacProvider.notifier).clear();
+        ref.read(selectedTabProvider.notifier).state = 0;
+        ref.read(loadedTabsProvider.notifier).state = {};
+        ref.read(companyRepositoryProvider).clearCache();
+        ref.read(userRepositoryProvider).clearCache();
+      }
+    });
+
     final authState = ref.watch(authProvider);
     final themeMode = ref.watch(themeProvider);
     final accent = ref.watch(accentColorProvider);
