@@ -50,6 +50,11 @@ class AppConstants {
   static const String attendanceCheckOut = '/api/attendance/check-out';
   static const String attendanceRecords = '/api/attendance/records';
 
+  /// Late check-in reconciliation (see Postman Attendance).
+  static const String attendanceReconciliations = '/api/attendance/reconciliations';
+  static String attendanceReconciliationReview(String reconciliationId) =>
+      '/api/attendance/reconciliations/$reconciliationId/review';
+
   // Shifts (HR — required for check-in/out; see Postman "Shifts")
   static const String shifts = '/api/shifts';
   static const String shiftsAssign = '/api/shifts/assign';
@@ -85,6 +90,14 @@ class AppConstants {
   static const String tokenKey = 'auth_token';
   static const String userKey = 'user_data';
   static const String refreshTokenKey = 'refresh_token';
+
+  /// Legacy single-account keys (migrated to [savedLoginAccountsKey] on read).
+  static const String rememberMeEnabledKey = 'remember_me_enabled';
+  static const String rememberedEmailKey = 'remembered_login_email';
+  static const String rememberedPasswordKey = 'remembered_login_password';
+
+  /// JSON array of `{ "email", "password" }` — multiple saved logins.
+  static const String savedLoginAccountsKey = 'saved_login_accounts_v1';
 
   // Timeouts
   static const int connectTimeout = 30000;

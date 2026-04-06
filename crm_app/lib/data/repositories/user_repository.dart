@@ -83,6 +83,30 @@ class UserRepository {
     _cachedUsers = null;
   }
 
+  /// `GET /api/users/me` — optional; used to read nested shift when attendance omits it.
+  Future<Map<String, dynamic>?> fetchCurrentUserPayload() async {
+    try {
+      final response = await _apiClient.get(AppConstants.usersMe);
+      final m = _unwrapUserMap(response.data);
+      return m.isEmpty ? null : m;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// `GET /api/users/:id` — may include shift fields for the signed-in user.
+  Future<Map<String, dynamic>?> fetchUserPayloadById(String userId) async {
+    final id = userId.trim();
+    if (id.isEmpty) return null;
+    try {
+      final response = await _apiClient.get('${AppConstants.users}/$id');
+      final m = _unwrapUserMap(response.data);
+      return m.isEmpty ? null : m;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// `PATCH /api/users/me` — Postman: name, phone.
   Future<User> updateMe({required String name, String phone = ''}) async {
     final response = await _apiClient.patch(

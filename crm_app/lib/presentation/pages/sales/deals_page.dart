@@ -69,16 +69,6 @@ class _DealsPageState extends ConsumerState<DealsPage>
           MaterialPageRoute(builder: (context) => const SaleFormPage()),
         );
         break;
-      case 1:
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => const OrderFormPage()),
-        ).then((created) {
-          if (created == true && mounted) {
-            ref.read(ordersProvider.notifier).loadOrders();
-          }
-        });
-        break;
       case 2:
         Navigator.push(
           context,
@@ -202,10 +192,12 @@ class _DealsPageState extends ConsumerState<DealsPage>
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _openFab,
-        child: const Icon(Icons.add),
-      ),
+      floatingActionButton: _hubController.index == 1
+          ? null
+          : FloatingActionButton(
+              onPressed: _openFab,
+              child: const Icon(Icons.add),
+            ),
     );
   }
 }

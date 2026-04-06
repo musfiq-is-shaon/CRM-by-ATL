@@ -11,7 +11,7 @@ import '../settings/change_password_page.dart';
 import '../settings/settings_page.dart';
 import 'notification_settings_page.dart';
 import 'help_support_page.dart';
-import '../attendance/attendance_records_page.dart';
+import '../attendance/attendance_hub_page.dart';
 import '../leave/leave_list_page.dart';
 import '../profile/profile_page.dart';
 
@@ -128,8 +128,8 @@ class MorePage extends ConsumerWidget {
                 _buildMenuItem(
                   context,
                   icon: Icons.access_time_outlined,
-                  title: 'Attendance Records',
-                  subtitle: 'View attendance history',
+                  title: 'Attendance',
+                  subtitle: 'History & late reconciliation requests',
                   textPrimary: textPrimary,
                   textSecondary: textSecondary,
                   textTertiary: textTertiary,
@@ -138,7 +138,7 @@ class MorePage extends ConsumerWidget {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => const AttendanceRecordsPage(),
+                        builder: (context) => const AttendanceHubPage(),
                       ),
                     );
                   },

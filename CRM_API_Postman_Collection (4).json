@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "CRM API",
-    "description": "Backend API for CRM (**Flask**). Set {{baseUrl}} (e.g. http://localhost:5000). Use **Login** to set {{token}}; send **Authorization: Bearer {{token}}** on protected routes.\n\n## RBAC\n- **Global role `admin`**: full JWT access to most routes; **sidebar/nav** still uses **explicit RBAC** (`GET /api/rbac/me` → `navPageKeys`) except global admins see all modules.\n- **Per-module access** (`sales`, `tasks`, `leaves`, …): enforced per endpoint. Typical scopes:\n  - **Sales** (`pageKey: sales`): **full scope** = global admin *or* RBAC **admin** column for Sales → all funnel deals, orders, renewals. **User scope** = funnel/renewals where **company KAM** is you; **orders** only if **assignTo** or **forwardedTo** is you.\n  - **Leaves** (`pageKey: leaves`): RBAC **admin** vs **user** treated the same for data scope; **extra visibility** via **HR module** (`can_access_page(hr)`) or **reporting manager** (`/api/leaves/team`, approve/reject).\n- **RBAC API** (`/api/rbac/*`): most routes require **global admin** (`require_admin`), not only a matrix cell.\n\n## Resources\nAuth, **RBAC**, Users, Companies, Contacts, Tasks, **Sales** (funnel), **Orders**, **Renewals**, Notifications, Shifts, **Attendance**, **Leaves**, HR, Status config, Company profile, Currencies, Expense purposes, Expenses (bin/restore), Account particulars, Accounts, Departments, Designations.\n\n## Leaves\n- **Balances** `GET/PUT /api/leaves/balances/:userId`: **self**, **HR module access**, or employee’s **reporting manager** (not global-admin-only).\n- **Apply**: `durationType`: `single_day` | `half_day` | `multiple_day`; `half_day` needs `halfDayPeriod`: `first_half` | `second_half`.\n- **All leaves** `GET /api/leaves/all`: **global admin OR HR module access** (HR calendar).\n- **Approve / reject**: **HR** or **reporting manager** for that employee (not global admin alone).\n- **Leave types / weekends / holidays** (mutations): **global admin OR HR module access** (`require_admin_or_hr_access`).\n\n## Attendance\nUsers need **shift** on HR. Without shift: `GET /api/attendance/today` may return `hasShiftAssigned: false`; check-in/out can return **422**.",
+    "description": "Backend API for CRM (**Flask**). Set {{baseUrl}} (e.g. http://localhost:5000). Use **Login** to set {{token}}; send **Authorization: Bearer {{token}}** on protected routes.\n\n_Last updated: aligns with Flask blueprints in `app/api/` (including RBAC batch assignments and attendance late-reconciliation APIs)._\n\n## RBAC\n- **Global role `admin`**: full JWT access to most routes; **sidebar/nav** still uses **explicit RBAC** (`GET /api/rbac/me` → `navPageKeys`) except global admins see all modules.\n- **Per-module access** (`sales`, `tasks`, `leaves`, …): enforced per endpoint. Typical scopes:\n  - **Sales** (`pageKey: sales`): **full scope** = global admin *or* RBAC **admin** column for Sales → all funnel deals, orders, renewals. **User scope** = funnel/renewals where **company KAM** is you; **orders** only if **assignTo** or **forwardedTo** is you.\n  - **Leaves** (`pageKey: leaves`): RBAC **admin** vs **user** treated the same for data scope; **extra visibility** via **HR module** (`can_access_page(hr)`) or **reporting manager** (`/api/leaves/team`, approve/reject).\n- **RBAC API** (`/api/rbac/*`): most routes require **global admin** (`require_admin`), not only a matrix cell.\n- **Batch assign**: `POST /api/rbac/assignments/batch` assigns **multiple userIds** to one `pageKey` with the same `accessType`.\n\n## Resources\nAuth, **RBAC**, Users, Companies, Contacts, Tasks, **Sales** (funnel), **Orders**, **Renewals**, Notifications, Shifts, **Attendance** (including **reconciliations**), **Leaves**, HR, Status config, Company profile, Currencies, Expense purposes, Expenses (bin/restore), Account particulars, Accounts, Departments, Designations.\n\n## Leaves\n- **Balances** `GET/PUT /api/leaves/balances/:userId`: **self**, **HR module access**, or employee’s **reporting manager** (not global-admin-only).\n- **Apply**: `durationType`: `single_day` | `half_day` | `multiple_day`; `half_day` needs `halfDayPeriod`: `first_half` | `second_half`.\n- **All leaves** `GET /api/leaves/all`: **global admin OR HR module access** (HR calendar).\n- **Approve / reject**: **HR** or **reporting manager** for that employee (not global admin alone).\n- **Leave types / weekends / holidays** (mutations): **global admin OR HR module access** (`require_admin_or_hr_access`).\n\n## Attendance\nUsers need **shift** on HR. Without shift: `GET /api/attendance/today` may return `hasShiftAssigned: false`; check-in/out can return **422**.\n**Reconciliations** (late/absence disputes): `GET/POST /api/attendance/reconciliations`, `PATCH /api/attendance/reconciliations/:id/review` — require **Attendance** module access; reviewers per `require_attendance_reconciliation_review` (typically attendance admin scope / HR).",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -28,7 +28,9 @@
     { "key": "departmentId", "value": "" },
     { "key": "designationId", "value": "" },
     { "key": "orderId", "value": "" },
-    { "key": "renewalId", "value": "" }
+    { "key": "renewalId", "value": "" },
+    { "key": "reconciliationId", "value": "" },
+    { "key": "attendanceId", "value": "" }
   ],
   "item": [
     {
@@ -134,6 +136,22 @@
             },
             "url": "{{baseUrl}}/api/rbac/assignments",
             "description": "Upsert one assignment. `accessType`: `admin` | `user`. Returns updated assignment matrix."
+          }
+        },
+        {
+          "name": "Post batch user assignments (admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userIds\": [\"{{userId}}\"],\n  \"pageKey\": \"sales\",\n  \"accessType\": \"user\"\n}"
+            },
+            "url": "{{baseUrl}}/api/rbac/assignments/batch",
+            "description": "Global admin. Assign several users to the same module with one scope. Body: `userIds` (array), `pageKey`, `accessType` (`admin` | `user`). Returns updated assignment matrix."
           }
         },
         {
@@ -893,7 +911,7 @@
     },
     {
       "name": "Attendance",
-      "description": "Check-in and check-out require an **assigned shift** (see HR / Shifts). If the user has no shift: GET /today returns `status: no_shift` and `hasShiftAssigned: false`; POST check-in or check-out returns **422** with `{ \"error\": \"...\" }`.",
+      "description": "Check-in and check-out require an **assigned shift** (see HR / Shifts). If the user has no shift: GET /today returns `status: no_shift` and `hasShiftAssigned: false`; POST check-in or check-out returns **422** with `{ \"error\": \"...\" }`.\n\n**Reconciliations**: applicants create requests (`POST` with `attendanceId`, `reason`); list with `GET` (`status`, `userId`, `dateFrom`, `dateTo` for admins); managers review with `PATCH .../review` (`status`: `approved` | `rejected`, optional `reviewNote`).",
       "item": [
         {
           "name": "Get today attendance",
@@ -970,6 +988,47 @@
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
             "url": "{{baseUrl}}/api/attendance/initialize-today",
             "description": "Admin only. Initialize attendance records for today for all active employees."
+          }
+        },
+        {
+          "name": "List attendance reconciliations",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/attendance/reconciliations?status=pending&userId=&dateFrom=&dateTo=",
+            "description": "Attendance module access. **Applicants**: own requests; optional `status` filter (`pending` | `approved` | `rejected`). **Attendance admin / global admin**: may filter by `userId`, `dateFrom`, `dateTo` (ISO dates)."
+          }
+        },
+        {
+          "name": "Create attendance reconciliation",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"attendanceId\": \"{{attendanceId}}\",\n  \"reason\": \"Late due to traffic\"\n}"
+            },
+            "url": "{{baseUrl}}/api/attendance/reconciliations",
+            "description": "Attendance module access. Body: `attendanceId` (UUID of the attendance row), `reason`. Creates a pending reconciliation request (e.g. late check-in justification)."
+          }
+        },
+        {
+          "name": "Review attendance reconciliation",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"approved\",\n  \"reviewNote\": \"OK\"\n}"
+            },
+            "url": "{{baseUrl}}/api/attendance/reconciliations/{{reconciliationId}}/review",
+            "description": "Authorized reviewers only (attendance admin scope / policy in backend). Body: `status` — `approved` or `rejected`; optional `reviewNote`."
           }
         }
       ]

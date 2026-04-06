@@ -18,6 +18,9 @@ class CRMTextField extends StatelessWidget {
   final FocusNode? focusNode;
   final TextInputAction? textInputAction;
   final bool autofocus;
+  /// When true, does not register autofill hints (avoids OS password-manager auto-fill).
+  final bool disableAutofill;
+  final VoidCallback? onTap;
 
   const CRMTextField({
     super.key,
@@ -36,6 +39,8 @@ class CRMTextField extends StatelessWidget {
     this.focusNode,
     this.textInputAction,
     this.autofocus = false,
+    this.disableAutofill = false,
+    this.onTap,
   });
 
   @override
@@ -64,6 +69,10 @@ class CRMTextField extends StatelessWidget {
           focusNode: focusNode,
           textInputAction: textInputAction,
           autofocus: autofocus,
+          onTap: onTap,
+          autofillHints: disableAutofill ? const [] : null,
+          enableSuggestions: !disableAutofill,
+          autocorrect: !disableAutofill,
           style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                 color: cs.onSurface,
               ),

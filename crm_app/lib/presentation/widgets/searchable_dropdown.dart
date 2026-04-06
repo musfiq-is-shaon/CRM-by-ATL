@@ -26,6 +26,9 @@ class SearchableDropdown<T> extends StatefulWidget {
   final Widget? Function(T)? leadingBuilder;
   final Widget? Function(T, String)? highlightBuilder;
 
+  /// Called after the search overlay is inserted (e.g. parent can [Scrollable.ensureVisible]).
+  final VoidCallback? onMenuOpened;
+
   const SearchableDropdown({
     super.key,
     required this.items,
@@ -43,13 +46,15 @@ class SearchableDropdown<T> extends StatefulWidget {
     this.isLoading = false,
     this.leadingBuilder,
     this.highlightBuilder,
+    this.onMenuOpened,
   });
 
   @override
   State<SearchableDropdown<T>> createState() => _SearchableDropdownState<T>();
 }
 
-class _SearchableDropdownState<T> extends State<SearchableDropdown<T>> {
+class _SearchableDropdownState<T> extends State<SearchableDropdown<T>>
+    with WidgetsBindingObserver {
   final TextEditingController _controller = TextEditingController();
   final LayerLink _layerLink = LayerLink();
   final FocusNode _focusNode = FocusNode();
@@ -68,11 +73,18 @@ class _SearchableDropdownState<T> extends State<SearchableDropdown<T>> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _filteredItems = widget.items;
     _controller.text = widget.value != null
         ? widget.itemLabelBuilder(widget.value as T)
         : '';
     _controller.addListener(_onTextChanged);
+  }
+
+  @override
+  void didChangeMetrics() {
+    // Keyboard open/close: reposition overlay above IME so search field stays visible.
+    _overlayEntry?.markNeedsBuild();
   }
 
   @override
@@ -90,6 +102,7 @@ class _SearchableDropdownState<T> extends State<SearchableDropdown<T>> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _controller.removeListener(_onTextChanged);
     _controller.dispose();
     _focusNode.dispose();
@@ -121,6 +134,11 @@ class _SearchableDropdownState<T> extends State<SearchableDropdown<T>> {
       }).toList();
       _highlightedIndex = _filteredItems.isNotEmpty ? 0 : -1;
     });
+    if (_isOpen) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _overlayEntry?.markNeedsBuild();
+      });
+    }
   }
 
   void _toggleDropdown() {
@@ -132,80 +150,91 @@ class _SearchableDropdownState<T> extends State<SearchableDropdown<T>> {
   }
 
   void _showOverlay() {
-    final renderBox = context.findRenderObject() as RenderBox;
-    final size = renderBox.size;
-
-    // Calculate available space below and above the dropdown
-    final screenHeight = MediaQuery.of(context).size.height;
-    final globalPosition = renderBox.localToGlobal(Offset.zero);
-    final bottomSpace = screenHeight - globalPosition.dy - size.height;
-    final topSpace = globalPosition.dy;
-
-    // Check if there's enough space below (at least 200px) or if there's more space above
-    final showAbove = bottomSpace < 220 && topSpace > bottomSpace;
-
-    // Dropdown height is 250 (increased for better UX), add some buffer
-    const dropdownHeight = 280.0;
-    final offsetY = showAbove
-        ? -(dropdownHeight + size.height + 4)
-        : size.height + 4;
-
     _filterItems(_controller.text);
 
     _overlayEntry = OverlayEntry(
-      builder: (context) => Stack(
-        children: [
-          // Transparent barrier to detect taps outside
-          Positioned.fill(
-            child: GestureDetector(
-              onTap: _removeOverlay,
-              behavior: HitTestBehavior.opaque,
-              child: Container(color: Colors.transparent),
+      builder: (overlayContext) {
+        // Use the dropdown widget's context for geometry (overlayContext has correct viewInsets).
+        final renderBox = context.findRenderObject() as RenderBox?;
+        if (renderBox == null || !renderBox.hasSize) {
+          return const SizedBox.shrink();
+        }
+        final size = renderBox.size;
+        final media = MediaQuery.of(overlayContext);
+        final viewInsetsBottom = media.viewInsets.bottom;
+        // Visible viewport above system keyboard / IME.
+        final safeHeight = media.size.height - viewInsetsBottom;
+        final globalPosition = renderBox.localToGlobal(Offset.zero);
+
+        final bottomSpace = safeHeight - globalPosition.dy - size.height;
+        final topSpace = globalPosition.dy;
+
+        // Prefer opening above the field when the keyboard leaves little room below.
+        final showAbove = bottomSpace < 200 && topSpace > bottomSpace;
+
+        const searchAndChrome = 72.0;
+        final maxList =
+            (showAbove ? topSpace : bottomSpace) - searchAndChrome - 16;
+        final listMaxHeight = maxList.clamp(80.0, 220.0);
+        final panelHeight = (searchAndChrome + listMaxHeight).clamp(160.0, 360.0);
+
+        final offsetY = showAbove
+            ? -(panelHeight + size.height + 4)
+            : size.height + 4;
+
+        return Stack(
+          children: [
+            Positioned.fill(
+              child: GestureDetector(
+                onTap: _removeOverlay,
+                behavior: HitTestBehavior.opaque,
+                child: Container(color: Colors.transparent),
+              ),
             ),
-          ),
-          // Dropdown content
-          Positioned(
-            width: size.width,
-            child: CompositedTransformFollower(
-              link: _layerLink,
-              showWhenUnlinked: false,
-              offset: Offset(0, offsetY),
-              child: Material(
-                elevation: 8,
-                borderRadius: BorderRadius.circular(16),
-                color: widget.dropdownColor,
-                child: Container(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: widget.hintColor.withValues(alpha: 0.2),
+            Positioned(
+              width: size.width,
+              child: CompositedTransformFollower(
+                link: _layerLink,
+                showWhenUnlinked: false,
+                offset: Offset(0, offsetY),
+                child: Material(
+                  elevation: 8,
+                  borderRadius: BorderRadius.circular(16),
+                  color: widget.dropdownColor,
+                  child: Container(
+                    constraints: BoxConstraints(maxHeight: panelHeight),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: widget.hintColor.withValues(alpha: 0.2),
+                      ),
                     ),
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Search field in dropdown
-                      _buildSearchField(),
-                      // Results list
-                      Flexible(child: _buildResultsList()),
-                      // Add new option
-                      if (widget.onAddNew != null) _buildAddNewOption(),
-                    ],
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _buildSearchField(),
+                        Flexible(
+                          child: _buildResultsList(maxHeight: listMaxHeight),
+                        ),
+                        if (widget.onAddNew != null) _buildAddNewOption(),
+                      ],
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-        ],
-      ),
+          ],
+        );
+      },
     );
 
     Overlay.of(context).insert(_overlayEntry!);
     setState(() => _isOpen = true);
+    widget.onMenuOpened?.call();
 
-    // Request focus after the overlay is shown
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _searchFocusNode.requestFocus();
+      _overlayEntry?.markNeedsBuild();
     });
   }
 
@@ -309,7 +338,7 @@ class _SearchableDropdownState<T> extends State<SearchableDropdown<T>> {
     }
   }
 
-  Widget _buildResultsList() {
+  Widget _buildResultsList({double maxHeight = 220}) {
     if (_filteredItems.isEmpty) {
       return Container(
         padding: const EdgeInsets.all(24),
@@ -346,7 +375,7 @@ class _SearchableDropdownState<T> extends State<SearchableDropdown<T>> {
     }
 
     return Container(
-      constraints: const BoxConstraints(maxHeight: 220),
+      constraints: BoxConstraints(maxHeight: maxHeight),
       child: ListView.builder(
         controller: _scrollController,
         padding: EdgeInsets.zero,

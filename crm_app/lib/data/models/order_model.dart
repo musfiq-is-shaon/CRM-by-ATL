@@ -2,6 +2,18 @@ import '../../core/constants/app_constants.dart';
 import 'company_model.dart';
 import 'user_model.dart';
 
+String _orderIdFromJson(Map<String, dynamic> json) {
+  dynamic v = json['id'] ?? json['_id'];
+  if (v is Map) {
+    final oid = v[r'$oid'] ?? v['oid'];
+    if (oid != null) return oid.toString().trim();
+    v = v['id'] ?? v['_id'];
+  }
+  if (v == null) return '';
+  final s = v.toString().trim();
+  return s == 'null' || s.isEmpty ? '' : s;
+}
+
 class Order {
   final String id;
   final String? companyId;
@@ -51,13 +63,15 @@ class Order {
     }
 
     return Order(
-      id: json['id']?.toString() ?? '',
-      companyId: json['companyId']?.toString(),
+      id: _orderIdFromJson(json),
+      companyId: json['companyId']?.toString() ?? json['company_id']?.toString(),
       company: json['company'] != null
           ? Company.fromJson(Map<String, dynamic>.from(json['company'] as Map))
           : null,
-      salesId: json['salesId']?.toString(),
-      orderDetails: json['orderDetails']?.toString(),
+      salesId:
+          json['salesId']?.toString() ?? json['sales_id']?.toString(),
+      orderDetails: json['orderDetails']?.toString() ??
+          json['order_details']?.toString(),
       revenue: json['revenue'] != null
           ? double.tryParse(json['revenue'].toString())
           : null,

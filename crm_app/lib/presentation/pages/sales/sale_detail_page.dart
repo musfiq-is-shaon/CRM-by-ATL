@@ -18,6 +18,8 @@ import '../../widgets/status_badge.dart';
 import '../../widgets/loading_widget.dart';
 import '../../widgets/searchable_dropdown.dart';
 import '../../widgets/celebration_shell.dart';
+import '../../providers/order_provider.dart';
+import 'order_form_page.dart';
 
 class SaleDetailPage extends ConsumerStatefulWidget {
   final String saleId;
@@ -699,10 +701,33 @@ class _SaleDetailPageState extends ConsumerState<SaleDetailPage> {
                   ref.invalidate(saleLogsProvider(sale.id));
                   if (status == 'closed_won' && context.mounted) {
                     HapticFeedback.mediumImpact();
+                    Sale freshSale;
+                    try {
+                      freshSale = await ref
+                          .read(saleRepositoryProvider)
+                          .getSaleById(sale.id);
+                    } catch (_) {
+                      freshSale = sale.copyWith(status: 'closed_won');
+                    }
+                    if (freshSale.status != 'closed_won') {
+                      freshSale = freshSale.copyWith(status: 'closed_won');
+                    }
                     setState(() => _celebrating = true);
                     _confettiController.play();
-                    await Future.delayed(const Duration(milliseconds: 2800));
-                    if (mounted) setState(() => _celebrating = false);
+                    await Future.delayed(const Duration(milliseconds: 700));
+                    if (!mounted) return;
+                    _confettiController.stop();
+                    setState(() => _celebrating = false);
+                    if (!context.mounted) return;
+                    await Navigator.of(context).push<bool>(
+                      MaterialPageRoute(
+                        builder: (ctx) =>
+                            OrderFormPage(closedWonSale: freshSale),
+                      ),
+                    );
+                    if (mounted) {
+                      await ref.read(ordersProvider.notifier).loadOrders();
+                    }
                   }
                 },
           child: Padding(

@@ -43,10 +43,19 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
-  Future<void> login({required String email, required String password}) async {
+  Future<void> login({
+    required String email,
+    required String password,
+    bool rememberMe = false,
+  }) async {
     state = state.copyWith(status: AuthStatus.loading, error: null);
     try {
       final authResponse = await _authRepository.login(
+        email: email,
+        password: password,
+      );
+      await _authRepository.persistRememberMe(
+        rememberMe: rememberMe,
         email: email,
         password: password,
       );

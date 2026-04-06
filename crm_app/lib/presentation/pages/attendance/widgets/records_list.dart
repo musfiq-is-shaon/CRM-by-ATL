@@ -7,8 +7,14 @@ import 'attendance_location_row.dart';
 
 class RecordsList extends ConsumerWidget {
   final AttendanceState state;
+  /// When embedded in [AttendanceHubPage], hide the duplicate page title.
+  final bool showHeading;
 
-  const RecordsList({super.key, required this.state});
+  const RecordsList({
+    super.key,
+    required this.state,
+    this.showHeading = true,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -22,15 +28,29 @@ class RecordsList extends ConsumerWidget {
       children: [
         Row(
           children: [
-            Text(
-              'Attendance Records',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: textPrimary,
+            if (showHeading) ...[
+              Text(
+                'Attendance Records',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: textPrimary,
+                ),
               ),
-            ),
-            const Spacer(),
+              const Spacer(),
+            ] else ...[
+              Expanded(
+                child: Text(
+                  'Period',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: textPrimary,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+            ],
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12),
               decoration: BoxDecoration(

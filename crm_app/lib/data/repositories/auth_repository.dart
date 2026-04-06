@@ -45,7 +45,20 @@ class AuthRepository {
       // Ignore logout API errors - server might be slow or unreachable
       // We still want to clear local storage and log out
     } finally {
-      await _storage.clearAll();
+      await _storage.clearSession();
+    }
+  }
+
+  /// After a successful login — add/update saved account, or remove this email.
+  Future<void> persistRememberMe({
+    required bool rememberMe,
+    required String email,
+    required String password,
+  }) async {
+    if (rememberMe) {
+      await _storage.upsertSavedAccount(email, password);
+    } else {
+      await _storage.removeSavedAccount(email);
     }
   }
 

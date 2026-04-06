@@ -13,6 +13,20 @@ class ShiftRepository {
     return _parseShiftList(response.data).map(WorkShift.fromJson).toList();
   }
 
+  /// Single shift (often works for assigned employees when list-all is admin-only).
+  Future<WorkShift?> getShiftById(String shiftId) async {
+    final tid = shiftId.trim();
+    if (tid.isEmpty) return null;
+    try {
+      final response = await _api.get(AppConstants.shiftById(tid));
+      final map = _unwrapMap(response.data);
+      if (map.isEmpty) return null;
+      return WorkShift.fromJson(map);
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<WorkShift> createShift(WorkShift draft) async {
     final response = await _api.post(
       AppConstants.shifts,
@@ -71,18 +85,37 @@ List<Map<String, dynamic>> _parseShiftList(dynamic body) {
 }
 
 Map<String, dynamic> _unwrapMap(dynamic body) {
-  if (body is Map<String, dynamic>) {
-    final inner = body['data'] ?? body['shift'];
-    if (inner is Map) return Map<String, dynamic>.from(inner);
-    return body;
+  if (body is List && body.isNotEmpty && body.first is Map) {
+    return _unwrapNested(Map<String, dynamic>.from(body.first as Map));
   }
-  if (body is Map) {
-    final m = Map<String, dynamic>.from(body);
-    final inner = m['data'] ?? m['shift'];
-    if (inner is Map) return Map<String, dynamic>.from(inner);
-    return m;
+  if (body is! Map) return {};
+  return _unwrapNested(Map<String, dynamic>.from(body));
+}
+
+/// Flask/jsonify often nests under `data`, `result`, `shift`, … — unwrap repeatedly.
+Map<String, dynamic> _unwrapNested(Map<String, dynamic> m) {
+  const keys = [
+    'data',
+    'shift',
+    'result',
+    'payload',
+    'record',
+    'item',
+    'body',
+  ];
+  for (var depth = 0; depth < 8; depth++) {
+    var progressed = false;
+    for (final key in keys) {
+      final inner = m[key];
+      if (inner is Map) {
+        m = Map<String, dynamic>.from(inner);
+        progressed = true;
+        break;
+      }
+    }
+    if (!progressed) break;
   }
-  return {};
+  return m;
 }
 
 final shiftRepositoryProvider = Provider<ShiftRepository>((ref) {

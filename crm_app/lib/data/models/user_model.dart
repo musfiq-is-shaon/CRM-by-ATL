@@ -8,6 +8,8 @@ class User {
   final String? role;
   final bool? isActive;
   final DateTime? createdAt;
+  /// HR shift template id from `GET /api/users/me` (or login payload) when present.
+  final String? shiftId;
 
   User({
     required this.id,
@@ -17,11 +19,64 @@ class User {
     this.role,
     this.isActive,
     this.createdAt,
+    this.shiftId,
   });
+
+  /// Plain string, Mongo extended JSON `{ "\$oid": "..." }`, or nested id maps.
+  static String? _idLikeToString(dynamic v) {
+    if (v == null) return null;
+    if (v is String) {
+      final s = v.trim();
+      if (s.isNotEmpty && s != 'null') return s;
+      return null;
+    }
+    if (v is Map) {
+      final m = Map<String, dynamic>.from(v);
+      final o = m[r'$oid'] ?? m['oid'];
+      if (o != null) {
+        final s = o.toString().trim();
+        if (s.isNotEmpty) return s;
+      }
+      return _idLikeToString(m['id'] ?? m['_id']);
+    }
+    return null;
+  }
+
+  static String? _parseShiftId(Map<String, dynamic> json) {
+    for (final k in [
+      'shiftId',
+      'shift_id',
+      'assignedShiftId',
+      'assigned_shift_id',
+      'currentShiftId',
+      'current_shift_id',
+    ]) {
+      final v = json[k];
+      if (v == null) continue;
+      final s = _idLikeToString(v);
+      if (s != null && s.isNotEmpty) return s;
+    }
+    for (final key in [
+      'shift',
+      'assignedShift',
+      'assigned_shift',
+      'workShift',
+      'work_shift',
+    ]) {
+      final v = json[key];
+      if (v is Map) {
+        final m = Map<String, dynamic>.from(v);
+        final id = m['id'] ?? m['_id'] ?? m['shiftId'] ?? m['shift_id'];
+        final s = _idLikeToString(id);
+        if (s != null && s.isNotEmpty) return s;
+      }
+    }
+    return null;
+  }
 
   factory User.fromJson(Map<String, dynamic> json) {
     return User(
-      id: json['id']?.toString() ?? '',
+      id: _idLikeToString(json['id'] ?? json['_id']) ?? '',
       name: json['name'] ?? '',
       email: json['email'] ?? '',
       phone: json['phone'],
@@ -30,6 +85,7 @@ class User {
       createdAt: json['createdAt'] != null
           ? DateTime.tryParse(json['createdAt'].toString())
           : null,
+      shiftId: _parseShiftId(json),
     );
   }
 
@@ -42,6 +98,7 @@ class User {
       'role': role,
       'isActive': isActive,
       'createdAt': createdAt?.toIso8601String(),
+      'shiftId': shiftId,
     };
   }
 

@@ -9,8 +9,16 @@ class OrderRepository {
 
   OrderRepository({required ApiClient apiClient}) : _apiClient = apiClient;
 
+  /// Flask/API may return `{ "data": {...} }`, `{ "order": {...} }`, or the row at root.
   static dynamic _unwrap(dynamic raw) {
-    if (raw is Map && raw['data'] != null) return raw['data'];
+    if (raw == null) return null;
+    if (raw is Map) {
+      final m = Map<String, dynamic>.from(raw);
+      if (m['data'] != null) return _unwrap(m['data']);
+      if (m['order'] != null) return _unwrap(m['order']);
+      if (m['item'] != null) return _unwrap(m['item']);
+      if (m['result'] != null) return _unwrap(m['result']);
+    }
     return raw;
   }
 
