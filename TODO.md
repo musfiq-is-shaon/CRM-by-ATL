@@ -1,25 +1,8 @@
-# Attendance Status UI Fix - ✅ COMPLETE
+# Deal Status Update Fix
+Plan approved. Steps:
 
-## Summary
-Updated `today_attendance_card.dart` with explicit state logic per requirements:
+- [x] Step 1: Create TODO.md for tracking
+- [x] Step 2: Edit sale_detail_page.dart - add salesProvider/saleDetailProvider invalidation after OrderFormPage
+- [x] Step 3: Test fix (`flutter pub get && flutter run`)
+- [x] Step 4: Complete task
 
-**Status Flow**:
-- **Pending** (no check-in/out): Shows \"Pending\" + Check In button
-- **Pending** (after check-in): Shows \"Pending\" + Check Out button  
-- **Completed** (both): Shows \"Completed\" + NO buttons + \"Today's attendance completed\" message
-
-**Changes**:
-- `getStatusText()`: Pending → Pending → Completed
-- `getStatusIcon()`: Clock → Timer → Check circle
-- Buttons: Hidden completely when `safeStatus == 'completed'`
-- Polished completion message box
-
-## Test Results
-Run: `cd crm_app && flutter pub get && flutter run`
-- Navigate to Dashboard → Verify attendance card states transition correctly
-
-## Next Steps
-- [ ] Test backend API status updates
-- [ ] If backend issues persist, check server-side logic
-
-Task complete! 🚀

@@ -179,7 +179,7 @@ class _SaleDetailPageState extends ConsumerState<SaleDetailPage> {
                   _buildInfoRow(
                     'Expected Revenue',
                     '${AppConstants.currencySymbol}'
-                    '${sale.expectedRevenue?.toStringAsFixed(2) ?? '0'}',
+                        '${sale.expectedRevenue?.toStringAsFixed(2) ?? '0'}',
                     textPrimary,
                     textSecondary,
                   ),
@@ -221,9 +221,9 @@ class _SaleDetailPageState extends ConsumerState<SaleDetailPage> {
             Text(
               'Change Status',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: textPrimary,
-                    fontWeight: FontWeight.w600,
-                  ),
+                color: textPrimary,
+                fontWeight: FontWeight.w600,
+              ),
             ),
             const SizedBox(height: 12),
             Builder(
@@ -244,10 +244,10 @@ class _SaleDetailPageState extends ConsumerState<SaleDetailPage> {
                     final btnColor = st == 'closed_won'
                         ? cs.tertiary
                         : st == 'closed_lost'
-                            ? cs.error
-                            : st == 'disqualified'
-                                ? cs.outline
-                                : primaryColor;
+                        ? cs.error
+                        : st == 'disqualified'
+                        ? cs.outline
+                        : primaryColor;
                     return _buildStatusButton(
                       context,
                       sale,
@@ -346,10 +346,7 @@ class _SaleDetailPageState extends ConsumerState<SaleDetailPage> {
                         const SizedBox(height: 6),
                         Text(
                           'By ${log.changedByUser!.name}',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: primaryColor,
-                          ),
+                          style: TextStyle(fontSize: 12, color: primaryColor),
                         ),
                       ],
                     ],
@@ -435,10 +432,7 @@ class _SaleDetailPageState extends ConsumerState<SaleDetailPage> {
     );
   }
 
-  void _showAddActivityDialog(
-    BuildContext context,
-    String saleId,
-  ) {
+  void _showAddActivityDialog(BuildContext context, String saleId) {
     final titleController = TextEditingController();
     final noteController = TextEditingController();
     DateTime selectedDate = DateTime.now();
@@ -692,7 +686,9 @@ class _SaleDetailPageState extends ConsumerState<SaleDetailPage> {
           onTap: isSelected
               ? null
               : () async {
-                  await ref.read(salesProvider.notifier).changeSaleStatus(
+                  await ref
+                      .read(salesProvider.notifier)
+                      .changeSaleStatus(
                         id: sale.id,
                         status: status,
                         changedByUserId: ref.read(currentUserIdProvider),
@@ -719,7 +715,7 @@ class _SaleDetailPageState extends ConsumerState<SaleDetailPage> {
                     _confettiController.stop();
                     setState(() => _celebrating = false);
                     if (!context.mounted) return;
-                    await Navigator.of(context).push<bool>(
+                    final orderCreated = await Navigator.of(context).push<bool>(
                       MaterialPageRoute(
                         builder: (ctx) =>
                             OrderFormPage(closedWonSale: freshSale),
@@ -727,6 +723,8 @@ class _SaleDetailPageState extends ConsumerState<SaleDetailPage> {
                     );
                     if (mounted) {
                       await ref.read(ordersProvider.notifier).loadOrders();
+                      ref.invalidate(salesProvider);
+                      ref.invalidate(saleDetailProvider(sale.id));
                     }
                   }
                 },
@@ -898,8 +896,9 @@ class _SaleFormPageState extends ConsumerState<SaleFormPage> {
     String? selectedKamUserId = authState.user?.id;
     if (selectedKamUserId != null &&
         !usersState.users.any((u) => u.id == selectedKamUserId)) {
-      selectedKamUserId =
-          usersState.users.isNotEmpty ? usersState.users.first.id : null;
+      selectedKamUserId = usersState.users.isNotEmpty
+          ? usersState.users.first.id
+          : null;
     }
     if (selectedKamUserId == null && usersState.users.isNotEmpty) {
       selectedKamUserId = usersState.users.first.id;
@@ -921,108 +920,108 @@ class _SaleFormPageState extends ConsumerState<SaleFormPage> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-                TextField(
-                  controller: nameController,
-                  style: TextStyle(color: textPrimary),
-                  decoration: InputDecoration(
-                    labelText: 'Company Name *',
-                    labelStyle: TextStyle(color: textSecondary),
-                    border: OutlineInputBorder(
-                      borderSide: BorderSide(color: borderColor),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderSide: BorderSide(color: borderColor),
-                    ),
+              TextField(
+                controller: nameController,
+                style: TextStyle(color: textPrimary),
+                decoration: InputDecoration(
+                  labelText: 'Company Name *',
+                  labelStyle: TextStyle(color: textSecondary),
+                  border: OutlineInputBorder(
+                    borderSide: BorderSide(color: borderColor),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderSide: BorderSide(color: borderColor),
                   ),
                 ),
-                const SizedBox(height: 16),
-                // Currency Dropdown
-                DropdownButtonFormField<String>(
-                  initialValue: selectedCurrencyId,
-                  decoration: InputDecoration(
-                    labelText: 'Currency *',
-                    labelStyle: TextStyle(color: textSecondary),
-                    border: OutlineInputBorder(
-                      borderSide: BorderSide(color: borderColor),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderSide: BorderSide(color: borderColor),
-                    ),
+              ),
+              const SizedBox(height: 16),
+              // Currency Dropdown
+              DropdownButtonFormField<String>(
+                initialValue: selectedCurrencyId,
+                decoration: InputDecoration(
+                  labelText: 'Currency *',
+                  labelStyle: TextStyle(color: textSecondary),
+                  border: OutlineInputBorder(
+                    borderSide: BorderSide(color: borderColor),
                   ),
-                  items: currenciesState.currencies.map((currency) {
-                    return DropdownMenuItem(
-                      value: currency.id,
-                      child: Text('${currency.code} - ${currency.name}'),
-                    );
-                  }).toList(),
-                  onChanged: (value) {
-                    setDialogState(() {
-                      selectedCurrencyId = value;
-                    });
-                  },
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: locationController,
-                  style: TextStyle(color: textPrimary),
-                  decoration: InputDecoration(
-                    labelText: 'Location',
-                    labelStyle: TextStyle(color: textSecondary),
-                    border: OutlineInputBorder(
-                      borderSide: BorderSide(color: borderColor),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderSide: BorderSide(color: borderColor),
-                    ),
+                  enabledBorder: OutlineInputBorder(
+                    borderSide: BorderSide(color: borderColor),
                   ),
                 ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: countryController,
-                  style: TextStyle(color: textPrimary),
-                  decoration: InputDecoration(
-                    labelText: 'Country',
-                    labelStyle: TextStyle(color: textSecondary),
-                    border: OutlineInputBorder(
-                      borderSide: BorderSide(color: borderColor),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderSide: BorderSide(color: borderColor),
-                    ),
+                items: currenciesState.currencies.map((currency) {
+                  return DropdownMenuItem(
+                    value: currency.id,
+                    child: Text('${currency.code} - ${currency.name}'),
+                  );
+                }).toList(),
+                onChanged: (value) {
+                  setDialogState(() {
+                    selectedCurrencyId = value;
+                  });
+                },
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: locationController,
+                style: TextStyle(color: textPrimary),
+                decoration: InputDecoration(
+                  labelText: 'Location',
+                  labelStyle: TextStyle(color: textSecondary),
+                  border: OutlineInputBorder(
+                    borderSide: BorderSide(color: borderColor),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderSide: BorderSide(color: borderColor),
                   ),
                 ),
-                const SizedBox(height: 16),
-                DropdownButtonFormField<String>(
-                  isExpanded: true,
-                  key: ValueKey(selectedKamUserId ?? 'kam'),
-                  initialValue: selectedKamUserId,
-                  decoration: InputDecoration(
-                    labelText: 'KAM (Key Account Manager) *',
-                    labelStyle: TextStyle(color: textSecondary),
-                    border: OutlineInputBorder(
-                      borderSide: BorderSide(color: borderColor),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderSide: BorderSide(color: borderColor),
-                    ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: countryController,
+                style: TextStyle(color: textPrimary),
+                decoration: InputDecoration(
+                  labelText: 'Country',
+                  labelStyle: TextStyle(color: textSecondary),
+                  border: OutlineInputBorder(
+                    borderSide: BorderSide(color: borderColor),
                   ),
-                  dropdownColor: surfaceColor,
-                  items: usersState.users
-                      .map(
-                        (user) => DropdownMenuItem(
-                          value: user.id,
-                          child: Text(user.name),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: usersState.users.isEmpty
-                      ? null
-                      : (value) {
-                          setDialogState(() => selectedKamUserId = value);
-                        },
+                  enabledBorder: OutlineInputBorder(
+                    borderSide: BorderSide(color: borderColor),
+                  ),
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                isExpanded: true,
+                key: ValueKey(selectedKamUserId ?? 'kam'),
+                initialValue: selectedKamUserId,
+                decoration: InputDecoration(
+                  labelText: 'KAM (Key Account Manager) *',
+                  labelStyle: TextStyle(color: textSecondary),
+                  border: OutlineInputBorder(
+                    borderSide: BorderSide(color: borderColor),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderSide: BorderSide(color: borderColor),
+                  ),
+                ),
+                dropdownColor: surfaceColor,
+                items: usersState.users
+                    .map(
+                      (user) => DropdownMenuItem(
+                        value: user.id,
+                        child: Text(user.name),
+                      ),
+                    )
+                    .toList(),
+                onChanged: usersState.users.isEmpty
+                    ? null
+                    : (value) {
+                        setDialogState(() => selectedKamUserId = value);
+                      },
+              ),
+            ],
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
@@ -1107,7 +1106,9 @@ class _SaleFormPageState extends ConsumerState<SaleFormPage> {
             ? DateTime.tryParse(_nextActionDateController.text)
             : null;
 
-        await ref.read(salesProvider.notifier).createSale(
+        await ref
+            .read(salesProvider.notifier)
+            .createSale(
               companyId: _selectedCompanyId!,
               prospect: _prospectController.text,
               expectedClosingDate:
@@ -1141,14 +1142,14 @@ class _SaleFormPageState extends ConsumerState<SaleFormPage> {
           ? DateTime.tryParse(_nextActionDateController.text)
           : null;
 
-      await ref.read(salesProvider.notifier).updateSale(
+      await ref
+          .read(salesProvider.notifier)
+          .updateSale(
             id: widget.sale!.id,
             prospect: _prospectController.text,
             category: _category,
             expectedRevenue: double.tryParse(_revenueController.text),
-            expectedClosingDate: DateTime.tryParse(
-              _closingDateController.text,
-            ),
+            expectedClosingDate: DateTime.tryParse(_closingDateController.text),
             companyId: _selectedCompanyId,
             nextAction: _nextActionController.text.trim().isEmpty
                 ? null
@@ -1212,349 +1213,326 @@ class _SaleFormPageState extends ConsumerState<SaleFormPage> {
           ],
         ),
         body: SafeArea(
-        child: SingleChildScrollView(
-          padding: AppThemeColors.pagePaddingAll,
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Prospect Name
-                Text(
-                  'Prospect Name *',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w500,
-                    color: textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                TextFormField(
-                  controller: _prospectController,
-                  style: TextStyle(color: textPrimary),
-                  decoration: InputDecoration(
-                    hintText: 'Enter prospect name',
-                    hintStyle: TextStyle(color: textSecondary.withValues(alpha: 0.6)),
-                    filled: true,
-                    fillColor: surfaceColor,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: borderColor),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: borderColor),
+          child: SingleChildScrollView(
+            padding: AppThemeColors.pagePaddingAll,
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Prospect Name
+                  Text(
+                    'Prospect Name *',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w500,
+                      color: textPrimary,
                     ),
                   ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter prospect name';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 20),
-
-                // Company (for new and existing deals)
-                Text(
-                  'Company *',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w500,
-                    color: textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Consumer(
-                  builder: (context, ref, child) {
-                    final companiesState = ref.watch(companiesProvider);
-                    return SearchableDropdown<String>(
-                      items: companiesState.companies.map((c) => c.id).toList(),
-                      value: _selectedCompanyId,
-                      hintText: 'Select company',
-                      labelText: 'Company *',
-                      itemLabelBuilder: (id) {
-                        final company = companiesState.companies
-                            .where((c) => c.id == id)
-                            .firstOrNull;
-                        return company?.name ?? '';
-                      },
-                      dropdownColor: surfaceColor,
-                      textColor: textPrimary,
-                      hintColor: textSecondary,
-                      required: true,
-                      onChanged: (value) {
-                        setState(() => _selectedCompanyId = value);
-                      },
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return 'Please select a company';
-                        }
-                        return null;
-                      },
-                      onAddNew: () async {
-                        ref.read(usersProvider.notifier).loadUsers();
-                        await _showCreateCompanyDialog(context);
-                      },
-                    );
-                  },
-                ),
-                const SizedBox(height: 20),
-
-                // Expected Revenue
-                Text(
-                  'Expected Revenue',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w500,
-                    color: textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                TextFormField(
-                  controller: _revenueController,
-                  style: TextStyle(color: textPrimary),
-                  keyboardType: TextInputType.number,
-                  decoration: InputDecoration(
-                    hintText: 'Enter expected revenue',
-                    hintStyle: TextStyle(color: textSecondary.withValues(alpha: 0.6)),
-                    prefixText: '${AppConstants.currencySymbol} ',
-                    prefixStyle: TextStyle(color: textPrimary),
-                    filled: true,
-                    fillColor: surfaceColor,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: borderColor),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: borderColor),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 20),
-
-                // Expected Closing Date
-                Text(
-                  'Expected Closing Date',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w500,
-                    color: textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                TextFormField(
-                  controller: _closingDateController,
-                  style: TextStyle(color: textPrimary),
-                  decoration: InputDecoration(
-                    hintText: 'YYYY-MM-DD',
-                    hintStyle: TextStyle(color: textSecondary.withValues(alpha: 0.6)),
-                    filled: true,
-                    fillColor: surfaceColor,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: borderColor),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: borderColor),
-                    ),
-                    suffixIcon: Icon(
-                      Icons.calendar_today,
-                      color: textSecondary,
-                    ),
-                  ),
-                  readOnly: true,
-                  onTap: () async {
-                    final date = await showDatePicker(
-                      context: context,
-                      initialDate: _closingDateController.text.isNotEmpty
-                          ? DateTime.tryParse(_closingDateController.text) ??
-                                DateTime.now()
-                          : DateTime.now(),
-                      firstDate: DateTime.now().subtract(
-                        const Duration(days: 365),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: _prospectController,
+                    style: TextStyle(color: textPrimary),
+                    decoration: InputDecoration(
+                      hintText: 'Enter prospect name',
+                      hintStyle: TextStyle(
+                        color: textSecondary.withValues(alpha: 0.6),
                       ),
-                      lastDate: DateTime.now().add(
-                        const Duration(days: 365 * 5),
+                      filled: true,
+                      fillColor: surfaceColor,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: borderColor),
                       ),
-                    );
-                    if (date != null) {
-                      setState(() {
-                        _closingDateController.text =
-                            '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
-                      });
-                    }
-                  },
-                ),
-                const SizedBox(height: 20),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: borderColor),
+                      ),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please enter prospect name';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 20),
 
-                Text(
-                  'Next action',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w500,
-                    color: textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                TextFormField(
-                  controller: _nextActionController,
-                  style: TextStyle(color: textPrimary),
-                  decoration: InputDecoration(
-                    hintText: 'e.g. Follow up call',
-                    hintStyle:
-                        TextStyle(color: textSecondary.withValues(alpha: 0.6)),
-                    filled: true,
-                    fillColor: surfaceColor,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: borderColor),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: borderColor),
+                  // Company (for new and existing deals)
+                  Text(
+                    'Company *',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w500,
+                      color: textPrimary,
                     ),
                   ),
-                ),
-                const SizedBox(height: 20),
-                Text(
-                  'Next action date',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w500,
-                    color: textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                TextFormField(
-                  controller: _nextActionDateController,
-                  style: TextStyle(color: textPrimary),
-                  decoration: InputDecoration(
-                    hintText: 'YYYY-MM-DD',
-                    hintStyle:
-                        TextStyle(color: textSecondary.withValues(alpha: 0.6)),
-                    filled: true,
-                    fillColor: surfaceColor,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: borderColor),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: borderColor),
-                    ),
-                    suffixIcon: Icon(
-                      Icons.calendar_today,
-                      color: textSecondary,
-                    ),
-                  ),
-                  readOnly: true,
-                  onTap: () async {
-                    final date = await showDatePicker(
-                      context: context,
-                      initialDate: _nextActionDateController.text.isNotEmpty
-                          ? DateTime.tryParse(_nextActionDateController.text) ??
-                                DateTime.now()
-                          : DateTime.now(),
-                      firstDate: DateTime.now().subtract(
-                        const Duration(days: 365),
-                      ),
-                      lastDate: DateTime.now().add(
-                        const Duration(days: 365 * 5),
-                      ),
-                    );
-                    if (date != null) {
-                      setState(() {
-                        _nextActionDateController.text =
-                            '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
-                      });
-                    }
-                  },
-                ),
-                const SizedBox(height: 20),
-
-                Builder(
-                  builder: (context) {
-                    final cfg = ref.watch(statusConfigProvider).valueOrNull;
-                    final categories = List<String>.from(
-                      cfg != null && cfg.salesCategories.isNotEmpty
-                          ? cfg.salesCategories
-                          : const ['hot', 'warm', 'cold'],
-                    );
-                    final pipeline = List<String>.from(
-                      cfg != null && cfg.salesStatuses.isNotEmpty
-                          ? cfg.salesStatuses
-                          : StatusConfig.defaultDealPipelineStatuses,
-                    );
-                    if (categories.isEmpty) {
-                      categories.addAll(
-                        List<String>.from(['hot', 'warm', 'cold']),
+                  const SizedBox(height: 8),
+                  Consumer(
+                    builder: (context, ref, child) {
+                      final companiesState = ref.watch(companiesProvider);
+                      return SearchableDropdown<String>(
+                        items: companiesState.companies
+                            .map((c) => c.id)
+                            .toList(),
+                        value: _selectedCompanyId,
+                        hintText: 'Select company',
+                        labelText: 'Company *',
+                        itemLabelBuilder: (id) {
+                          final company = companiesState.companies
+                              .where((c) => c.id == id)
+                              .firstOrNull;
+                          return company?.name ?? '';
+                        },
+                        dropdownColor: surfaceColor,
+                        textColor: textPrimary,
+                        hintColor: textSecondary,
+                        required: true,
+                        onChanged: (value) {
+                          setState(() => _selectedCompanyId = value);
+                        },
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Please select a company';
+                          }
+                          return null;
+                        },
+                        onAddNew: () async {
+                          ref.read(usersProvider.notifier).loadUsers();
+                          await _showCreateCompanyDialog(context);
+                        },
                       );
-                    }
-                    if (pipeline.isEmpty) {
-                      pipeline.addAll(
-                        List<String>.from(StatusConfig.defaultDealPipelineStatuses),
+                    },
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Expected Revenue
+                  Text(
+                    'Expected Revenue',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w500,
+                      color: textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: _revenueController,
+                    style: TextStyle(color: textPrimary),
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      hintText: 'Enter expected revenue',
+                      hintStyle: TextStyle(
+                        color: textSecondary.withValues(alpha: 0.6),
+                      ),
+                      prefixText: '${AppConstants.currencySymbol} ',
+                      prefixStyle: TextStyle(color: textPrimary),
+                      filled: true,
+                      fillColor: surfaceColor,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: borderColor),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: borderColor),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Expected Closing Date
+                  Text(
+                    'Expected Closing Date',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w500,
+                      color: textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: _closingDateController,
+                    style: TextStyle(color: textPrimary),
+                    decoration: InputDecoration(
+                      hintText: 'YYYY-MM-DD',
+                      hintStyle: TextStyle(
+                        color: textSecondary.withValues(alpha: 0.6),
+                      ),
+                      filled: true,
+                      fillColor: surfaceColor,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: borderColor),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: borderColor),
+                      ),
+                      suffixIcon: Icon(
+                        Icons.calendar_today,
+                        color: textSecondary,
+                      ),
+                    ),
+                    readOnly: true,
+                    onTap: () async {
+                      final date = await showDatePicker(
+                        context: context,
+                        initialDate: _closingDateController.text.isNotEmpty
+                            ? DateTime.tryParse(_closingDateController.text) ??
+                                  DateTime.now()
+                            : DateTime.now(),
+                        firstDate: DateTime.now().subtract(
+                          const Duration(days: 365),
+                        ),
+                        lastDate: DateTime.now().add(
+                          const Duration(days: 365 * 5),
+                        ),
                       );
-                    }
+                      if (date != null) {
+                        setState(() {
+                          _closingDateController.text =
+                              '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+                        });
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 20),
 
-                    if (!categories.contains(_category)) {
-                      WidgetsBinding.instance.addPostFrameCallback((_) {
-                        if (!mounted) return;
-                        setState(() => _category = categories.first);
-                      });
-                    }
-                    if (widget.sale == null && !pipeline.contains(_status)) {
-                      WidgetsBinding.instance.addPostFrameCallback((_) {
-                        if (!mounted) return;
-                        setState(() => _status = pipeline.first);
-                      });
-                    }
-
-                    final categoryValue =
-                        categories.contains(_category) ? _category : categories.first;
-                    final statusValue =
-                        pipeline.contains(_status) ? _status : pipeline.first;
-
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Category',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w500,
-                            color: textPrimary,
-                          ),
+                  Text(
+                    'Next action',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w500,
+                      color: textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: _nextActionController,
+                    style: TextStyle(color: textPrimary),
+                    decoration: InputDecoration(
+                      hintText: 'e.g. Follow up call',
+                      hintStyle: TextStyle(
+                        color: textSecondary.withValues(alpha: 0.6),
+                      ),
+                      filled: true,
+                      fillColor: surfaceColor,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: borderColor),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: borderColor),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    'Next action date',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w500,
+                      color: textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: _nextActionDateController,
+                    style: TextStyle(color: textPrimary),
+                    decoration: InputDecoration(
+                      hintText: 'YYYY-MM-DD',
+                      hintStyle: TextStyle(
+                        color: textSecondary.withValues(alpha: 0.6),
+                      ),
+                      filled: true,
+                      fillColor: surfaceColor,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: borderColor),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: borderColor),
+                      ),
+                      suffixIcon: Icon(
+                        Icons.calendar_today,
+                        color: textSecondary,
+                      ),
+                    ),
+                    readOnly: true,
+                    onTap: () async {
+                      final date = await showDatePicker(
+                        context: context,
+                        initialDate: _nextActionDateController.text.isNotEmpty
+                            ? DateTime.tryParse(
+                                    _nextActionDateController.text,
+                                  ) ??
+                                  DateTime.now()
+                            : DateTime.now(),
+                        firstDate: DateTime.now().subtract(
+                          const Duration(days: 365),
                         ),
-                        const SizedBox(height: 8),
-                        DropdownButtonFormField<String>(
-                          key: ValueKey('cat-$categoryValue-${categories.join()}'),
-                          initialValue: categoryValue,
-                          isExpanded: true,
-                          decoration: InputDecoration(
-                            filled: true,
-                            fillColor: surfaceColor,
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide(color: borderColor),
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide(color: borderColor),
-                            ),
-                          ),
-                          dropdownColor: surfaceColor,
-                          items: categories
-                              .map(
-                                (c) => DropdownMenuItem(
-                                  value: c,
-                                  child: Text(_saleFormEnumLabel(c)),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (value) {
-                            setState(() => _category = value ?? categories.first);
-                          },
+                        lastDate: DateTime.now().add(
+                          const Duration(days: 365 * 5),
                         ),
-                        const SizedBox(height: 20),
-                        if (widget.sale == null) ...[
+                      );
+                      if (date != null) {
+                        setState(() {
+                          _nextActionDateController.text =
+                              '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+                        });
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 20),
+
+                  Builder(
+                    builder: (context) {
+                      final cfg = ref.watch(statusConfigProvider).valueOrNull;
+                      final categories = List<String>.from(
+                        cfg != null && cfg.salesCategories.isNotEmpty
+                            ? cfg.salesCategories
+                            : const ['hot', 'warm', 'cold'],
+                      );
+                      final pipeline = List<String>.from(
+                        cfg != null && cfg.salesStatuses.isNotEmpty
+                            ? cfg.salesStatuses
+                            : StatusConfig.defaultDealPipelineStatuses,
+                      );
+                      if (categories.isEmpty) {
+                        categories.addAll(
+                          List<String>.from(['hot', 'warm', 'cold']),
+                        );
+                      }
+                      if (pipeline.isEmpty) {
+                        pipeline.addAll(
+                          List<String>.from(
+                            StatusConfig.defaultDealPipelineStatuses,
+                          ),
+                        );
+                      }
+
+                      if (!categories.contains(_category)) {
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          if (!mounted) return;
+                          setState(() => _category = categories.first);
+                        });
+                      }
+                      if (widget.sale == null && !pipeline.contains(_status)) {
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          if (!mounted) return;
+                          setState(() => _status = pipeline.first);
+                        });
+                      }
+
+                      final categoryValue = categories.contains(_category)
+                          ? _category
+                          : categories.first;
+                      final statusValue = pipeline.contains(_status)
+                          ? _status
+                          : pipeline.first;
+
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
                           Text(
-                            'Status',
+                            'Category',
                             style: TextStyle(
                               fontWeight: FontWeight.w500,
                               color: textPrimary,
@@ -1562,8 +1540,10 @@ class _SaleFormPageState extends ConsumerState<SaleFormPage> {
                           ),
                           const SizedBox(height: 8),
                           DropdownButtonFormField<String>(
-                            key: ValueKey('st-$statusValue-${pipeline.join()}'),
-                            initialValue: statusValue,
+                            key: ValueKey(
+                              'cat-$categoryValue-${categories.join()}',
+                            ),
+                            initialValue: categoryValue,
                             isExpanded: true,
                             decoration: InputDecoration(
                               filled: true,
@@ -1578,29 +1558,74 @@ class _SaleFormPageState extends ConsumerState<SaleFormPage> {
                               ),
                             ),
                             dropdownColor: surfaceColor,
-                            items: pipeline
+                            items: categories
                                 .map(
-                                  (s) => DropdownMenuItem(
-                                    value: s,
-                                    child: Text(_saleFormEnumLabel(s)),
+                                  (c) => DropdownMenuItem(
+                                    value: c,
+                                    child: Text(_saleFormEnumLabel(c)),
                                   ),
                                 )
                                 .toList(),
                             onChanged: (value) {
-                              setState(() => _status = value ?? pipeline.first);
+                              setState(
+                                () => _category = value ?? categories.first,
+                              );
                             },
                           ),
+                          const SizedBox(height: 20),
+                          if (widget.sale == null) ...[
+                            Text(
+                              'Status',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w500,
+                                color: textPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            DropdownButtonFormField<String>(
+                              key: ValueKey(
+                                'st-$statusValue-${pipeline.join()}',
+                              ),
+                              initialValue: statusValue,
+                              isExpanded: true,
+                              decoration: InputDecoration(
+                                filled: true,
+                                fillColor: surfaceColor,
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: BorderSide(color: borderColor),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: BorderSide(color: borderColor),
+                                ),
+                              ),
+                              dropdownColor: surfaceColor,
+                              items: pipeline
+                                  .map(
+                                    (s) => DropdownMenuItem(
+                                      value: s,
+                                      child: Text(_saleFormEnumLabel(s)),
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged: (value) {
+                                setState(
+                                  () => _status = value ?? pipeline.first,
+                                );
+                              },
+                            ),
+                          ],
                         ],
-                      ],
-                    );
-                  },
-                ),
-              ],
+                      );
+                    },
+                  ),
+                ],
+              ),
             ),
           ),
         ),
       ),
-    ),
     );
   }
 }

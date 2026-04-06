@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/constants/app_constants.dart';
+import '../../core/errors/exceptions.dart';
 import '../../core/network/api_client.dart';
 import '../models/order_model.dart';
 
@@ -84,9 +85,35 @@ class OrderRepository {
         .toList();
   }
 
+  /// Loads one order. Tries `GET /api/orders/:id` first; many backends only
+  /// expose list + patch (see Postman), in which case we fall back to
+  /// [getOrders] and find the row by id.
   Future<Order> getOrderById(String id) async {
-    final response = await _apiClient.get('${AppConstants.orders}/$id');
-    return Order.fromJson(_asOrderMap(response.data));
+    try {
+      final response = await _apiClient.get('${AppConstants.orders}/$id');
+      return Order.fromJson(_asOrderMap(response.data));
+    } on NotFoundException {
+      return _findOrderInListOrThrow(id);
+    } on AppException catch (e) {
+      // 403: some deployments block GET-by-id but allow list for the same user.
+      if (e.statusCode == 405 || e.statusCode == 404 || e.statusCode == 403) {
+        return _findOrderInListOrThrow(id);
+      }
+      rethrow;
+    } on FormatException {
+      return _findOrderInListOrThrow(id);
+    }
+  }
+
+  Future<Order> _findOrderInListOrThrow(String id) async {
+    final list = await getOrders();
+    for (final o in list) {
+      if (o.id == id) return o;
+    }
+    throw NotFoundException(
+      message: 'Order not found',
+      statusCode: 404,
+    );
   }
 
   Future<Order> createOrder({

@@ -49,16 +49,23 @@ class CRMCard extends StatelessWidget {
         color: Colors.transparent,
         borderRadius: BorderRadius.circular(borderRadius),
         clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(borderRadius),
-          splashColor: accent.withValues(alpha: 0.08),
-          highlightColor: accent.withValues(alpha: 0.04),
-          child: Padding(
-            padding: padding ?? const EdgeInsets.all(AppSpacing.md),
-            child: child,
-          ),
-        ),
+        // Avoid [InkWell] when there is no tap handler — it can steal gestures from
+        // nested controls (e.g. [DropdownButton], [TextField]) on some devices.
+        child: onTap == null
+            ? Padding(
+                padding: padding ?? const EdgeInsets.all(AppSpacing.md),
+                child: child,
+              )
+            : InkWell(
+                onTap: onTap,
+                borderRadius: BorderRadius.circular(borderRadius),
+                splashColor: accent.withValues(alpha: 0.08),
+                highlightColor: accent.withValues(alpha: 0.04),
+                child: Padding(
+                  padding: padding ?? const EdgeInsets.all(AppSpacing.md),
+                  child: child,
+                ),
+              ),
       ),
     );
   }

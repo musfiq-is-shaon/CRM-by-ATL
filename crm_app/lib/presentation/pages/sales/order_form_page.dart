@@ -163,9 +163,13 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
             assignTo: _assignToId,
             statusChangeNote: null,
             changedByUserId: ref.read(authProvider).user?.id,
+            // API: sync linked funnel deal to Closed Won when the order is created (Postman).
+            finalizeCloseWon: _saleId != null && _saleId!.isNotEmpty,
+            closedWonStatus: 'closed_won',
           );
       if (mounted) {
         await ref.read(ordersProvider.notifier).loadOrders();
+        await ref.read(salesProvider.notifier).loadSales();
         if (mounted) Navigator.pop(context, true);
       }
     } catch (e) {

@@ -30,6 +30,10 @@ class Order {
   final DateTime? nextActionDate;
   final String? forwardedTo;
   final User? forwardedToUser;
+  /// Present when API includes creator (e.g. `createdBy` / `createdByUser`).
+  final User? createdByUser;
+  /// Raw attachment list from API (e.g. `{ fileName, url }`); optional.
+  final List<dynamic>? attachments;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -49,6 +53,8 @@ class Order {
     this.nextActionDate,
     this.forwardedTo,
     this.forwardedToUser,
+    this.createdByUser,
+    this.attachments,
     this.createdAt,
     this.updatedAt,
   });
@@ -95,6 +101,12 @@ class Order {
           : json['forwardedTo']?.toString(),
       forwardedToUser:
           parseUser(json['forwardedToUser']) ?? parseUser(json['forwardedTo']),
+      createdByUser: parseUser(json['createdByUser']) ??
+          parseUser(json['createdBy']) ??
+          parseUser(json['created_by']),
+      attachments: json['attachments'] is List
+          ? List<dynamic>.from(json['attachments'] as List)
+          : null,
       createdAt: json['createdAt'] != null
           ? DateTime.tryParse(json['createdAt'].toString())
           : null,
@@ -125,11 +137,15 @@ class Order {
     DateTime? nextActionDate,
     String? forwardedTo,
     User? forwardedToUser,
+    User? createdByUser,
+    List<dynamic>? attachments,
     DateTime? createdAt,
     DateTime? updatedAt,
     bool clearCompany = false,
     bool clearAssignToUser = false,
     bool clearForwardedToUser = false,
+    bool clearCreatedByUser = false,
+    bool clearAttachments = false,
   }) {
     return Order(
       id: id ?? this.id,
@@ -152,6 +168,10 @@ class Order {
       forwardedToUser: clearForwardedToUser
           ? null
           : (forwardedToUser ?? this.forwardedToUser),
+      createdByUser: clearCreatedByUser
+          ? null
+          : (createdByUser ?? this.createdByUser),
+      attachments: clearAttachments ? null : (attachments ?? this.attachments),
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
