@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_theme_colors.dart';
+import '../../../../data/models/shift_model.dart';
 import '../../../providers/attendance_provider.dart';
+import '../../../providers/shift_provider.dart';
 
-/// Top of More → Attendance: this week’s status counts and refresh.
+/// Top of More → Attendance: this week status counts and refresh.
 class AttendanceHubHeader extends ConsumerStatefulWidget {
   const AttendanceHubHeader({super.key});
 
@@ -15,7 +17,9 @@ class AttendanceHubHeader extends ConsumerStatefulWidget {
 class _AttendanceHubHeaderState extends ConsumerState<AttendanceHubHeader> {
   Future<void> _refresh() async {
     ref.invalidate(attendanceWeekRollupProvider);
+    ref.invalidate(userProfileShiftProvider);
     await ref.read(attendanceProvider.notifier).loadToday();
+    await ref.read(shiftProvider.notifier).loadShifts();
     await ref.read(attendanceWeekRollupProvider.future);
   }
 
@@ -29,6 +33,26 @@ class _AttendanceHubHeaderState extends ConsumerState<AttendanceHubHeader> {
     final noShift =
         today?.hasShiftAssigned == false || today?.safeStatus == 'no_shift';
     final weekAsync = ref.watch(attendanceWeekRollupProvider);
+    final profileShiftAsync = ref.watch(userProfileShiftProvider);
+    final todaySnap = WorkShift.fromAttendanceDaySnapshot(today);
+    final snapHasTimes = todaySnap != null &&
+        todaySnap.startTime.trim().isNotEmpty &&
+        todaySnap.endTime.trim().isNotEmpty;
+    final profileW = profileShiftAsync.valueOrNull;
+    final profileHasTimes = profileW != null &&
+        profileW.startTime.trim().isNotEmpty &&
+        profileW.endTime.trim().isNotEmpty;
+    // Prefer `/attendance/today` times when present; otherwise HR + `/users/me` + `GET /shifts/:id` via [userProfileShiftProvider].
+    final String shiftLine = snapHasTimes
+        ? todaySnap.timingDisplayLine
+        : profileHasTimes
+            ? profileW.timingDisplayLine
+            : profileShiftAsync.when(
+                skipLoadingOnReload: true,
+                data: (w) => w?.timingDisplayLine ?? 'No shift assigned',
+                loading: () => 'Loading shift…',
+                error: (_, _) => 'Could not load shift',
+              );
 
     return Padding(
       padding: AppThemeColors.pagePaddingHorizontal.copyWith(
@@ -116,6 +140,44 @@ class _AttendanceHubHeaderState extends ConsumerState<AttendanceHubHeader> {
                     ),
                   ],
                 ),
+                const SizedBox(height: 10),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.schedule_rounded,
+                      size: 18,
+                      color: cs.tertiary,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Your shift',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.2,
+                              color: textSecondary,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            shiftLine,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              height: 1.3,
+                              color: textPrimary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
                 if (noShift) ...[
                   const SizedBox(height: 10),
                   Text(
@@ -181,7 +243,7 @@ class _AttendanceHubHeaderState extends ConsumerState<AttendanceHubHeader> {
                   data: (r) {
                     if (r.total == 0) {
                       return Text(
-                        'Your week’s attendance will show here once recorded.',
+                        'Your week attendance will show here once recorded.',
                         style: TextStyle(
                           fontSize: 13,
                           color: textSecondary,

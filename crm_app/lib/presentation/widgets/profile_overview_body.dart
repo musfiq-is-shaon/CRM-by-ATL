@@ -4,6 +4,7 @@ import '../../core/theme/app_theme_colors.dart';
 import '../pages/settings/company_profile_edit_page.dart';
 import '../pages/settings/edit_profile_page.dart';
 import '../providers/auth_provider.dart';
+import '../providers/shift_provider.dart';
 import '../providers/rbac_provider.dart' show companyProfileEditAllowedProvider;
 import '../providers/company_profile_provider.dart';
 import 'crm_card.dart';
@@ -52,6 +53,7 @@ class _ProfileOverviewBodyState extends ConsumerState<ProfileOverviewBody> {
     final profileName = user?.name ?? 'User';
     final email = _dash(user?.email);
     final role = (user?.role ?? 'user').toUpperCase();
+    final shiftAsync = ref.watch(userProfileShiftProvider);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -85,6 +87,52 @@ class _ProfileOverviewBodyState extends ConsumerState<ProfileOverviewBody> {
               _kvRow('Email', email, textPrimary, textSecondary),
               _kvRow('Phone', _dash(user?.phone), textPrimary, textSecondary),
               _kvRow('Role', user?.role ?? 'user', textPrimary, textSecondary),
+              shiftAsync.when(
+                skipLoadingOnReload: true,
+                data: (w) => _kvRow(
+                  'Work shift',
+                  w?.timingDisplayLine ?? 'No shift assigned',
+                  textPrimary,
+                  textSecondary,
+                ),
+                loading: () => Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 92,
+                        child: Text(
+                          'Work shift',
+                          style: TextStyle(
+                            color: textSecondary,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: Align(
+                          alignment: Alignment.centerRight,
+                          child: SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: primaryColor,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                error: (e, _) => _kvRow(
+                  'Work shift',
+                  'Could not load',
+                  textPrimary,
+                  textSecondary,
+                ),
+              ),
             ],
           ),
         ),

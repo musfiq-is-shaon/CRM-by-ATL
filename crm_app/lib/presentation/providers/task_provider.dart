@@ -1,5 +1,8 @@
+import 'dart:async' show unawaited;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/services/attendance_reminder_controller.dart';
 import '../../data/models/task_model.dart';
 import '../../data/models/company_model.dart';
 import '../../data/models/user_model.dart';
@@ -163,11 +166,13 @@ class TasksNotifier extends StateNotifier<TasksState> {
   final TaskRepository _taskRepository;
   final CompanyRepository _companyRepository;
   final UserRepository _userRepository;
+  final Ref _ref;
 
   TasksNotifier(
     this._taskRepository,
     this._companyRepository,
     this._userRepository,
+    this._ref,
   ) : super(const TasksState());
 
   Future<void> loadTasks() async {
@@ -327,6 +332,7 @@ class TasksNotifier extends StateNotifier<TasksState> {
         debugPrint('Notifications disabled');
       }
       debugPrint('=========================');
+      unawaited(scheduleAttendanceRemindersFromRef(_ref));
     } catch (e) {
       debugPrint('Error scheduling notifications: $e');
     }
@@ -600,7 +606,7 @@ final tasksProvider = StateNotifierProvider<TasksNotifier, TasksState>((ref) {
   final taskRepository = ref.watch(taskRepositoryProvider);
   final companyRepository = ref.watch(companyRepositoryProvider);
   final userRepository = ref.watch(userRepositoryProvider);
-  return TasksNotifier(taskRepository, companyRepository, userRepository);
+  return TasksNotifier(taskRepository, companyRepository, userRepository, ref);
 });
 
 final taskDetailProvider = FutureProvider.family<Task, String>((ref, id) async {

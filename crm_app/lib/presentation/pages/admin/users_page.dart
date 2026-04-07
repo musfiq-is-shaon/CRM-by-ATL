@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme_colors.dart';
 import '../../../data/repositories/user_repository.dart';
 import '../../../data/models/user_model.dart';
+import '../../providers/shift_provider.dart';
 import '../../widgets/crm_card.dart';
 import '../../widgets/avatar_widget.dart';
 import '../../widgets/app_semantic_pill.dart';
@@ -19,6 +20,12 @@ class UsersPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final usersAsync = ref.watch(usersProvider);
+    final shiftLines = ref.watch(userShiftTimingsProvider).maybeWhen(
+          data: (list) => {
+            for (final r in list) r.user.id: r.timingLine,
+          },
+          orElse: () => <String, String>{},
+        );
 
     final bgColor = AppThemeColors.backgroundColor(context);
     final surfaceColor = AppThemeColors.surfaceColor(context);
@@ -48,7 +55,10 @@ class UsersPage extends ConsumerWidget {
           isLoading: true,
           error: null,
           isEmpty: false,
-          onRetry: () => ref.invalidate(usersProvider),
+          onRetry: () {
+            ref.invalidate(usersProvider);
+            ref.invalidate(userShiftTimingsProvider);
+          },
           emptyTitle: '',
           emptySubtitle: '',
           emptyIcon: Icons.people_outline,
@@ -58,7 +68,10 @@ class UsersPage extends ConsumerWidget {
           isLoading: false,
           error: error.toString(),
           isEmpty: false,
-          onRetry: () => ref.invalidate(usersProvider),
+          onRetry: () {
+            ref.invalidate(usersProvider);
+            ref.invalidate(userShiftTimingsProvider);
+          },
           emptyTitle: '',
           emptySubtitle: '',
           emptyIcon: Icons.people_outline,
@@ -69,14 +82,19 @@ class UsersPage extends ConsumerWidget {
             isLoading: false,
             error: null,
             isEmpty: users.isEmpty,
-            onRetry: () => ref.invalidate(usersProvider),
+            onRetry: () {
+            ref.invalidate(usersProvider);
+            ref.invalidate(userShiftTimingsProvider);
+          },
             emptyTitle: 'No users found',
             emptySubtitle: 'Add your first user',
             emptyIcon: Icons.people_outline,
             content: RefreshIndicator(
               onRefresh: () async {
                 ref.invalidate(usersProvider);
+                ref.invalidate(userShiftTimingsProvider);
                 await ref.read(usersProvider.future);
+                await ref.read(userShiftTimingsProvider.future);
               },
               child: ListView.builder(
                 padding: AppThemeColors.pagePaddingAll,
@@ -95,6 +113,7 @@ class UsersPage extends ConsumerWidget {
                           surfaceColor,
                           primaryColor,
                           accentColor,
+                          shiftLines[user.id],
                         );
                       },
                       child: Row(
@@ -121,6 +140,18 @@ class UsersPage extends ConsumerWidget {
                                     color: textSecondary,
                                   ),
                                 ),
+                                if (shiftLines[user.id] != null) ...[
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    shiftLines[user.id]!,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: textTertiary,
+                                    ),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
                                 if (user.role != null) ...[
                                   const SizedBox(height: 4),
                                   AppSemanticPill(
@@ -155,6 +186,7 @@ class UsersPage extends ConsumerWidget {
     Color surfaceColor,
     Color primaryColor,
     Color accentColor,
+    String? shiftTimingLine,
   ) {
     showDialog(
       context: context,
@@ -174,6 +206,13 @@ class UsersPage extends ConsumerWidget {
               textPrimary,
               textSecondary,
             ),
+            if (shiftTimingLine != null && shiftTimingLine.isNotEmpty)
+              _buildDetailRow(
+                'Shift',
+                shiftTimingLine,
+                textPrimary,
+                textSecondary,
+              ),
           ],
         ),
         actions: [

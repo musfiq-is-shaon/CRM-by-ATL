@@ -28,12 +28,41 @@ class AuthNotifier extends StateNotifier<AuthState> {
   AuthNotifier(this._authRepository, this._userRepository)
     : super(const AuthState());
 
+  /// Fills `shiftId` (and light profile fields) from `GET /api/users/me` when the login payload skipped them.
+  Future<User> _mergeLiveProfile(User user) async {
+    final live = await _userRepository.fetchMeAsUser();
+    if (live == null) return user;
+    return User(
+      id: user.id.isNotEmpty ? user.id : live.id,
+      name: live.name.isNotEmpty ? live.name : user.name,
+      email: live.email.isNotEmpty ? live.email : user.email,
+      phone: live.phone ?? user.phone,
+      role: live.role ?? user.role,
+      isActive: live.isActive ?? user.isActive,
+      createdAt: live.createdAt ?? user.createdAt,
+      shiftId: (live.shiftId != null && live.shiftId!.trim().isNotEmpty)
+          ? live.shiftId
+          : user.shiftId,
+    );
+  }
+
   Future<void> checkAuthStatus() async {
     state = state.copyWith(status: AuthStatus.loading);
     try {
       final isLoggedIn = await _authRepository.isLoggedIn();
       if (isLoggedIn) {
-        final user = await _authRepository.getCurrentUser();
+        var user = await _authRepository.getCurrentUser();
+        if (user == null) {
+          state = const AuthState(status: AuthStatus.unauthenticated);
+          return;
+        }
+        final merged = await _mergeLiveProfile(user);
+        if (merged.shiftId != user.shiftId ||
+            merged.name != user.name ||
+            merged.email != user.email) {
+          await _authRepository.persistUser(merged);
+        }
+        user = merged;
         state = AuthState(status: AuthStatus.authenticated, user: user);
       } else {
         state = const AuthState(status: AuthStatus.unauthenticated);
@@ -59,9 +88,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
         email: email,
         password: password,
       );
+      var user = await _mergeLiveProfile(authResponse.user);
+      await _authRepository.persistUser(user);
       state = AuthState(
         status: AuthStatus.authenticated,
-        user: authResponse.user,
+        user: user,
       );
     } catch (e) {
       state = AuthState(

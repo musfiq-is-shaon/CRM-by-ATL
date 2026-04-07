@@ -1,8 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/models/shift_model.dart';
+import '../../data/models/user_model.dart';
 import '../../data/repositories/shift_repository.dart';
 import '../../data/repositories/user_repository.dart';
-import 'auth_provider.dart';
+
+export 'user_profile_shift_provider.dart';
 
 class ShiftState {
   final List<WorkShift> shifts;
@@ -38,8 +40,7 @@ class ShiftNotifier extends StateNotifier<ShiftState> {
   Future<void> loadShifts() async {
     state = state.copyWith(isLoading: true, error: null);
     try {
-      var list = await _repository.getShifts();
-      list = await _enrichShiftsWithEmployeeRosters(list);
+      final list = await _repository.getShiftsEnriched();
       state = ShiftState(shifts: list, isLoading: false);
     } catch (e) {
       state = ShiftState(
@@ -76,35 +77,6 @@ class ShiftNotifier extends StateNotifier<ShiftState> {
   void clearError() {
     state = state.copyWith(error: null);
   }
-
-  /// When `GET /shifts` omits `employeeIds`, fetch each shift by id so [WorkShift.forUser]
-  /// can resolve assignments for every template (parallel, failures ignored per shift).
-  Future<List<WorkShift>> _enrichShiftsWithEmployeeRosters(
-    List<WorkShift> list,
-  ) async {
-    final need = list
-        .where((s) => s.id.trim().isNotEmpty && s.employeeIds.isEmpty)
-        .toList();
-    if (need.isEmpty) return list;
-    final details = await Future.wait(
-      need.map((s) => _repository.getShiftById(s.id)),
-    );
-    final byId = <String, WorkShift>{};
-    for (var i = 0; i < need.length; i++) {
-      final d = details[i];
-      if (d != null && d.id.trim().isNotEmpty) {
-        byId[d.id.trim().toLowerCase()] = d;
-      }
-    }
-    return list
-        .map(
-          (s) => WorkShift.mergeRosterFromDetail(
-            s,
-            byId[s.id.trim().toLowerCase()],
-          ),
-        )
-        .toList();
-  }
 }
 
 final shiftProvider =
@@ -112,30 +84,47 @@ final shiftProvider =
   return ShiftNotifier(ref.watch(shiftRepositoryProvider));
 });
 
-/// HR-assigned template from [User.shiftId] or `GET /api/users/me` — merged in
-/// [WorkShift.resolveAttendanceShift] (no time guessing).
-final userProfileShiftProvider = FutureProvider<WorkShift?>((ref) async {
-  final user = ref.watch(authProvider.select((a) => a.user));
-  final uid = user?.id;
-  if (uid == null || uid.isEmpty) return null;
-  final shiftRepo = ref.read(shiftRepositoryProvider);
+/// One row: [user] plus resolved [shift] (from `User.shiftId` or shift roster).
+class UserShiftTiming {
+  const UserShiftTiming({required this.user, this.shift});
+
+  final User user;
+  final WorkShift? shift;
+
+  /// Human-readable window + shift name (or unassigned).
+  String get timingLine => shift?.timingDisplayLine ?? 'No shift assigned';
+}
+
+/// Loads all users and matches each to a [WorkShift] using the same rules as attendance
+/// (`shiftId` on user, else roster membership on `GET /shifts` enriched with employees),
+/// then enriches from `GET /api/hr/info/:userId` when the HR endpoint is allowed (parallel fetch).
+final userShiftTimingsProvider =
+    FutureProvider<List<UserShiftTiming>>((ref) async {
   final userRepo = ref.read(userRepositoryProvider);
+  final shiftRepo = ref.read(shiftRepositoryProvider);
+  final users = await userRepo.getUsers(forceRefresh: true);
+  final shifts = await shiftRepo.getShiftsEnriched();
 
-  final fromAuth = user?.shiftId?.trim();
-  if (fromAuth != null && fromAuth.isNotEmpty) {
-    final w = await shiftRepo.getShiftById(fromAuth);
-    if (w != null) return w;
-  }
+  final hrByUserId = <String, Map<String, dynamic>>{};
+  await Future.wait(
+    users.map((u) async {
+      final m = await userRepo.fetchHrInfoByUserId(u.id);
+      if (m != null && m.isNotEmpty) hrByUserId[u.id] = m;
+    }),
+  );
 
-  var payload = await userRepo.fetchCurrentUserPayload();
-  payload ??= await userRepo.fetchUserPayloadById(uid);
-  if (payload == null || payload.isEmpty) return null;
-  var w = WorkShift.tryParseFromUserPayload(payload);
-  if (w != null && WorkShift.looksPopulated(w)) return w;
-  final sid = WorkShift.parseShiftIdFromUserPayload(payload);
-  if (sid != null && sid.isNotEmpty) {
-    final fetched = await shiftRepo.getShiftById(sid);
-    if (fetched != null) return fetched;
-  }
-  return w;
+  final rows = users.map((u) {
+    WorkShift? shift = WorkShift.byId(u.shiftId, shifts);
+    shift ??= WorkShift.forUser(u.id, shifts, userEmail: u.email);
+    shift = WorkShift.enrichFromHrInfoPayload(
+      shift,
+      hrByUserId[u.id],
+      shifts,
+    );
+    return UserShiftTiming(user: u, shift: shift);
+  }).toList();
+  rows.sort(
+    (a, b) => a.user.name.toLowerCase().compareTo(b.user.name.toLowerCase()),
+  );
+  return rows;
 });

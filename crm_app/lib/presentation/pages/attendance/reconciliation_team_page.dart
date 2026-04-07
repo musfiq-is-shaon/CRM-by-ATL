@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme_colors.dart';
 import '../../../data/models/attendance_model.dart';
+import '../../../data/models/shift_model.dart';
 import '../../providers/attendance_provider.dart';
 import '../../providers/attendance_reconciliation_provider.dart';
 import '../../providers/shift_provider.dart';
@@ -129,6 +130,7 @@ class _AttendanceTeamReconciliationTabState
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(attendanceReconciliationProvider);
+    final shifts = ref.watch(shiftProvider).shifts;
     final textPrimary = AppThemeColors.textPrimaryColor(context);
     final textSecondary = AppThemeColors.textSecondaryColor(context);
     final cs = Theme.of(context).colorScheme;
@@ -170,6 +172,11 @@ class _AttendanceTeamReconciliationTabState
                   itemCount: state.items.length,
                   itemBuilder: (context, i) {
                     final row = state.items[i];
+                    final applicantShift = WorkShift.resolveForApplicant(
+                      shifts: shifts,
+                      embeddedUser: row.user,
+                      applicantUserId: row.effectiveApplicantUserId,
+                    );
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 12),
                       child: Card(
@@ -194,6 +201,29 @@ class _AttendanceTeamReconciliationTabState
                                     label: const Text('Pending'),
                                     visualDensity: VisualDensity.compact,
                                     backgroundColor: cs.secondaryContainer,
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.schedule_rounded,
+                                    size: 15,
+                                    color: cs.tertiary,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(
+                                      applicantShift?.timingDisplayLine ??
+                                          'No shift assigned',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w500,
+                                        color: textSecondary,
+                                        height: 1.3,
+                                      ),
+                                    ),
                                   ),
                                 ],
                               ),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/services/attendance_reminder_controller.dart';
 import '../../../core/theme/app_theme_colors.dart';
 import '../../providers/theme_provider.dart';
 import '../../providers/accent_color_provider.dart';
@@ -62,6 +63,7 @@ class SettingsPage extends ConsumerWidget {
                       await ref
                           .read(notificationSettingsProvider.notifier)
                           .rescheduleNotifications(tasks);
+                      await scheduleAttendanceReminders(ref.read);
                     },
                     activeThumbColor: primaryColor,
                   ),
@@ -343,6 +345,7 @@ class SettingsPage extends ConsumerWidget {
                     await ref
                         .read(notificationSettingsProvider.notifier)
                         .rescheduleNotifications(tasks);
+                    await scheduleAttendanceReminders(ref.read);
                     if (context.mounted) Navigator.pop(context);
                   },
                   child: const Text('Save'),

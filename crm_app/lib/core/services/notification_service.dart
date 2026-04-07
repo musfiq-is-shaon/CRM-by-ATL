@@ -5,6 +5,12 @@ import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz_data;
 import '../../data/models/task_model.dart';
 
+/// One calendar day’s shift window (local wall-clock) for attendance reminders.
+typedef AttendanceShiftWindow = ({
+  DateTime anchorLocal,
+  DateTime windowEndLocal,
+});
+
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
   factory NotificationService() => _instance;
@@ -14,6 +20,21 @@ class NotificationService {
       FlutterLocalNotificationsPlugin();
 
   bool _isInitialized = false;
+
+  /// Reserved range for “check in now” shift reminders (every 5 min until check-in / shift end).
+  static const int attendanceReminderIdBase = 8810000;
+  /// Max 5-minute ticks in the longest window we schedule (6h → 72 slots per day).
+  static const int attendanceReminderSlotsPerDay = 72;
+  /// Pre-schedule this many calendar days so alarms fire without opening the app (OS-held).
+  /// Total IDs = [attendanceReminderSlotsPerDay] × this; keep ≤ ~500 (Android 12+ alarm cap).
+  static const int attendanceReminderDaysAhead = 6;
+
+  static int get attendanceReminderTotalIds =>
+      attendanceReminderSlotsPerDay * attendanceReminderDaysAhead;
+
+  static bool notificationIdIsAttendanceReminder(int id) =>
+      id >= attendanceReminderIdBase &&
+      id < attendanceReminderIdBase + attendanceReminderTotalIds;
 
   Future<void> initialize() async {
     if (_isInitialized) return;
@@ -179,14 +200,113 @@ class NotificationService {
     required List<Task> tasks,
     required int daysBefore,
   }) async {
-    // Cancel existing notifications first to avoid duplicates
-    await cancelAllNotifications();
+    // Cancel task (and other) notifications but keep shift check-in reminders in
+    // [attendanceReminderIdBase..] — those are resynced from [syncAttendanceCheckInReminders].
+    final pending = await _notifications.pendingNotificationRequests();
+    for (final p in pending) {
+      if (!notificationIdIsAttendanceReminder(p.id)) {
+        await _notifications.cancel(p.id);
+      }
+    }
 
     for (final task in tasks) {
       await scheduleTaskDeadlineNotification(
         task: task,
         daysBefore: daysBefore,
       );
+    }
+  }
+
+  /// Clears all scheduled “check in” nags (IDs in [attendanceReminderIdBase] range).
+  Future<void> cancelAttendanceCheckInReminders() async {
+    for (var i = 0; i < attendanceReminderTotalIds; i++) {
+      await _notifications.cancel(attendanceReminderIdBase + i);
+    }
+  }
+
+  /// Schedules OS-local alarms every 5 minutes from each window’s anchor until its end.
+  ///
+  /// [windows] are typically **today + next days** so the next reminders are already registered
+  /// with the device — they fire when the app is **not** running, until the user checks in
+  /// (then we cancel all IDs) or the window ends.
+  Future<void> scheduleAttendanceCheckInReminders({
+    required List<AttendanceShiftWindow> windows,
+    required String shiftLabel,
+  }) async {
+    if (!_isInitialized) await initialize();
+    await cancelAttendanceCheckInReminders();
+
+    if (windows.isEmpty) return;
+
+    final now = DateTime.now();
+
+    const androidDetails = AndroidNotificationDetails(
+      'attendance_shift_channel',
+      'Shift check-in reminders',
+      channelDescription:
+          'Reminds you to check in at shift start (repeats every 5 minutes until you check in)',
+      importance: Importance.high,
+      priority: Priority.high,
+      icon: '@mipmap/ic_launcher',
+    );
+    const iosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+    );
+    const details = NotificationDetails(
+      android: androidDetails,
+      iOS: iosDetails,
+    );
+
+    const title = 'Time to check in';
+    final body = shiftLabel.trim().isNotEmpty
+        ? 'Your shift ($shiftLabel) has started. Open the app to check in.'
+        : 'Your shift has started. Open the app to check in.';
+
+    var dayIndex = 0;
+    for (final w in windows) {
+      if (dayIndex >= attendanceReminderDaysAhead) break;
+
+      final anchorLocal = w.anchorLocal;
+      final windowEndLocal = w.windowEndLocal;
+      final anchor =
+          anchorLocal.isAfter(now) ? anchorLocal : now;
+      final end =
+          windowEndLocal.isAfter(anchor) ? windowEndLocal : anchor;
+
+      final endTz = tz.TZDateTime.from(end, tz.local);
+      final idBase =
+          attendanceReminderIdBase + dayIndex * attendanceReminderSlotsPerDay;
+
+      for (var i = 0; i < attendanceReminderSlotsPerDay; i++) {
+        final fireAt = anchor.add(Duration(minutes: 5 * i));
+        if (!fireAt.isBefore(end)) break;
+        if (fireAt.isBefore(now.subtract(const Duration(seconds: 1)))) {
+          continue;
+        }
+        var scheduled = tz.TZDateTime.from(fireAt, tz.local);
+        final tzNow = tz.TZDateTime.now(tz.local);
+        if (!scheduled.isAfter(tzNow)) {
+          scheduled = tzNow.add(const Duration(seconds: 2));
+        }
+        if (!scheduled.isBefore(endTz)) {
+          break;
+        }
+
+        await _notifications.zonedSchedule(
+          idBase + i,
+          title,
+          body,
+          scheduled,
+          details,
+          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+          uiLocalNotificationDateInterpretation:
+              UILocalNotificationDateInterpretation.absoluteTime,
+          payload: 'attendance_check_in',
+        );
+      }
+      dayIndex++;
     }
   }
 

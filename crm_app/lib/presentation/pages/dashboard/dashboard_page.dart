@@ -41,8 +41,6 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       prefetchCrmLookupData(ref, ref.read(rbacMeProvider));
-      final notifier = ref.read(attendanceProvider.notifier);
-      notifier.loadToday(); // Initial load
       ref.read(notificationsProvider.notifier).load(silent: true);
       // Setup periodic refresh handled by provider
     });

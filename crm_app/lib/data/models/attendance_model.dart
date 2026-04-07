@@ -156,6 +156,11 @@ String _reconciliationApplicantUserId(
 }
 
 /// Parses [shiftDisplay] as `HH:mm`, `HH:mm:ss`, or `h:mm AM/PM` on [date]'s calendar day.
+///
+/// Public for scheduling (e.g. shift-start local notifications).
+DateTime? attendanceDateAtShiftClock(DateTime date, String shiftDisplay) =>
+    _combineLocalDateWithShiftDisplay(date, shiftDisplay);
+
 DateTime? _combineLocalDateWithShiftDisplay(
   DateTime date,
   String shiftDisplay,
@@ -389,6 +394,45 @@ class TodayAttendance {
     }
     // Root `id` on /attendance/today is the **attendance row** id (same as lateReconciliation.attendanceId),
     // not a template id from GET /shifts — do not use it for [assignedShiftId].
+
+    if (assignedShiftId == null || assignedShiftId.trim().isEmpty) {
+      for (final uk in ['user', 'employee', 'profile', 'staff', 'member']) {
+        final u = _mapFromDynamic(json[uk]);
+        if (u == null) continue;
+        var sid = _firstNonEmptyString(u, const [
+          'shiftId',
+          'shift_id',
+          'assignedShiftId',
+          'assigned_shift_id',
+          'currentShiftId',
+          'current_shift_id',
+        ]);
+        if (sid == null || sid.isEmpty) {
+          for (final sk in [
+            'shift',
+            'assignedShift',
+            'assigned_shift',
+            'workShift',
+            'work_shift',
+          ]) {
+            final sh = _mapFromDynamic(u[sk]);
+            if (sh == null) continue;
+            sid = _firstNonEmptyString(sh, const [
+                  'id',
+                  '_id',
+                  'shiftId',
+                  'shift_id',
+                ]) ??
+                _firstIdString(sh, const ['id', '_id']);
+            if (sid != null && sid.isNotEmpty) break;
+          }
+        }
+        if (sid != null && sid.isNotEmpty) {
+          assignedShiftId = sid;
+          break;
+        }
+      }
+    }
 
     return TodayAttendance(
       id: _pickAttendanceRowId(json),

@@ -3,6 +3,7 @@ import 'dart:async' show unawaited;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/services/location_service.dart';
+import '../../core/services/notification_service.dart';
 import '../../data/models/attendance_model.dart';
 import '../../data/repositories/attendance_repository.dart';
 import '../providers/auth_provider.dart';
@@ -65,10 +66,10 @@ class AttendanceNotifier extends StateNotifier<AttendanceState> {
   /// Last user id we merged local fallbacks for; used to drop stale locals on account switch.
   String? _lastLoadedUserId;
 
-  AttendanceNotifier(this._repository, this.ref)
-    : super(const AttendanceState()) {
-    // Initial load
-    loadToday();
+  AttendanceNotifier(this._repository, this.ref) : super(const AttendanceState()) {
+    // Do not call [loadToday] here — it races with [userProfileShiftProvider] (which watches
+    // [attendanceProvider]) and can trigger Riverpod [CircularDependencyError]. Shell/dashboard
+    // / hub pages call [loadToday] explicitly after auth + tab setup.
   }
 
   /// Load today's attendance status with validation.
@@ -211,6 +212,9 @@ class AttendanceNotifier extends StateNotifier<AttendanceState> {
         localCheckInLocation: label.isNotEmpty ? label : null,
         todayAttendance: quick ?? state.todayAttendance,
       );
+      if (quick?.checkInTime != null) {
+        unawaited(NotificationService().cancelAttendanceCheckInReminders());
+      }
 
       debugPrint('🔄 Scheduling GET /today after check-in (non-blocking)...');
       // Next frame: let late-reconciliation dialog open first; avoid racing [loadToday].

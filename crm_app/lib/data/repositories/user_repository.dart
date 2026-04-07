@@ -94,6 +94,32 @@ class UserRepository {
     }
   }
 
+  /// Same as [fetchCurrentUserPayload] parsed as [User] (for merging `shiftId` after login).
+  Future<User?> fetchMeAsUser() async {
+    final m = await fetchCurrentUserPayload();
+    if (m == null || m.isEmpty) return null;
+    try {
+      return User.fromJson(m);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// `GET /api/hr/info/:userId` — full HR row (shift often nested under `hrInfo` / `shift`).
+  /// Uses a light envelope unwrap so nested maps are not stripped away.
+  /// Returns null on 403/404/network error so callers can fall back to [fetchUserPayloadById].
+  Future<Map<String, dynamic>?> fetchHrInfoByUserId(String userId) async {
+    final id = userId.trim();
+    if (id.isEmpty) return null;
+    try {
+      final response = await _apiClient.get(AppConstants.hrInfo(id));
+      final m = _unwrapHrEnvelope(response.data);
+      return m.isEmpty ? null : m;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// `GET /api/users/:id` — may include shift fields for the signed-in user.
   Future<Map<String, dynamic>?> fetchUserPayloadById(String userId) async {
     final id = userId.trim();
@@ -177,11 +203,46 @@ class UserRepository {
   }
 }
 
+/// Strips at most a few `data` / `result` envelopes — keeps `hrInfo`, `shift`, etc. intact.
+Map<String, dynamic> _unwrapHrEnvelope(dynamic raw) {
+  if (raw is! Map) return {};
+  var m = Map<String, dynamic>.from(raw);
+  for (var i = 0; i < 4; i++) {
+    final next = m['data'] ?? m['result'];
+    if (next is Map) {
+      m = Map<String, dynamic>.from(next);
+    } else {
+      break;
+    }
+  }
+  return m;
+}
+
+/// Unwraps nested Flask/jsonify shapes: `{ data: { user: {...} } }`, etc.
 Map<String, dynamic> _unwrapUserMap(dynamic raw) {
   if (raw is! Map) return {};
-  final m = Map<String, dynamic>.from(raw);
-  final inner = m['data'] ?? m['user'];
-  if (inner is Map) return Map<String, dynamic>.from(inner);
+  var m = Map<String, dynamic>.from(raw);
+  const keys = [
+    'data',
+    'user',
+    'payload',
+    'result',
+    'body',
+    'item',
+    'response',
+  ];
+  for (var depth = 0; depth < 12; depth++) {
+    var progressed = false;
+    for (final k in keys) {
+      final inner = m[k];
+      if (inner is Map) {
+        m = Map<String, dynamic>.from(inner);
+        progressed = true;
+        break;
+      }
+    }
+    if (!progressed) break;
+  }
   return m;
 }
 

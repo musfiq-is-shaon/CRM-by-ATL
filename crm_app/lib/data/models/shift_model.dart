@@ -1,5 +1,6 @@
 import '../../core/json_parse.dart';
 import 'attendance_model.dart';
+import 'user_model.dart';
 
 /// Work shift from `GET/POST/PUT /api/shifts`. `weekendDays`: 0=Mon … 6=Sun (Postman).
 class WorkShift {
@@ -237,6 +238,98 @@ class WorkShift {
         w.id.trim().isNotEmpty;
   }
 
+  /// Merges a shift resolved from user + `GET /shifts` with optional `GET /api/hr/info/:userId` body.
+  static WorkShift? enrichFromHrInfoPayload(
+    WorkShift? base,
+    Map<String, dynamic>? hrPayload,
+    List<WorkShift> shifts,
+  ) {
+    if (hrPayload == null || hrPayload.isEmpty) return base;
+    WorkShift? fromHr = tryParseFromHrInfoPayload(hrPayload);
+    final sidHr = parseShiftIdFromUserPayload(hrPayload);
+    if (fromHr != null &&
+        !looksPopulated(fromHr) &&
+        sidHr != null &&
+        sidHr.isNotEmpty) {
+      final fromList = byId(sidHr, shifts);
+      if (fromList != null) {
+        fromHr = mergeWithSameId(fromHr, fromList);
+      }
+    } else if ((fromHr == null || !looksPopulated(fromHr)) &&
+        sidHr != null &&
+        sidHr.isNotEmpty) {
+      fromHr = byId(sidHr, shifts);
+    }
+    if (fromHr == null) return base;
+    if (base == null) return fromHr;
+    var merged = mergeWithSameId(base, fromHr);
+    if (!looksPopulated(merged) && looksPopulated(fromHr)) {
+      merged = fromHr;
+    }
+    return merged;
+  }
+
+  static bool _mapLooksLikeShiftTimes(Map<String, dynamic> m) {
+    final hasStart = m.containsKey('startTime') ||
+        m.containsKey('start_time') ||
+        m.containsKey('start') ||
+        m.containsKey('shiftStart') ||
+        m.containsKey('shift_start');
+    final hasEnd = m.containsKey('endTime') ||
+        m.containsKey('end_time') ||
+        m.containsKey('end') ||
+        m.containsKey('shiftEnd') ||
+        m.containsKey('shift_end');
+    return hasStart && hasEnd;
+  }
+
+  /// Walks nested HR JSON to find the first object that parses as a shift with times.
+  static WorkShift? _deepFindShiftInHrPayload(Map<String, dynamic> root, int depth) {
+    if (depth > 10) return null;
+    if (_mapLooksLikeShiftTimes(root)) {
+      try {
+        final w = WorkShift.fromJson(Map<String, dynamic>.from(root));
+        if (looksPopulated(w)) return w;
+      } catch (_) {}
+    }
+    for (final v in root.values) {
+      if (v is Map) {
+        final w = _deepFindShiftInHrPayload(
+          Map<String, dynamic>.from(v),
+          depth + 1,
+        );
+        if (w != null) return w;
+      }
+    }
+    return null;
+  }
+
+  /// HR document from `GET /api/hr/info/:userId` — often mirrors user shift fields under `hrInfo` or root.
+  static WorkShift? tryParseFromHrInfoPayload(Map<String, dynamic>? root) {
+    if (root == null || root.isEmpty) return null;
+    WorkShift? w = tryParseFromUserPayload(root);
+    if (w != null && looksPopulated(w)) return w;
+    for (final key in [
+      'hrInfo',
+      'hr_info',
+      'hr',
+      'employeeHr',
+      'employee_hr',
+      'record',
+      'profile',
+      'employee',
+    ]) {
+      final v = root[key];
+      if (v is Map) {
+        w = tryParseFromUserPayload(Map<String, dynamic>.from(v));
+        if (w != null && looksPopulated(w)) return w;
+      }
+    }
+    w = tryParseFromUserPayload(root);
+    if (w != null && looksPopulated(w)) return w;
+    return _deepFindShiftInHrPayload(Map<String, dynamic>.from(root), 0);
+  }
+
   /// Nested `shift` / `assignedShift` on user (or me) payloads.
   static WorkShift? tryParseFromUserPayload(Map<String, dynamic>? root) {
     if (root == null || root.isEmpty) return null;
@@ -260,6 +353,10 @@ class WorkShift {
       'current_shift',
       'shiftTemplate',
       'shift_template',
+      'shiftInfo',
+      'shift_info',
+      'shiftDetails',
+      'shift_details',
       'roster',
     ]) {
       final v = m[key];
@@ -268,6 +365,55 @@ class WorkShift {
           final w = WorkShift.fromJson(Map<String, dynamic>.from(v));
           if (looksPopulated(w)) return w;
         } catch (_) {}
+      }
+    }
+    return null;
+  }
+
+  static String? _shiftIdFromFlatMap(Map<String, dynamic> m) {
+    var sid = _pickFirstString(m, const [
+      'shiftId',
+      'shift_id',
+      'assignedShiftId',
+      'assigned_shift_id',
+      'currentShiftId',
+      'current_shift_id',
+      'workShiftId',
+      'work_shift_id',
+      'templateShiftId',
+      'template_shift_id',
+      'shiftTemplateId',
+      'shift_template_id',
+      'defaultShiftId',
+      'default_shift_id',
+      'shiftAssignmentId',
+      'shift_assignment_id',
+    ]);
+    if (sid.isNotEmpty) return sid;
+    for (final key in [
+      'shift',
+      'assignedShift',
+      'assigned_shift',
+      'workShift',
+      'work_shift',
+    ]) {
+      final sv = m[key];
+      if (sv is String && sv.trim().isNotEmpty) {
+        return sv.trim();
+      }
+      if (sv is Map) {
+        final mm = Map<String, dynamic>.from(sv);
+        sid = _pickFirstString(mm, const [
+          'id',
+          '_id',
+          'shiftId',
+          'shift_id',
+        ]);
+        if (sid.isEmpty) {
+          final oid = mm[r'$oid'] ?? mm['oid'];
+          if (oid != null) sid = oid.toString().trim();
+        }
+        if (sid.isNotEmpty) return sid;
       }
     }
     return null;
@@ -283,27 +429,25 @@ class WorkShift {
         break;
       }
     }
-    var sid = _pickFirstString(m, const [
-      'shiftId',
-      'shift_id',
-      'assignedShiftId',
-      'assigned_shift_id',
-      'currentShiftId',
-      'current_shift_id',
-      'workShiftId',
-      'work_shift_id',
-      'templateShiftId',
-      'template_shift_id',
-      'shiftTemplateId',
-      'shift_template_id',
-    ]);
-    if (sid.isEmpty) {
-      final sv = m['shift'];
-      if (sv is String && sv.trim().isNotEmpty) {
-        sid = sv.trim();
+    var sid = _shiftIdFromFlatMap(m);
+    if (sid == null || sid.isEmpty) {
+      for (final hk in [
+        'hrInfo',
+        'hr_info',
+        'hr',
+        'employee',
+        'profile',
+        'employeeProfile',
+        'employee_profile',
+      ]) {
+        final v = m[hk];
+        if (v is Map) {
+          sid = _shiftIdFromFlatMap(Map<String, dynamic>.from(v));
+          if (sid != null && sid.isNotEmpty) return sid;
+        }
       }
     }
-    return sid.isEmpty ? null : sid;
+    return (sid == null || sid.isEmpty) ? null : sid;
   }
 
   static String _parseShiftDocumentId(dynamic v) {
@@ -349,6 +493,25 @@ class WorkShift {
 
   static String _norm(String? s) => (s ?? '').trim().toLowerCase();
 
+  static String _hexNorm(String s) {
+    return s.trim().toLowerCase().replaceAll(RegExp(r'[^0-9a-f]'), '');
+  }
+
+  /// When the API mixes 12- and 24-char hex ids (Mongo ObjectId vs short form).
+  static bool _idsLooseHexMatch(String a, String b) {
+    final x = _hexNorm(a);
+    final y = _hexNorm(b);
+    if (x.isEmpty || y.isEmpty) return false;
+    if (x == y) return true;
+    if (x.length == 24 && y.length == 12) {
+      return x.endsWith(y) || x.startsWith(y);
+    }
+    if (y.length == 24 && x.length == 12) {
+      return y.endsWith(x) || y.startsWith(x);
+    }
+    return false;
+  }
+
   /// Merge `employeeIds` from [detail] (e.g. `GET /shifts/:id`) into [base] when the list
   /// endpoint omitted the roster. Preserves order: [base] first, then new ids from [detail].
   static WorkShift mergeRosterFromDetail(WorkShift base, WorkShift? detail) {
@@ -385,7 +548,9 @@ class WorkShift {
   /// so a shell prefetch (missing times) does not hide a populated profile shift.
   static WorkShift mergeWithSameId(WorkShift a, WorkShift b) {
     if (a.id.trim().isEmpty || b.id.trim().isEmpty) return a;
-    if (_norm(a.id) != _norm(b.id)) return a;
+    if (_norm(a.id) != _norm(b.id) && !_idsLooseHexMatch(a.id, b.id)) {
+      return a;
+    }
     return WorkShift(
       id: a.id,
       name: _preferNonEmptyString(a.name, b.name),
@@ -451,7 +616,9 @@ class WorkShift {
 
     if (pre != null) {
       final pid = pre.id.trim();
-      final idOk = wanted.isEmpty || _norm(pid) == _norm(wanted);
+      final idOk = wanted.isEmpty ||
+          _norm(pid) == _norm(wanted) ||
+          _idsLooseHexMatch(pid, wanted);
       if (idOk) {
         final st = pre.startTime.trim();
         final et = pre.endTime.trim();
@@ -503,6 +670,9 @@ class WorkShift {
     final key = _norm(shiftId);
     for (final s in shifts) {
       if (_norm(s.id) == key) return s;
+    }
+    for (final s in shifts) {
+      if (_idsLooseHexMatch(shiftId, s.id)) return s;
     }
     return null;
   }
@@ -594,6 +764,26 @@ class WorkShift {
     return candidates.first;
   }
 
+  /// Shift for a reconciliation / team row: embedded [user] (shift id + roster) then [applicantUserId] on rosters.
+  static WorkShift? resolveForApplicant({
+    required List<WorkShift> shifts,
+    User? embeddedUser,
+    required String applicantUserId,
+  }) {
+    if (embeddedUser != null) {
+      WorkShift? s = byId(embeddedUser.shiftId, shifts);
+      s ??= forUser(
+        embeddedUser.id,
+        shifts,
+        userEmail: embeddedUser.email,
+      );
+      if (s != null) return s;
+    }
+    final id = applicantUserId.trim();
+    if (id.isEmpty) return null;
+    return forUser(id, shifts);
+  }
+
   static String weekdayLabel(int i) {
     const names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     if (i >= 0 && i < names.length) return names[i];
@@ -603,5 +793,16 @@ class WorkShift {
   String get weekendDaysLabel {
     if (weekendDays.isEmpty) return '—';
     return weekendDays.map(weekdayLabel).join(', ');
+  }
+
+  /// Single line for attendance UI: window and optional template name.
+  String get timingDisplayLine {
+    final a = startTime.trim();
+    final b = endTime.trim();
+    final n = name.trim();
+    if (a.isEmpty || b.isEmpty) {
+      return n.isNotEmpty ? n : 'Shift (times not set)';
+    }
+    return n.isNotEmpty ? '$a – $b · $n' : '$a – $b';
   }
 }

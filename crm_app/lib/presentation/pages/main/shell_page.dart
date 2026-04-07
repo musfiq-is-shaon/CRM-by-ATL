@@ -228,6 +228,15 @@ class _ShellPageState extends ConsumerState<ShellPage>
     if (id == _kDashboard) {
       prefetchCrmLookupData(ref, me);
       ref.read(notificationsProvider.notifier).load(silent: true);
+      final uid = ref.read(currentUserIdProvider)?.trim();
+      if (uid != null && uid.isNotEmpty) {
+        final loadAttendance = me == null ||
+            me.hasNav(RbacPageKey.attendance) ||
+            me.hasNav(RbacPageKey.hr);
+        if (loadAttendance) {
+          ref.read(attendanceProvider.notifier).loadToday();
+        }
+      }
       if (me == null) return;
       if (me.hasNav(RbacPageKey.sales)) {
         ref.read(salesProvider.notifier).loadSales();
@@ -237,9 +246,6 @@ class _ShellPageState extends ConsumerState<ShellPage>
       }
       if (me.canNavContacts) {
         ref.read(contactsProvider.notifier).loadContacts();
-      }
-      if (me.hasNav(RbacPageKey.attendance) || me.hasNav(RbacPageKey.hr)) {
-        ref.read(attendanceProvider.notifier).loadToday();
       }
       return;
     }

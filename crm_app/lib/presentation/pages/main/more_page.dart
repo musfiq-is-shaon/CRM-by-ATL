@@ -4,6 +4,7 @@ import '../../../core/constants/rbac_page_keys.dart';
 import '../../../core/theme/app_theme_colors.dart';
 import '../../../core/theme/design_tokens.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/shift_provider.dart';
 import '../../providers/rbac_provider.dart';
 import '../../providers/notifications_provider.dart';
 import '../../widgets/crm_card.dart';
@@ -22,6 +23,7 @@ class MorePage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final authState = ref.watch(authProvider);
     final user = authState.user;
+    final shiftAsync = ref.watch(userProfileShiftProvider);
     final me = ref.watch(rbacMeProvider);
     final showAttendance =
         me != null &&
@@ -88,6 +90,37 @@ class MorePage extends ConsumerWidget {
                       Text(
                         user?.email ?? '',
                         style: TextStyle(fontSize: 14, color: textSecondary),
+                      ),
+                      shiftAsync.when(
+                        skipLoadingOnReload: true,
+                        data: (w) {
+                          final line = w?.timingDisplayLine.trim() ?? '';
+                          if (line.isEmpty) return const SizedBox.shrink();
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 6),
+                            child: Text(
+                              line,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: textTertiary,
+                                fontWeight: FontWeight.w500,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          );
+                        },
+                        loading: () => Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: Text(
+                            'Loading shift…',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: textTertiary,
+                            ),
+                          ),
+                        ),
+                        error: (e, _) => const SizedBox.shrink(),
                       ),
                       const SizedBox(height: 4),
                       Container(

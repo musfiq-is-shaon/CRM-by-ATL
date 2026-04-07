@@ -50,6 +50,12 @@ class User {
       'assigned_shift_id',
       'currentShiftId',
       'current_shift_id',
+      'defaultShiftId',
+      'default_shift_id',
+      'shiftAssignmentId',
+      'shift_assignment_id',
+      'selectedShiftId',
+      'selected_shift_id',
     ]) {
       final v = json[k];
       if (v == null) continue;
@@ -64,10 +70,8 @@ class User {
       'work_shift',
     ]) {
       final v = json[key];
-      if (v is Map) {
-        final m = Map<String, dynamic>.from(v);
-        final id = m['id'] ?? m['_id'] ?? m['shiftId'] ?? m['shift_id'];
-        final s = _idLikeToString(id);
+      if (v is String || v is Map) {
+        final s = _idLikeToString(v);
         if (s != null && s.isNotEmpty) return s;
       }
     }

@@ -82,6 +82,9 @@ class AppConstants {
   static String leavesHolidayById(String holidayId) =>
       '/api/leaves/holidays/$holidayId';
 
+  /// Full HR record for a user (may include nested shift). Admin or HR module access.
+  static String hrInfo(String userId) => '/api/hr/info/$userId';
+
   static String leavesById(String leaveId) => '/api/leaves/$leaveId';
   static String leavesApprove(String leaveId) => '/api/leaves/$leaveId/approve';
   static String leavesReject(String leaveId) => '/api/leaves/$leaveId/reject';

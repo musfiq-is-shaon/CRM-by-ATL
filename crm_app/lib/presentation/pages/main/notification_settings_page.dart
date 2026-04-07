@@ -1,10 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../core/theme/app_theme_colors.dart';
+import '../../../data/models/task_model.dart';
+import '../../../core/services/attendance_reminder_controller.dart';
 import '../../../core/services/notification_service.dart';
+import '../../../core/theme/app_theme_colors.dart';
 import '../../providers/notification_provider.dart';
 import '../../providers/task_provider.dart';
 import '../../widgets/crm_card.dart';
+
+Future<void> _rescheduleTasksAndShiftAlerts(WidgetRef ref, List<Task> tasks) async {
+  await ref.read(notificationSettingsProvider.notifier).rescheduleNotifications(tasks);
+  await scheduleAttendanceReminders(ref.read);
+}
 
 class NotificationSettingsPage extends ConsumerWidget {
   const NotificationSettingsPage({super.key});
@@ -62,7 +69,7 @@ class NotificationSettingsPage extends ConsumerWidget {
                             ),
                           ),
                           Text(
-                            'Receive task deadline reminders',
+                            'Task deadlines and shift check-in reminders',
                             style: TextStyle(
                               fontSize: 12,
                               color: textSecondary,
@@ -75,8 +82,8 @@ class NotificationSettingsPage extends ConsumerWidget {
                       value: settings.enabled,
                       onChanged: (value) async {
                         await settingsNotifier.setEnabled(value);
-                        // Reschedule notifications with current tasks
-                        await settingsNotifier.rescheduleNotifications(
+                        await _rescheduleTasksAndShiftAlerts(
+                          ref,
                           tasksState.tasks,
                         );
                       },
@@ -102,10 +109,7 @@ class NotificationSettingsPage extends ConsumerWidget {
                 selectedValue: settings.daysBefore,
                 onTap: () async {
                   await settingsNotifier.setDaysBefore(0);
-                  // Reschedule notifications with current tasks
-                  await settingsNotifier.rescheduleNotifications(
-                    tasksState.tasks,
-                  );
+                  await _rescheduleTasksAndShiftAlerts(ref, tasksState.tasks);
                 },
                 textPrimary: textPrimary,
                 textSecondary: textSecondary,
@@ -119,10 +123,7 @@ class NotificationSettingsPage extends ConsumerWidget {
                 selectedValue: settings.daysBefore,
                 onTap: () async {
                   await settingsNotifier.setDaysBefore(1);
-                  // Reschedule notifications with current tasks
-                  await settingsNotifier.rescheduleNotifications(
-                    tasksState.tasks,
-                  );
+                  await _rescheduleTasksAndShiftAlerts(ref, tasksState.tasks);
                 },
                 textPrimary: textPrimary,
                 textSecondary: textSecondary,
@@ -136,10 +137,7 @@ class NotificationSettingsPage extends ConsumerWidget {
                 selectedValue: settings.daysBefore,
                 onTap: () async {
                   await settingsNotifier.setDaysBefore(3);
-                  // Reschedule notifications with current tasks
-                  await settingsNotifier.rescheduleNotifications(
-                    tasksState.tasks,
-                  );
+                  await _rescheduleTasksAndShiftAlerts(ref, tasksState.tasks);
                 },
                 textPrimary: textPrimary,
                 textSecondary: textSecondary,
@@ -153,10 +151,7 @@ class NotificationSettingsPage extends ConsumerWidget {
                 selectedValue: settings.daysBefore,
                 onTap: () async {
                   await settingsNotifier.setDaysBefore(7);
-                  // Reschedule notifications with current tasks
-                  await settingsNotifier.rescheduleNotifications(
-                    tasksState.tasks,
-                  );
+                  await _rescheduleTasksAndShiftAlerts(ref, tasksState.tasks);
                 },
                 textPrimary: textPrimary,
                 textSecondary: textSecondary,
@@ -176,7 +171,7 @@ class NotificationSettingsPage extends ConsumerWidget {
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      'Notifications are sent for upcoming task deadlines based on your selected preference.',
+                      'Task alerts use your timing below. Shift check-in reminders fire every 5 minutes from your shift start until you check in (or until shift end), when you have an assigned shift.',
                       style: TextStyle(fontSize: 13, color: textSecondary),
                     ),
                   ),

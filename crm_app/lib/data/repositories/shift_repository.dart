@@ -1,5 +1,7 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/constants/app_constants.dart';
+import '../../core/errors/exceptions.dart';
 import '../../core/network/api_client.dart';
 import '../models/shift_model.dart';
 
@@ -13,16 +15,73 @@ class ShiftRepository {
     return _parseShiftList(response.data).map(WorkShift.fromJson).toList();
   }
 
+  /// Same as [getShifts], then merges `employeeIds` from `GET /shifts/:id` when the list omits rosters.
+  Future<List<WorkShift>> getShiftsEnriched() async {
+    var list = await getShifts();
+    // Avoid N+1 GET /shifts/:id when the list payload already has times (detail often 403 for
+    // employees; roster merge is only needed when we lack employeeIds *and* times).
+    final need = list
+        .where(
+          (s) =>
+              s.id.trim().isNotEmpty &&
+              s.employeeIds.isEmpty &&
+              (s.startTime.trim().isEmpty || s.endTime.trim().isEmpty),
+        )
+        .toList();
+    if (need.isEmpty) return list;
+    final details = await Future.wait(
+      need.map((s) => getShiftById(s.id)),
+    );
+    final byId = <String, WorkShift>{};
+    for (var i = 0; i < need.length; i++) {
+      final d = details[i];
+      if (d != null && d.id.trim().isNotEmpty) {
+        byId[d.id.trim().toLowerCase()] = d;
+      }
+    }
+    return list
+        .map(
+          (s) => WorkShift.mergeRosterFromDetail(
+            s,
+            byId[s.id.trim().toLowerCase()],
+          ),
+        )
+        .toList();
+  }
+
   /// Single shift (often works for assigned employees when list-all is admin-only).
   Future<WorkShift?> getShiftById(String shiftId) async {
     final tid = shiftId.trim();
     if (tid.isEmpty) return null;
     try {
       final response = await _api.get(AppConstants.shiftById(tid));
-      final map = _unwrapMap(response.data);
-      if (map.isEmpty) return null;
+      var map = _unwrapMap(response.data);
+      if (map.isEmpty && response.data is Map) {
+        final m = Map<String, dynamic>.from(response.data as Map);
+        final looksLikeShift = m.containsKey('startTime') ||
+            m.containsKey('start_time') ||
+            m.containsKey('endTime') ||
+            m.containsKey('end_time') ||
+            m.containsKey('name') ||
+            m.containsKey('employeeIds') ||
+            m.containsKey('employee_ids');
+        if (looksLikeShift) map = m;
+      }
+      if (map.isEmpty) {
+        if (kDebugMode) {
+          debugPrint(
+            'getShiftById($tid): empty after unwrap, '
+            'topKeys=${response.data is Map ? (response.data as Map).keys.toList() : response.data.runtimeType}',
+          );
+        }
+        return null;
+      }
       return WorkShift.fromJson(map);
-    } catch (_) {
+    } catch (e, st) {
+      if (kDebugMode) {
+        final sc = e is AppException ? e.statusCode : null;
+        debugPrint('getShiftById($tid) status=$sc: $e\n$st');
+      }
       return null;
     }
   }
