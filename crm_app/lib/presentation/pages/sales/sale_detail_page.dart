@@ -715,7 +715,7 @@ class _SaleDetailPageState extends ConsumerState<SaleDetailPage> {
                     _confettiController.stop();
                     setState(() => _celebrating = false);
                     if (!context.mounted) return;
-                    final orderCreated = await Navigator.of(context).push<bool>(
+                    await Navigator.of(context).push<bool>(
                       MaterialPageRoute(
                         builder: (ctx) =>
                             OrderFormPage(closedWonSale: freshSale),

@@ -34,15 +34,77 @@ class _TodayAttendanceCardWidgetState
     extends ConsumerState<TodayAttendanceCardWidget> {
   String _statusText(TodayAttendance? todayAttendance) {
     if (todayAttendance == null || todayAttendance.safeStatus == 'pending') {
-      return 'Pending';
+      return 'Not checked in yet';
     }
     if (todayAttendance.safeStatus == 'no_shift') {
       return 'Check-in unavailable';
     }
     if (todayAttendance.safeStatus == 'checked_in') {
-      return 'Pending';
+      return 'Checked in';
     }
-    return 'Completed';
+    return 'Day complete';
+  }
+
+  String? _statusHint(TodayAttendance? todayAttendance) {
+    if (todayAttendance == null) return null;
+    switch (todayAttendance.safeStatus) {
+      case 'pending':
+        return 'Hold below to check in.';
+      case 'checked_in':
+        return 'Hold below to check out.';
+      case 'completed':
+        return null;
+      case 'no_shift':
+        return null;
+      default:
+        return null;
+    }
+  }
+
+  Widget _buildTimeChip(
+    ColorScheme cs,
+    Color borderColor,
+    Color textPrimary,
+    Color textSecondary,
+    String label,
+    DateTime? time,
+  ) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHighest.withValues(alpha: 0.65),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: borderColor.withValues(alpha: 0.75),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.2,
+              color: textSecondary,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            time != null ? _formatTime(time) : '—',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              height: 1.1,
+              color: time != null
+                  ? textPrimary
+                  : textSecondary.withValues(alpha: 0.55),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Color _statusColor(BuildContext context, TodayAttendance? todayAttendance) {
@@ -98,8 +160,12 @@ class _TodayAttendanceCardWidgetState
     final showLocOut = locOut.isNotEmpty && hasCheckOutEvent;
     final hasLocationLines = showLocIn || showLocOut;
     final textPrimary = AppThemeColors.textPrimaryColor(context);
+    final textSecondary = AppThemeColors.textSecondaryColor(context);
     final surfaceColor = AppThemeColors.surfaceColor(context);
+    final borderColor = AppThemeColors.borderColor(context);
+    final cs = Theme.of(context).colorScheme;
     final statusColor = _statusColor(context, todayAttendance);
+    final statusHint = _statusHint(todayAttendance);
 
     // Listen for errors and show snackbar
     ref.listen(attendanceProvider, (previous, next) {
@@ -117,36 +183,42 @@ class _TodayAttendanceCardWidgetState
     });
 
     return Container(
-      padding: AppThemeColors.pagePaddingAll,
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: surfaceColor,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // Status Header
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: statusColor.withValues(alpha: 0.1),
+                  color: statusColor.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: statusColor.withValues(alpha: 0.32),
+                    width: 1,
+                  ),
                 ),
                 child: Icon(
                   _statusIcon(todayAttendance),
                   color: statusColor,
-                  size: 28,
+                  size: 24,
                 ),
               ),
-              const SizedBox(width: 16),
+              const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -154,30 +226,44 @@ class _TodayAttendanceCardWidgetState
                     Text(
                       _statusText(todayAttendance),
                       style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        height: 1.2,
                         color: textPrimary,
                       ),
                     ),
+                    if (statusHint != null) ...[
+                      const SizedBox(height: 3),
+                      Text(
+                        statusHint,
+                        style: TextStyle(
+                          fontSize: 12,
+                          height: 1.3,
+                          color: textSecondary,
+                        ),
+                      ),
+                    ],
                     if (todayAttendance != null) ...[
+                      const SizedBox(height: 4),
                       Text(
                         todayAttendance.date,
                         style: TextStyle(
-                          fontSize: 14,
-                          color: AppThemeColors.textSecondaryColor(context),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: textSecondary,
                         ),
                       ),
                       if (todayAttendance.isWeekend == true ||
                           todayAttendance.isHoliday == true) ...[
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 2),
                         Text(
                           [
                             if (todayAttendance.isWeekend == true) 'Weekend',
                             if (todayAttendance.isHoliday == true) 'Holiday',
                           ].join(' · '),
                           style: TextStyle(
-                            fontSize: 12,
-                            color: AppThemeColors.textSecondaryColor(context),
+                            fontSize: 11,
+                            color: textSecondary,
                             fontStyle: FontStyle.italic,
                           ),
                         ),
@@ -223,51 +309,65 @@ class _TodayAttendanceCardWidgetState
                 ),
             ],
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 12),
           // Times Row
           Row(
             children: [
               Expanded(
-                child: timeChip('Check In', todayAttendance?.checkInTime),
+                child: _buildTimeChip(
+                  cs,
+                  borderColor,
+                  textPrimary,
+                  textSecondary,
+                  'Check-in',
+                  todayAttendance?.checkInTime,
+                ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 8),
               Expanded(
-                child: timeChip('Check Out', todayAttendance?.checkOutTime),
+                child: _buildTimeChip(
+                  cs,
+                  borderColor,
+                  textPrimary,
+                  textSecondary,
+                  'Check-out',
+                  todayAttendance?.checkOutTime,
+                ),
               ),
             ],
           ),
           if (hasLocationLines) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
             if (showLocIn)
               AttendanceLocationRow(
                 icon: Icons.login_rounded,
                 caption: 'Check-in location',
                 value: locIn,
                 textPrimary: textPrimary,
-                textSecondary: AppThemeColors.textSecondaryColor(context),
+                textSecondary: textSecondary,
               ),
-            if (showLocIn && showLocOut) const SizedBox(height: 8),
+            if (showLocIn && showLocOut) const SizedBox(height: 6),
             if (showLocOut)
               AttendanceLocationRow(
                 icon: Icons.logout_rounded,
                 caption: 'Check-out location',
                 value: locOut,
                 textPrimary: textPrimary,
-                textSecondary: AppThemeColors.textSecondaryColor(context),
+                textSecondary: textSecondary,
               ),
           ],
           if (todayAttendance?.totalHours != null) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
             Text(
               'Total: ${(todayAttendance!.totalHours! * 100).round() / 100}h',
               style: TextStyle(
-                fontSize: 16,
+                fontSize: 14,
                 fontWeight: FontWeight.w600,
                 color: textPrimary,
               ),
             ),
           ],
-          const SizedBox(height: 20),
+          const SizedBox(height: 10),
           if (todayAttendance != null &&
               todayAttendance.safeStatus == 'no_shift') ...[
             Builder(
@@ -275,8 +375,8 @@ class _TodayAttendanceCardWidgetState
                 final s = Theme.of(context).colorScheme.secondary;
                 return Container(
               width: double.infinity,
-              padding: const EdgeInsets.all(14),
-              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.all(10),
+              margin: const EdgeInsets.only(bottom: 6),
               decoration: BoxDecoration(
                 color: Theme.of(context).colorScheme.secondaryContainer,
                 borderRadius: BorderRadius.circular(12),
@@ -287,14 +387,14 @@ class _TodayAttendanceCardWidgetState
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.info_outline, color: s, size: 22),
-                  const SizedBox(width: 10),
+                  Icon(Icons.info_outline, color: s, size: 20),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       'Check-in and check-out are not enabled for your account. Contact HR.',
                       style: TextStyle(
-                        fontSize: 14,
-                        height: 1.35,
+                        fontSize: 13,
+                        height: 1.3,
                         color: textPrimary,
                       ),
                     ),
@@ -309,24 +409,24 @@ class _TodayAttendanceCardWidgetState
           if (todayAttendance != null &&
               todayAttendance.safeStatus == 'completed') ...[
             Container(
-              padding: const EdgeInsets.all(16),
-              margin: const EdgeInsets.only(bottom: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              margin: const EdgeInsets.only(bottom: 8),
               decoration: BoxDecoration(
                 color: statusColor.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(10),
                 border: Border.all(color: statusColor.withValues(alpha: 0.4)),
               ),
               child: Row(
                 children: [
-                  Icon(Icons.check_circle, color: statusColor, size: 24),
-                  const SizedBox(width: 12),
+                  Icon(Icons.check_circle, color: statusColor, size: 20),
+                  const SizedBox(width: 10),
                   Expanded(
                     child: const Text(
                       "Today's attendance completed",
                       style: TextStyle(
-                        fontSize: 16,
+                        fontSize: 14,
                         fontWeight: FontWeight.w600,
-                        height: 1.3,
+                        height: 1.25,
                       ),
                     ),
                   ),
@@ -337,7 +437,7 @@ class _TodayAttendanceCardWidgetState
           // Hold to check in / check out (fingerprint-style ring; same duration + haptics)
           if (todayAttendance?.safeStatus != 'completed' &&
               todayAttendance?.safeStatus != 'no_shift') ...[
-            const SizedBox(height: 16),
+            const SizedBox(height: 10),
             Builder(
               builder: (context) {
                 final flow = todayAttendance?.safeStatus ?? 'pending';
@@ -346,7 +446,7 @@ class _TodayAttendanceCardWidgetState
                   return HoldToAttendanceAction(
                     enabled: !busy,
                     label: 'Hold to check in',
-                    accentColor: Theme.of(context).colorScheme.tertiary,
+                    accentColor: Theme.of(context).colorScheme.primary,
                     onHoldComplete: () => _fetchLocationAndSubmit(
                       context,
                       ref,
@@ -727,32 +827,6 @@ class _TodayAttendanceCardWidgetState
   }
 }
 
-Widget timeChip(String label, DateTime? time) {
-  return Container(
-    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-    decoration: BoxDecoration(
-      color: Colors.grey.withValues(alpha: 0.1),
-      borderRadius: BorderRadius.circular(8),
-    ),
-    child: Column(
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w500,
-            color: Colors.grey,
-          ),
-        ),
-        Text(
-          time != null ? _formatTime(time) : '--:--',
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-        ),
-      ],
-    ),
-  );
-}
-
 String _formatTime(DateTime time) {
   final local = time.toLocal();
   final minute = local.minute.toString().padLeft(2, '0');
@@ -784,7 +858,7 @@ class HoldToAttendanceAction extends StatefulWidget {
 
 class _HoldToAttendanceActionState extends State<HoldToAttendanceAction>
     with SingleTickerProviderStateMixin {
-  static const double _ringSize = 140;
+  static const double _ringSize = 148;
   static const Duration _holdDuration = Duration(milliseconds: 1600);
 
   late AnimationController _controller;
@@ -857,91 +931,114 @@ class _HoldToAttendanceActionState extends State<HoldToAttendanceAction>
       opacity: disabled && !_busy ? 0.55 : 1,
       child: AbsorbPointer(
         absorbing: disabled,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTapDown: _onTapDown,
-              onTapUp: (_) => _onTapEnd(),
-              onTapCancel: _onTapEnd,
-              child: AnimatedBuilder(
-                animation: _controller,
-                builder: (context, _) {
-                  final p = _controller.value.clamp(0.0, 1.0);
-                  final track = Color.lerp(
-                    accent.withValues(alpha: 0.14),
-                    accent.withValues(alpha: 0.22),
-                    p,
-                  )!;
-                  return SizedBox(
-                    width: _ringSize,
-                    height: _ringSize,
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        Positioned.fill(
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: accent.withValues(alpha: 0.06 + p * 0.08),
-                              boxShadow: [
-                                BoxShadow(
-                                  color:
-                                      accent.withValues(alpha: 0.12 + p * 0.18),
-                                  blurRadius: 18 + p * 12,
-                                  spreadRadius: p * 2,
-                                ),
-                              ],
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.fromLTRB(12, 14, 12, 12),
+          decoration: BoxDecoration(
+            color: accent.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: accent.withValues(alpha: 0.42),
+              width: 1.5,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: accent.withValues(alpha: 0.08),
+                blurRadius: 10,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTapDown: _onTapDown,
+                onTapUp: (_) => _onTapEnd(),
+                onTapCancel: _onTapEnd,
+                child: AnimatedBuilder(
+                  animation: _controller,
+                  builder: (context, _) {
+                    final p = _controller.value.clamp(0.0, 1.0);
+                    final track = Color.lerp(
+                      accent.withValues(alpha: 0.2),
+                      accent.withValues(alpha: 0.32),
+                      p,
+                    )!;
+                    return SizedBox(
+                      width: _ringSize,
+                      height: _ringSize,
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          Positioned.fill(
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: accent.withValues(alpha: 0.08 + p * 0.1),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: accent.withValues(
+                                      alpha: 0.18 + p * 0.22,
+                                    ),
+                                    blurRadius: 14 + p * 10,
+                                    spreadRadius: p * 2,
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
-                        ),
-                        CustomPaint(
-                          size: const Size(_ringSize, _ringSize),
-                          painter: _FingerprintHoldRingPainter(
-                            progress: p,
-                            accent: accent,
-                            trackColor: track,
+                          CustomPaint(
+                            size: const Size(_ringSize, _ringSize),
+                            painter: _FingerprintHoldRingPainter(
+                              progress: p,
+                              accent: accent,
+                              trackColor: track,
+                            ),
                           ),
-                        ),
-                        Icon(
-                          Icons.fingerprint,
-                          size: 56,
-                          color: Color.lerp(
-                            accent.withValues(alpha: 0.65),
-                            accent,
-                            p,
+                          Icon(
+                            Icons.fingerprint_rounded,
+                            size: 56,
+                            color: Color.lerp(
+                              accent.withValues(alpha: 0.55),
+                              accent,
+                              p,
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-            ),
-            const SizedBox(height: 14),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: Text(
-                widget.label,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: textPrimary,
+                        ],
+                      ),
+                    );
+                  },
                 ),
               ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Keep holding until the ring completes',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 12,
-                color: textSecondary,
+              const SizedBox(height: 10),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 2),
+                child: Text(
+                  widget.label,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    height: 1.2,
+                    color: textPrimary,
+                  ),
+                ),
               ),
-            ),
-          ],
+              const SizedBox(height: 4),
+              Text(
+                'Hold until the ring completes · release to cancel',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 11,
+                  height: 1.25,
+                  fontWeight: FontWeight.w500,
+                  color: textSecondary,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -960,21 +1057,28 @@ class _FingerprintHoldRingPainter extends CustomPainter {
   final Color accent;
   final Color trackColor;
 
-  static const double _stroke = 4.5;
+  static const double _stroke = 6.5;
 
   @override
   void paint(Canvas canvas, Size size) {
     final c = Offset(size.width / 2, size.height / 2);
-    final r = size.width / 2 - _stroke;
+    final r = size.width / 2 - _stroke - 1.5;
 
-    for (var i = 0; i < 3; i++) {
-      final rr = r * (0.38 + i * 0.17);
+    for (var i = 0; i < 2; i++) {
+      final rr = r * (0.42 + i * 0.22);
       final p = Paint()
-        ..color = accent.withValues(alpha: 0.05 + i * 0.035)
+        ..color = accent.withValues(alpha: 0.09 + i * 0.05)
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 1;
+        ..strokeWidth = 1.5;
       canvas.drawCircle(c, rr, p);
     }
+
+    final outerGuide = Paint()
+      ..color = accent.withValues(alpha: 0.16)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2
+      ..strokeCap = StrokeCap.round;
+    canvas.drawCircle(c, r + 1.25, outerGuide);
 
     final track = Paint()
       ..color = trackColor

@@ -364,8 +364,22 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
               if (canAttendance)
                 SliverToBoxAdapter(
                   child: Padding(
-                    padding: AppThemeColors.pagePaddingHorizontalBottomXs,
-                    child: const TodayAttendanceCardWidget(),
+                    padding: AppThemeColors.pagePaddingHorizontal,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Attendance',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        const TodayAttendanceCardWidget(),
+                      ],
+                    ),
                   ),
                 ),
 

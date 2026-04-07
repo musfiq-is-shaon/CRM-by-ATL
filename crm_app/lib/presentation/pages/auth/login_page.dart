@@ -64,88 +64,100 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       context: context,
       showDragHandle: true,
       isDismissible: true,
+      isScrollControlled: true,
       builder: (sheetCtx) {
         final textPrimary = AppThemeColors.textPrimaryColor(sheetCtx);
         final textSecondary = AppThemeColors.textSecondaryColor(sheetCtx);
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
-                child: Text(
-                  'Saved accounts',
-                  style: Theme.of(sheetCtx).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: textPrimary,
-                      ),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-                child: Text(
-                  'Choose an account to fill email and password.',
-                  style: TextStyle(fontSize: 13, color: textSecondary, height: 1.3),
-                ),
-              ),
-              ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxHeight: math.min(
-                    420,
-                    MediaQuery.sizeOf(sheetCtx).height * 0.5,
+        final viewInsets = MediaQuery.viewInsetsOf(sheetCtx);
+        final viewH = MediaQuery.sizeOf(sheetCtx).height;
+        // Cap sheet so header + scrollable list + footer fit the screen (avoids overflow with many accounts).
+        final maxSheet = math.max(
+          200.0,
+          viewH - viewInsets.top - viewInsets.bottom - 32,
+        );
+        final sheetHeight = math.min(math.max(260.0, viewH * 0.72), maxSheet);
+
+        return Padding(
+          padding: EdgeInsets.only(bottom: viewInsets.bottom),
+          child: SafeArea(
+            child: SizedBox(
+              height: sheetHeight,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
+                    child: Text(
+                      'Saved accounts',
+                      style: Theme.of(sheetCtx).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: textPrimary,
+                          ),
+                    ),
                   ),
-                ),
-                child: ListView.separated(
-                  shrinkWrap: true,
-                  itemCount: _savedAccounts.length,
-                  separatorBuilder: (context, index) =>
-                      const Divider(height: 1),
-                  itemBuilder: (context, i) {
-                    // Newest saved accounts last in storage — show recent first.
-                    final a = _savedAccounts[_savedAccounts.length - 1 - i];
-                    return ListTile(
-                      leading: Icon(
-                        Icons.account_circle_outlined,
-                        color: Theme.of(sheetCtx).colorScheme.primary,
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                    child: Text(
+                      'Choose an account to fill email and password.',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: textSecondary,
+                        height: 1.3,
                       ),
-                      title: Text(
-                        a.email,
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          color: textPrimary,
-                        ),
-                      ),
-                      subtitle: Text(
-                        'Tap to sign in with saved password',
-                        style: TextStyle(fontSize: 12, color: textSecondary),
-                      ),
-                      onTap: () {
-                        setState(() {
-                          _rememberMe = true;
-                          _emailController.text = a.email;
-                          _passwordController.text = a.password;
-                        });
-                        ref.read(authProvider.notifier).clearError();
-                        Navigator.of(sheetCtx).pop(true);
-                        _emailFocus.unfocus();
-                        WidgetsBinding.instance.addPostFrameCallback((_) {
-                          if (!mounted) return;
-                          FocusScope.of(loginCtx).requestFocus(_passwordFocus);
-                        });
+                    ),
+                  ),
+                  Expanded(
+                    child: ListView.separated(
+                      itemCount: _savedAccounts.length,
+                      separatorBuilder: (context, index) =>
+                          const Divider(height: 1),
+                      itemBuilder: (context, i) {
+                        // Newest saved accounts last in storage — show recent first.
+                        final a = _savedAccounts[_savedAccounts.length - 1 - i];
+                        return ListTile(
+                          leading: Icon(
+                            Icons.account_circle_outlined,
+                            color: Theme.of(sheetCtx).colorScheme.primary,
+                          ),
+                          title: Text(
+                            a.email,
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: textPrimary,
+                            ),
+                          ),
+                          subtitle: Text(
+                            'Tap to sign in with saved password',
+                            style: TextStyle(fontSize: 12, color: textSecondary),
+                          ),
+                          onTap: () {
+                            setState(() {
+                              _rememberMe = true;
+                              _emailController.text = a.email;
+                              _passwordController.text = a.password;
+                            });
+                            ref.read(authProvider.notifier).clearError();
+                            Navigator.of(sheetCtx).pop(true);
+                            _emailFocus.unfocus();
+                            WidgetsBinding.instance.addPostFrameCallback((_) {
+                              if (!mounted) return;
+                              FocusScope.of(loginCtx).requestFocus(_passwordFocus);
+                            });
+                          },
+                        );
                       },
-                    );
-                  },
-                ),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.of(sheetCtx).pop(false),
+                      child: const Text('Type a different account'),
+                    ),
+                  ),
+                ],
               ),
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: OutlinedButton(
-                  onPressed: () => Navigator.of(sheetCtx).pop(false),
-                  child: const Text('Type a different account'),
-                ),
-              ),
-            ],
+            ),
           ),
         );
       },
