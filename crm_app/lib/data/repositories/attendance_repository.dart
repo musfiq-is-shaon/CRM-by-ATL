@@ -43,6 +43,21 @@ class AttendanceRepository {
     return rows.map(AttendanceRecord.fromJson).toList();
   }
 
+  /// Admin: `GET /api/attendance/all?period=&userId=` — all users, optional user filter.
+  Future<List<AttendanceRecord>> getAllAttendance({
+    String period = 'today',
+    String? userId,
+  }) async {
+    final qp = <String, dynamic>{'period': period};
+    if (userId != null && userId.isNotEmpty) qp['userId'] = userId;
+    final response = await _apiClient.get(
+      AppConstants.attendanceAll,
+      queryParameters: qp,
+    );
+    final rows = _recordsListFromResponse(response.data);
+    return rows.map(AttendanceRecord.fromJson).toList();
+  }
+
   /// List reconciliations. Applicants: own rows. Admins: optional filters.
   Future<List<AttendanceReconciliation>> getReconciliations({
     String? status,

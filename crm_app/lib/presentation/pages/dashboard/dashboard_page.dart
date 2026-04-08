@@ -83,13 +83,13 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     final notificationsState = ref.watch(notificationsProvider);
     final me = ref.watch(rbacMeProvider);
     ref.watch(rbacAccessDigestProvider);
-    final tasksModuleAdmin =
-        ref.watch(rbacModuleAdminProvider(RbacPageKey.tasks));
+    final tasksModuleAdmin = ref.watch(
+      rbacModuleAdminProvider(RbacPageKey.tasks),
+    );
     final canSales = ref.watch(dashboardQuickActionSalesProvider);
     final canTasks = ref.watch(dashboardTasksModuleProvider);
     final canExpenses = ref.watch(dashboardQuickActionExpensesProvider);
-    final salesLead =
-        me?.isModuleAdmin(RbacPageKey.sales) ?? false;
+    final salesLead = me?.isModuleAdmin(RbacPageKey.sales) ?? false;
     final canAttendance =
         me != null &&
         (me.hasNav(RbacPageKey.attendance) || me.hasNav(RbacPageKey.hr));
@@ -206,7 +206,9 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                                 ),
                                 child: IconButton(
                                   onPressed: () {
-                                    ref.read(themeProvider.notifier).toggleTheme();
+                                    ref
+                                        .read(themeProvider.notifier)
+                                        .toggleTheme();
                                   },
                                   icon: Icon(
                                     isDarkMode
@@ -376,10 +378,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                       padding: AppThemeColors.pagePaddingHorizontalBottomTight,
                       child: Text(
                         'No pending tasks',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: textSecondary,
-                        ),
+                        style: TextStyle(fontSize: 14, color: textSecondary),
                       ),
                     ),
                   )

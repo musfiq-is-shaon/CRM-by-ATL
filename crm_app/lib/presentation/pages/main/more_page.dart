@@ -114,10 +114,7 @@ class MorePage extends ConsumerWidget {
                           padding: const EdgeInsets.only(top: 6),
                           child: Text(
                             'Loading shift…',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: textTertiary,
-                            ),
+                            style: TextStyle(fontSize: 12, color: textTertiary),
                           ),
                         ),
                         error: (e, _) => const SizedBox.shrink(),

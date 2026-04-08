@@ -32,8 +32,7 @@ class RbacState {
     );
   }
 
-  bool get isReady =>
-      status == RbacLoadStatus.loaded && me != null;
+  bool get isReady => status == RbacLoadStatus.loaded && me != null;
 }
 
 class RbacNotifier extends StateNotifier<RbacState> {
@@ -52,12 +51,16 @@ class RbacNotifier extends StateNotifier<RbacState> {
     _loadBusy = true;
     final previousMe = state.me;
     if (!silent) {
-      state = state.copyWith(status: RbacLoadStatus.loading, errorMessage: null);
+      state = state.copyWith(
+        status: RbacLoadStatus.loading,
+        errorMessage: null,
+      );
     }
     try {
       final me = await _repository.fetchMe();
       if (silent) {
-        final unchanged = previousMe != null &&
+        final unchanged =
+            previousMe != null &&
             me.sameUiAccessAs(previousMe) &&
             state.status == RbacLoadStatus.loaded;
         if (!unchanged) {
@@ -138,7 +141,8 @@ final companyProfileEditAllowedProvider = Provider<bool>((ref) {
 /// JWT admins: follow `effective.sales` once loaded (default show until then).
 final dashboardQuickActionSalesProvider = Provider<bool>((ref) {
   if (ref.watch(isAdminProvider)) {
-    return ref.watch(rbacMeProvider)?.hasModuleAccess(RbacPageKey.sales) ?? true;
+    return ref.watch(rbacMeProvider)?.hasModuleAccess(RbacPageKey.sales) ??
+        true;
   }
   final me = ref.watch(rbacMeProvider);
   if (me == null) return false;
@@ -155,15 +159,16 @@ final dashboardQuickActionExpensesProvider = Provider<bool>((ref) {
   }
   final me = ref.watch(rbacMeProvider);
   if (me == null) return false;
-  return me.hasNav(RbacPageKey.expenses) && me.hasModuleAccess(RbacPageKey.expenses);
+  return me.hasNav(RbacPageKey.expenses) &&
+      me.hasModuleAccess(RbacPageKey.expenses);
 });
 
 /// Dashboard tasks quick action and task sections: `tasks` has no bottom tab — use
 /// [RbacMe.hasModuleAccess] only. JWT admins respect `effective.tasks` when loaded.
 final dashboardTasksModuleProvider = Provider<bool>((ref) {
   if (ref.watch(isAdminProvider)) {
-    return ref.watch(rbacMeProvider)?.hasModuleAccess(RbacPageKey.tasks) ?? true;
+    return ref.watch(rbacMeProvider)?.hasModuleAccess(RbacPageKey.tasks) ??
+        true;
   }
   return ref.watch(rbacMeProvider)?.hasModuleAccess(RbacPageKey.tasks) ?? false;
 });
-

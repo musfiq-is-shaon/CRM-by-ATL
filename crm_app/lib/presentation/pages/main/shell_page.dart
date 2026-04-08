@@ -1,6 +1,7 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart' show defaultTargetPlatform, TargetPlatform;
+import 'package:flutter/foundation.dart'
+    show defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_constants.dart';
@@ -12,11 +13,7 @@ import '../../providers/contact_provider.dart';
 import '../../providers/notifications_provider.dart';
 import '../../providers/rbac_prefetch.dart';
 import '../../providers/rbac_provider.dart'
-    show
-        rbacProvider,
-        RbacState,
-        RbacLoadStatus,
-        rbacAccessDigestProvider;
+    show rbacProvider, RbacState, RbacLoadStatus, rbacAccessDigestProvider;
 import '../../providers/auth_provider.dart';
 import '../../providers/sale_provider.dart';
 import '../../providers/order_provider.dart';
@@ -123,7 +120,8 @@ class _ShellPageState extends ConsumerState<ShellPage>
 
   /// Updates navbar preview from finger x only — does not move [PageView].
   void _updateNavBarPreviewFromDrag(DragUpdateDetails details, int tabCount) {
-    final box = _bottomNavBarKey.currentContext?.findRenderObject() as RenderBox?;
+    final box =
+        _bottomNavBarKey.currentContext?.findRenderObject() as RenderBox?;
     if (box == null || !box.hasSize) return;
     final local = box.globalToLocal(details.globalPosition);
     final dx = local.dx.clamp(0.0, box.size.width);
@@ -173,7 +171,8 @@ class _ShellPageState extends ConsumerState<ShellPage>
     int tabCount,
     int selectedTab,
   ) {
-    final box = _bottomNavBarKey.currentContext?.findRenderObject() as RenderBox?;
+    final box =
+        _bottomNavBarKey.currentContext?.findRenderObject() as RenderBox?;
     var anchor = (_pageController?.page?.round() ?? selectedTab).clamp(
       0,
       tabCount - 1,
@@ -370,7 +369,8 @@ class _ShellPageState extends ConsumerState<ShellPage>
       ref.read(notificationsProvider.notifier).load(silent: true);
       final uid = ref.read(currentUserIdProvider)?.trim();
       if (uid != null && uid.isNotEmpty) {
-        final loadAttendance = me == null ||
+        final loadAttendance =
+            me == null ||
             me.hasNav(RbacPageKey.attendance) ||
             me.hasNav(RbacPageKey.hr);
         if (loadAttendance) {
@@ -431,9 +431,9 @@ class _ShellPageState extends ConsumerState<ShellPage>
       final prevIds = _tabIds(previous ?? RbacState.empty);
       final nextIds = _tabIds(next);
       final nextIdSet = nextIds.toSet();
-      ref.read(loadedTabsProvider.notifier).update(
-            (s) => s.intersection(nextIdSet),
-          );
+      ref
+          .read(loadedTabsProvider.notifier)
+          .update((s) => s.intersection(nextIdSet));
       if (prevIds.length != nextIds.length) {
         final cur = ref.read(selectedTabProvider);
         if (cur >= nextIds.length) {
@@ -450,8 +450,9 @@ class _ShellPageState extends ConsumerState<ShellPage>
         if (prevMe == null || !next.me!.sameUiAccessAs(prevMe)) {
           // Allow module data refetch when only `effective` changes (e.g. contacts user→admin).
           ref.read(loadedTabsProvider.notifier).state = {};
-          final idx =
-              ref.read(selectedTabProvider).clamp(0, nextIds.length - 1);
+          final idx = ref
+              .read(selectedTabProvider)
+              .clamp(0, nextIds.length - 1);
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (!mounted) return;
             _loadTabData(nextIds, idx);
@@ -486,16 +487,14 @@ class _ShellPageState extends ConsumerState<ShellPage>
       ),
       bottomNavigationBar: GestureDetector(
         behavior: HitTestBehavior.translucent,
-        onHorizontalDragStart: (details) => _onNavBarHorizontalDragStart(
-          details,
-          tabIds.length,
-          selectedTab,
-        ),
+        onHorizontalDragStart: (details) =>
+            _onNavBarHorizontalDragStart(details, tabIds.length, selectedTab),
         onHorizontalDragUpdate: (details) {
           _updateNavBarPreviewFromDrag(details, tabIds.length);
         },
         onHorizontalDragEnd: (_) {
-          final preview = _navBarPreviewIndex?.clamp(0, tabIds.length - 1) ??
+          final preview =
+              _navBarPreviewIndex?.clamp(0, tabIds.length - 1) ??
               selectedTab.clamp(0, tabIds.length - 1);
           setState(() {
             _navBarDragging = false;
@@ -589,10 +588,7 @@ class _ShellNavigationBar extends StatelessWidget {
           )
         : base;
     final border = isDragging
-        ? Border.all(
-            color: cs.primary.withValues(alpha: 0.38),
-            width: 1.25,
-          )
+        ? Border.all(color: cs.primary.withValues(alpha: 0.38), width: 1.25)
         : Border.all(color: borderColor);
 
     return BoxDecoration(
@@ -668,13 +664,15 @@ class _ShellNavigationBar extends StatelessWidget {
                             child: AnimatedDefaultTextStyle(
                               duration: const Duration(milliseconds: 200),
                               curve: Curves.easeOutCubic,
-                              style: Theme.of(context).textTheme.labelSmall!.copyWith(
+                              style: Theme.of(context).textTheme.labelSmall!
+                                  .copyWith(
                                     fontSize: 12,
                                     color: sel
                                         ? cs.onSurface
                                         : cs.onSurfaceVariant,
-                                    fontWeight:
-                                        sel ? FontWeight.w600 : FontWeight.w500,
+                                    fontWeight: sel
+                                        ? FontWeight.w600
+                                        : FontWeight.w500,
                                   ),
                               child: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,

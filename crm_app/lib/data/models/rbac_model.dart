@@ -2,10 +2,7 @@ import '../../core/constants/rbac_page_keys.dart';
 
 /// Response from `GET /api/rbac/me`.
 class RbacMe {
-  RbacMe({
-    required this.navPageKeys,
-    required this.effective,
-  });
+  RbacMe({required this.navPageKeys, required this.effective});
 
   /// Keys the user may open in navigation (sidebar / app tabs).
   final Set<String> navPageKeys;
@@ -80,8 +77,7 @@ class RbacMe {
   bool isModuleAdmin(String pageKey) => accessFor(pageKey) == 'admin';
 
   /// True if any module grants RBAC `admin` (not JWT — use with [isModuleAdmin] per key).
-  bool get hasAnyRbacModuleAdmin =>
-      effective.values.any((v) => v == 'admin');
+  bool get hasAnyRbacModuleAdmin => effective.values.any((v) => v == 'admin');
 
   /// Whether nav + effective permissions match (for detecting UI-impacting RBAC changes).
   bool sameUiAccessAs(RbacMe? other) {

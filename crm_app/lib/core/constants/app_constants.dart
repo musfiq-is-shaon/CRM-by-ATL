@@ -50,6 +50,9 @@ class AppConstants {
   static const String attendanceCheckOut = '/api/attendance/check-out';
   static const String attendanceRecords = '/api/attendance/records';
 
+  /// Admin only — all users' attendance (`?period=&userId=`).
+  static const String attendanceAll = '/api/attendance/all';
+
   /// Late check-in reconciliation (see Postman Attendance).
   static const String attendanceReconciliations = '/api/attendance/reconciliations';
   static String attendanceReconciliationReview(String reconciliationId) =>

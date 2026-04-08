@@ -6,11 +6,13 @@ import '../../providers/attendance_reconciliation_provider.dart';
 import '../../providers/shift_provider.dart';
 import 'attendance_admin_access.dart';
 import 'reconciliation_team_page.dart';
+import 'team_attendance_tab.dart';
 import 'widgets/attendance_hub_header.dart';
 import 'widgets/records_list.dart';
 
 /// More → Attendance: reconciliation request history, attendance records,
-/// and (JWT admin or Attendance RBAC admin) team queue. Late reasons are submitted from the dashboard
+/// (JWT admin or Attendance RBAC admin) **team attendance** (all users),
+/// and team reconciliation queue. Late reasons are submitted from the dashboard
 /// after a late check-in.
 class AttendanceHubPage extends ConsumerStatefulWidget {
   const AttendanceHubPage({super.key, this.initialTabIndex = 0});
@@ -22,7 +24,7 @@ class AttendanceHubPage extends ConsumerStatefulWidget {
 }
 
 class _AttendanceHubPageState extends ConsumerState<AttendanceHubPage>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   TabController? _tabs;
 
   @override
@@ -58,7 +60,7 @@ class _AttendanceHubPageState extends ConsumerState<AttendanceHubPage>
   @override
   Widget build(BuildContext context) {
     final isReviewer = canManageAttendanceReconciliations(ref);
-    final tabCount = isReviewer ? 3 : 2;
+    final tabCount = isReviewer ? 4 : 2;
     _syncTabController(tabCount);
 
     final surface = AppThemeColors.surfaceColor(context);
@@ -67,7 +69,10 @@ class _AttendanceHubPageState extends ConsumerState<AttendanceHubPage>
       const Tab(text: 'History'),
     ];
     if (isReviewer) {
-      tabs.add(const Tab(text: 'Team'));
+      tabs.addAll(const [
+        Tab(text: 'Team attendance'),
+        Tab(text: 'Reviews'),
+      ]);
     }
 
     final views = <Widget>[
@@ -75,7 +80,10 @@ class _AttendanceHubPageState extends ConsumerState<AttendanceHubPage>
       const _AttendanceHistoryTab(),
     ];
     if (isReviewer) {
-      views.add(const AttendanceTeamReconciliationTab());
+      views.addAll(const [
+        TeamAttendanceTab(),
+        AttendanceTeamReconciliationTab(),
+      ]);
     }
 
     return Scaffold(

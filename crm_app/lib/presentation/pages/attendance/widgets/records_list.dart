@@ -132,7 +132,14 @@ class RecordsList extends ConsumerWidget {
 class RecordTile extends StatelessWidget {
   final AttendanceRecord record;
 
-  const RecordTile({super.key, required this.record});
+  /// When set (e.g. team attendance), shown above the date.
+  final String? userHeader;
+
+  const RecordTile({
+    super.key,
+    required this.record,
+    this.userHeader,
+  });
 
   Color getStatusColor() {
     return switch (record.status) {
@@ -192,6 +199,17 @@ class RecordTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                if (userHeader != null && userHeader!.trim().isNotEmpty) ...[
+                  Text(
+                    userHeader!.trim(),
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                ],
                 Text(
                   record.date,
                   style: TextStyle(

@@ -231,123 +231,120 @@ class _ShiftsAdminPageState extends ConsumerState<ShiftsAdminPage>
             child: state.isLoading && state.shifts.isEmpty
                 ? const Center(child: CircularProgressIndicator())
                 : state.error != null && state.shifts.isEmpty
-                    ? ListView(
-                        physics: const AlwaysScrollableScrollPhysics(),
-                        padding: AppThemeColors.pagePaddingAll,
-                        children: [
-                          Text(state.error!,
-                              style: TextStyle(color: textSecondary)),
-                          const SizedBox(height: 16),
-                          FilledButton(
-                            onPressed: () =>
-                                ref.read(shiftProvider.notifier).loadShifts(),
-                            child: const Text('Retry'),
+                ? ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: AppThemeColors.pagePaddingAll,
+                    children: [
+                      Text(
+                        state.error!,
+                        style: TextStyle(color: textSecondary),
+                      ),
+                      const SizedBox(height: 16),
+                      FilledButton(
+                        onPressed: () =>
+                            ref.read(shiftProvider.notifier).loadShifts(),
+                        child: const Text('Retry'),
+                      ),
+                    ],
+                  )
+                : state.shifts.isEmpty
+                ? ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    children: [
+                      SizedBox(
+                        height: MediaQuery.of(context).size.height * 0.3,
+                      ),
+                      Center(
+                        child: Text(
+                          'No shifts yet. Tap New shift.',
+                          style: TextStyle(color: textSecondary),
+                        ),
+                      ),
+                    ],
+                  )
+                : ListView.builder(
+                    padding: AppThemeColors.listPagePaddingFab,
+                    itemCount: state.shifts.length,
+                    itemBuilder: (context, i) {
+                      final s = state.shifts[i];
+                      return Card(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        child: ListTile(
+                          title: Text(
+                            s.name,
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: textPrimary,
+                            ),
                           ),
-                        ],
-                      )
-                    : state.shifts.isEmpty
-                        ? ListView(
-                            physics: const AlwaysScrollableScrollPhysics(),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              SizedBox(
-                                  height:
-                                      MediaQuery.of(context).size.height * 0.3),
-                              Center(
-                                child: Text(
-                                  'No shifts yet. Tap New shift.',
-                                  style: TextStyle(color: textSecondary),
+                              const SizedBox(height: 4),
+                              Text(
+                                '${s.startTime} – ${s.endTime} · grace ${s.gracePeriod} min',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: textSecondary,
                                 ),
                               ),
-                            ],
-                          )
-                        : ListView.builder(
-                            padding: AppThemeColors.listPagePaddingFab,
-                            itemCount: state.shifts.length,
-                            itemBuilder: (context, i) {
-                              final s = state.shifts[i];
-                              return Card(
-                                margin: const EdgeInsets.only(bottom: 12),
-                                child: ListTile(
-                                  title: Text(
-                                    s.name,
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                      color: textPrimary,
-                                    ),
-                                  ),
-                                  subtitle: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        '${s.startTime} – ${s.endTime} · grace ${s.gracePeriod} min',
-                                        style: TextStyle(
-                                          fontSize: 13,
-                                          color: textSecondary,
-                                        ),
-                                      ),
-                                      Text(
-                                        'Weekend: ${s.weekendDaysLabel}',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: textSecondary,
-                                        ),
-                                      ),
-                                      if (s.employeeIds.isNotEmpty)
-                                        Text(
-                                          '${s.employeeIds.length} employee(s)',
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: textSecondary,
-                                          ),
-                                        ),
-                                    ],
-                                  ),
-                                  isThreeLine: true,
-                                  trailing: PopupMenuButton<String>(
-                                    onSelected: (v) async {
-                                      if (v == 'edit') {
-                                        final ok =
-                                            await Navigator.of(context)
-                                                .push<bool>(
-                                          MaterialPageRoute(
-                                            builder: (_) =>
-                                                ShiftFormPage(existing: s),
-                                          ),
-                                        );
-                                        if (ok == true && mounted) {
-                                          ref.invalidate(
-                                              userShiftTimingsProvider);
-                                          ref
-                                              .read(shiftProvider.notifier)
-                                              .loadShifts();
-                                        }
-                                      } else if (v == 'assign') {
-                                        _openAssign(s);
-                                      } else if (v == 'delete') {
-                                        _confirmDelete(s);
-                                      }
-                                    },
-                                    itemBuilder: (ctx) => [
-                                      const PopupMenuItem(
-                                        value: 'edit',
-                                        child: Text('Edit'),
-                                      ),
-                                      const PopupMenuItem(
-                                        value: 'assign',
-                                        child: Text('Assign user…'),
-                                      ),
-                                      const PopupMenuItem(
-                                        value: 'delete',
-                                        child: Text('Delete'),
-                                      ),
-                                    ],
+                              Text(
+                                'Weekend: ${s.weekendDaysLabel}',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: textSecondary,
+                                ),
+                              ),
+                              if (s.employeeIds.isNotEmpty)
+                                Text(
+                                  '${s.employeeIds.length} employee(s)',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: textSecondary,
                                   ),
                                 ),
-                              );
-                            },
+                            ],
                           ),
+                          isThreeLine: true,
+                          trailing: PopupMenuButton<String>(
+                            onSelected: (v) async {
+                              if (v == 'edit') {
+                                final ok = await Navigator.of(context)
+                                    .push<bool>(
+                                      MaterialPageRoute(
+                                        builder: (_) =>
+                                            ShiftFormPage(existing: s),
+                                      ),
+                                    );
+                                if (ok == true && mounted) {
+                                  ref.invalidate(userShiftTimingsProvider);
+                                  ref.read(shiftProvider.notifier).loadShifts();
+                                }
+                              } else if (v == 'assign') {
+                                _openAssign(s);
+                              } else if (v == 'delete') {
+                                _confirmDelete(s);
+                              }
+                            },
+                            itemBuilder: (ctx) => [
+                              const PopupMenuItem(
+                                value: 'edit',
+                                child: Text('Edit'),
+                              ),
+                              const PopupMenuItem(
+                                value: 'assign',
+                                child: Text('Assign user…'),
+                              ),
+                              const PopupMenuItem(
+                                value: 'delete',
+                                child: Text('Delete'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
           ),
           _TeamShiftRosterTab(
             textPrimary: textPrimary,
@@ -388,10 +385,7 @@ class _TeamShiftRosterTab extends ConsumerWidget {
           physics: const AlwaysScrollableScrollPhysics(),
           padding: AppThemeColors.pagePaddingAll,
           children: [
-            Text(
-              e.toString(),
-              style: TextStyle(color: textSecondary),
-            ),
+            Text(e.toString(), style: TextStyle(color: textSecondary)),
             const SizedBox(height: 16),
             FilledButton(
               onPressed: () => ref.invalidate(userShiftTimingsProvider),
@@ -437,12 +431,13 @@ class _TeamShiftRosterTab extends ConsumerWidget {
               final row = rows[i - 1];
               final u = row.user;
               return ListTile(
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                tileColor: Theme.of(context)
-                    .colorScheme
-                    .surfaceContainerHighest
-                    .withValues(alpha: 0.35),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 4,
+                ),
+                tileColor: Theme.of(
+                  context,
+                ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10),
                 ),
