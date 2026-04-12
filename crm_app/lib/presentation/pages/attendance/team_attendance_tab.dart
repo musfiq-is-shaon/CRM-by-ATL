@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_theme_colors.dart';
+import '../../../core/utils/attendance_week_utils.dart';
 import '../../../data/models/attendance_model.dart';
 import '../../../data/models/user_model.dart';
 import '../../../data/repositories/attendance_repository.dart';
@@ -55,10 +56,52 @@ class _TeamAttendanceTabState extends ConsumerState<TeamAttendanceTab> {
       }
       if (!mounted || gen != _loadGeneration) return;
 
-      final rows = await ref.read(attendanceRepositoryProvider).getAllAttendance(
+      final repo = ref.read(attendanceRepositoryProvider);
+      List<AttendanceRecord> rows;
+      if (_period == 'week') {
+        final range = sundayWeekRangeContaining(DateTime.now());
+        try {
+          rows = await repo.getAllAttendance(
+            dateFrom: range.dateFrom,
+            dateTo: range.dateTo,
+            userId: _filterUserId,
+          );
+        } catch (_) {
+          rows = await repo.getAllAttendance(
             period: _period,
             userId: _filterUserId,
           );
+        }
+        rows = filterAttendanceRecordsToYmdRange(
+          rows,
+          range.dateFrom,
+          range.dateTo,
+        );
+      } else if (_period == 'last_week') {
+        final range = previousSundayWeekRange(DateTime.now());
+        try {
+          rows = await repo.getAllAttendance(
+            dateFrom: range.dateFrom,
+            dateTo: range.dateTo,
+            userId: _filterUserId,
+          );
+        } catch (_) {
+          rows = await repo.getAllAttendance(
+            period: _period,
+            userId: _filterUserId,
+          );
+        }
+        rows = filterAttendanceRecordsToYmdRange(
+          rows,
+          range.dateFrom,
+          range.dateTo,
+        );
+      } else {
+        rows = await repo.getAllAttendance(
+          period: _period,
+          userId: _filterUserId,
+        );
+      }
       if (!mounted || gen != _loadGeneration) return;
       setState(() {
         _rows = rows;

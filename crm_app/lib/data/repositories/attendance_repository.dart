@@ -33,22 +33,50 @@ class AttendanceRepository {
     return response.data;
   }
 
-  /// My records: `GET /api/attendance/records?period=...` (current user).
-  Future<List<AttendanceRecord>> getRecords({String period = 'month'}) async {
+  /// My records: `GET /api/attendance/records` — either `period=...` or
+  /// `dateFrom` + `dateTo` (YYYY-MM-DD) for an explicit range (e.g. Sun–Sat week).
+  Future<List<AttendanceRecord>> getRecords({
+    String period = 'month',
+    String? dateFrom,
+    String? dateTo,
+  }) async {
+    final qp = <String, dynamic>{};
+    final df = dateFrom?.trim();
+    final dt = dateTo?.trim();
+    final hasRange =
+        df != null && dt != null && df.isNotEmpty && dt.isNotEmpty;
+    if (hasRange) {
+      qp['dateFrom'] = df;
+      qp['dateTo'] = dt;
+    } else {
+      qp['period'] = period;
+    }
     final response = await _apiClient.get(
       AppConstants.attendanceRecords,
-      queryParameters: {'period': period},
+      queryParameters: qp,
     );
     final rows = _recordsListFromResponse(response.data);
     return rows.map(AttendanceRecord.fromJson).toList();
   }
 
-  /// Admin: `GET /api/attendance/all?period=&userId=` — all users, optional user filter.
+  /// Admin: `GET /api/attendance/all` — `period` or `dateFrom`/`dateTo` + optional `userId`.
   Future<List<AttendanceRecord>> getAllAttendance({
     String period = 'today',
     String? userId,
+    String? dateFrom,
+    String? dateTo,
   }) async {
-    final qp = <String, dynamic>{'period': period};
+    final qp = <String, dynamic>{};
+    final df = dateFrom?.trim();
+    final dt = dateTo?.trim();
+    final hasRange =
+        df != null && dt != null && df.isNotEmpty && dt.isNotEmpty;
+    if (hasRange) {
+      qp['dateFrom'] = df;
+      qp['dateTo'] = dt;
+    } else {
+      qp['period'] = period;
+    }
     if (userId != null && userId.isNotEmpty) qp['userId'] = userId;
     final response = await _apiClient.get(
       AppConstants.attendanceAll,

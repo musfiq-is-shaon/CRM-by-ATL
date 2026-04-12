@@ -5,6 +5,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/services/location_service.dart';
 import '../../core/services/notification_service.dart';
+import '../../core/utils/attendance_week_utils.dart';
 import '../../data/models/attendance_model.dart';
 import '../../data/repositories/attendance_repository.dart';
 import '../providers/auth_provider.dart';
@@ -188,7 +189,25 @@ class AttendanceNotifier extends StateNotifier<AttendanceState> {
     }
     state = state.copyWith(isLoading: true, error: null);
     try {
-      final records = await _repository.getRecords(period: period);
+      List<AttendanceRecord> records;
+      if (period == 'week') {
+        final range = sundayWeekRangeContaining(DateTime.now());
+        try {
+          records = await _repository.getRecords(
+            dateFrom: range.dateFrom,
+            dateTo: range.dateTo,
+          );
+        } catch (_) {
+          records = await _repository.getRecords(period: 'week');
+        }
+        records = filterAttendanceRecordsToYmdRange(
+          records,
+          range.dateFrom,
+          range.dateTo,
+        );
+      } else {
+        records = await _repository.getRecords(period: period);
+      }
       state = state.copyWith(
         records: records,
         period: period,
@@ -409,7 +428,7 @@ final attendanceProvider =
       return AttendanceNotifier(repository, ref);
     });
 
-/// Aggregated status counts for the Attendance hub header (`GET .../records?period=week`).
+/// Aggregated status counts for the Attendance hub header (current Sun–Sat week).
 ///
 /// [present] is **all attended days** (on-time + late). [late] is the subset marked late.
 /// [total] counts each calendar row once (`present + absent + other`), not `present + late`.
@@ -467,6 +486,20 @@ class AttendanceWeekRollup {
 final attendanceWeekRollupProvider =
     FutureProvider.autoDispose<AttendanceWeekRollup>((ref) async {
   final repo = ref.read(attendanceRepositoryProvider);
-  final rows = await repo.getRecords(period: 'week');
+  final range = sundayWeekRangeContaining(DateTime.now());
+  List<AttendanceRecord> rows;
+  try {
+    rows = await repo.getRecords(
+      dateFrom: range.dateFrom,
+      dateTo: range.dateTo,
+    );
+  } catch (_) {
+    rows = await repo.getRecords(period: 'week');
+  }
+  rows = filterAttendanceRecordsToYmdRange(
+    rows,
+    range.dateFrom,
+    range.dateTo,
+  );
   return AttendanceWeekRollup.fromRecords(rows);
 });
