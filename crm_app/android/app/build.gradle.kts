@@ -44,7 +44,7 @@ android {
         applicationId = "app.atl.crm"
         minSdk = flutter.minSdkVersion
         targetSdk = 35
-        versionCode = 36
+        versionCode = 37
         versionName = "1.2.3"
     }
 

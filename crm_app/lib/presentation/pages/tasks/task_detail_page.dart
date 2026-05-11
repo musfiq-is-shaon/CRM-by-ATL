@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme_colors.dart';
 import '../../../data/models/task_model.dart';
 import '../../../data/models/user_model.dart';
@@ -45,6 +46,9 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
     _confettiController = ConfettiController(
       duration: const Duration(seconds: 3),
     );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(usersProvider.notifier).loadUsers();
+    });
   }
 
   @override
@@ -235,11 +239,412 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
                       ),
                     ],
                   ),
+                  const SizedBox(height: 24),
+                  _buildActivityLogSection(
+                    context,
+                    task,
+                    textPrimary,
+                    textSecondary,
+                    primaryColor,
+                  ),
                 ],
               ),
             ),
     ),
     );
+  }
+
+  Widget _buildActivityLogSection(
+    BuildContext context,
+    Task task,
+    Color textPrimary,
+    Color textSecondary,
+    Color primaryColor,
+  ) {
+    final logsAsync = ref.watch(taskLogsProvider(task.id));
+    final usersState = ref.watch(usersProvider);
+    final nameById = {
+      for (final u in usersState.users)
+        if (u.id.trim().isNotEmpty) u.id: u.name,
+    };
+    final surface = AppThemeColors.surfaceColor(context);
+    final cs = Theme.of(context).colorScheme;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Activity log',
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                color: textPrimary,
+                fontWeight: FontWeight.w600,
+              ),
+        ),
+        const SizedBox(height: 12),
+        logsAsync.when(
+          loading: () => Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Center(
+              child: SizedBox(
+                width: 28,
+                height: 28,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: primaryColor,
+                ),
+              ),
+            ),
+          ),
+          error: (e, _) => CRMCard(
+            child: Row(
+              children: [
+                Icon(Icons.error_outline, color: Theme.of(context).colorScheme.error),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Could not load activity log.',
+                    style: TextStyle(color: textSecondary, fontSize: 14),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () =>
+                      ref.invalidate(taskLogsProvider(task.id)),
+                  child: const Text('Retry'),
+                ),
+              ],
+            ),
+          ),
+          data: (logs) {
+            if (logs.isEmpty) {
+              return Text(
+                'No activity recorded yet.',
+                style: TextStyle(color: textSecondary, fontSize: 14, height: 1.4),
+              );
+            }
+            return _buildActivityTimeline(
+              context,
+              logs: logs,
+              taskStatus: task.status,
+              nameById: nameById,
+              textPrimary: textPrimary,
+              textSecondary: textSecondary,
+              primaryColor: primaryColor,
+              surface: surface,
+              outlineVariant: cs.outlineVariant,
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  static final _activityWhenFormat = DateFormat('MMM d, yyyy, h:mm a', 'en_US');
+
+  TaskLog? _oldestActivityLog(List<TaskLog> logs) {
+    TaskLog? best;
+    DateTime? bestTime;
+    for (final l in logs) {
+      final t = l.createdAt ?? l.updatedAt;
+      if (t == null) continue;
+      if (bestTime == null || t.isBefore(bestTime)) {
+        bestTime = t;
+        best = l;
+      }
+    }
+    return best;
+  }
+
+  /// When [logs] are newest-first, each entry's `status` is the task state **after** that event.
+  /// Walk oldest → newest so we know the state immediately **before** each row (handles
+  /// duplicate snapshot statuses on consecutive API rows).
+  List<String?> _taskStatusBeforeEachLog(List<TaskLog> logs) {
+    final n = logs.length;
+    final prev = List<String?>.filled(n, null);
+    String? stateAfterOlder;
+    for (var i = n - 1; i >= 0; i--) {
+      prev[i] = stateAfterOlder;
+      final s = logs[i].status?.trim();
+      if (s != null && s.isNotEmpty) {
+        stateAfterOlder = s;
+      }
+    }
+    return prev;
+  }
+
+  Widget _buildActivityTimeline(
+    BuildContext context, {
+    required List<TaskLog> logs,
+    required String taskStatus,
+    required Map<String, String> nameById,
+    required Color textPrimary,
+    required Color textSecondary,
+    required Color primaryColor,
+    required Color surface,
+    required Color outlineVariant,
+  }) {
+    final creationRef = _oldestActivityLog(logs) ?? logs.last;
+    final creationId = creationRef.id;
+    final statusBefore = _taskStatusBeforeEachLog(logs);
+    final lineColor = outlineVariant.withValues(alpha: 0.55);
+
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Positioned(
+          left: 10,
+          top: 14,
+          bottom: 14,
+          child: IgnorePointer(
+            child: Container(width: 2, color: lineColor),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(left: 2),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: List.generate(logs.length, (index) {
+              final log = logs[index];
+              final isLast = index == logs.length - 1;
+              return Padding(
+                padding: EdgeInsets.only(bottom: isLast ? 0 : 22),
+                child: _buildActivityTimelineRow(
+                  context,
+                  log: log,
+                  index: index,
+                  logs: logs,
+                  creationId: creationId,
+                  statusBeforeThisLog: statusBefore[index],
+                  taskStatus: taskStatus,
+                  nameById: nameById,
+                  textPrimary: textPrimary,
+                  textSecondary: textSecondary,
+                  primaryColor: primaryColor,
+                  surface: surface,
+                ),
+              );
+            }),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildActivityTimelineRow(
+    BuildContext context, {
+    required TaskLog log,
+    required int index,
+    required List<TaskLog> logs,
+    required String creationId,
+    required String? statusBeforeThisLog,
+    required String taskStatus,
+    required Map<String, String> nameById,
+    required Color textPrimary,
+    required Color textSecondary,
+    required Color primaryColor,
+    required Color surface,
+  }) {
+    var rawNext = log.status?.trim();
+    if ((rawNext == null || rawNext.isEmpty) &&
+        index == 0 &&
+        (log.previousStatus?.trim().isNotEmpty ?? false)) {
+      final ts = taskStatus.trim();
+      if (ts.isNotEmpty) rawNext = ts;
+    }
+    final hasStatus = rawNext != null && rawNext.isNotEmpty;
+    final nextNorm = rawNext;
+
+    final fromApi = log.previousStatus?.trim();
+    final fromChain = statusBeforeThisLog?.trim();
+    // Prefer API "previous" only when it actually differs from the new status; some backends
+    // echo the same value in both fields, which would hide the timeline arrow.
+    String? fromNorm = fromChain;
+    if (fromApi != null &&
+        fromApi.isNotEmpty &&
+        (nextNorm == null ||
+            fromApi.toLowerCase() != nextNorm.toLowerCase())) {
+      fromNorm = fromApi;
+    }
+    // When chain/API omit "before", infer from the next-older log row (list is newest-first).
+    if ((fromNorm == null || fromNorm.isEmpty) &&
+        index + 1 < logs.length) {
+      final olderStatus = logs[index + 1].status?.trim();
+      if (olderStatus != null && olderStatus.isNotEmpty) {
+        fromNorm = olderStatus;
+      }
+    }
+
+    final isCreation = creationId.isNotEmpty && log.id == creationId ||
+        (creationId.isEmpty && index == logs.length - 1);
+    final hasTransition = !isCreation &&
+        hasStatus &&
+        fromNorm != null &&
+        fromNorm.isNotEmpty &&
+        nextNorm != null &&
+        fromNorm.toLowerCase() != nextNorm.toLowerCase();
+
+    final who = _resolveTaskLogActorName(log, nameById);
+
+    final when = log.createdAt ?? log.updatedAt;
+    final whenText = when != null
+        ? _activityWhenFormat.format(when.toLocal())
+        : '—';
+
+    final chipBg = Theme.of(context).colorScheme.surfaceContainerHighest;
+    final chipFg = Theme.of(context).colorScheme.onSurfaceVariant;
+    final actionLabel = isCreation
+        ? 'Created'
+        : (hasTransition || hasStatus
+            ? 'Status changed'
+            : ((log.note?.trim().isNotEmpty ?? false) ? 'Note' : 'Status changed'));
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 24,
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Container(
+                width: 12,
+                height: 12,
+                decoration: BoxDecoration(
+                  color: primaryColor,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: surface, width: 2),
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                who,
+                style: TextStyle(
+                  color: textPrimary,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  height: 1.25,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: chipBg,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: Theme.of(context)
+                        .colorScheme
+                        .outline
+                        .withValues(alpha: 0.22),
+                  ),
+                ),
+                child: Text(
+                  actionLabel,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: chipFg,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Icon(Icons.schedule, size: 16, color: textSecondary),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      whenText,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: textSecondary,
+                        height: 1.3,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              if (hasTransition) ...[
+                const SizedBox(height: 8),
+                _taskStatusArrowLine(fromNorm, nextNorm, textSecondary),
+              ] else if (!isCreation &&
+                  hasStatus &&
+                  nextNorm != null &&
+                  nextNorm.isNotEmpty &&
+                  (fromNorm == null || fromNorm.isEmpty)) ...[
+                const SizedBox(height: 8),
+                Text(
+                  'Status: ${taskStatusLogLabel(nextNorm)}',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: textSecondary,
+                    height: 1.4,
+                  ),
+                ),
+              ],
+              if (log.note != null && log.note!.trim().isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  log.note!.trim(),
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: textSecondary,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Single muted line `Pending → Completed` (Unicode arrow U+2192).
+  Widget _taskStatusArrowLine(String from, String to, Color muted) {
+    final f = taskStatusLogLabel(from.trim());
+    final t = taskStatusLogLabel(to.trim());
+    return Text.rich(
+      TextSpan(
+        style: TextStyle(
+          color: muted,
+          fontSize: 15,
+          fontWeight: FontWeight.w400,
+          height: 1.4,
+        ),
+        children: [
+          TextSpan(text: f),
+          TextSpan(
+            text: ' \u2192 ',
+            style: TextStyle(
+              color: muted,
+              fontWeight: FontWeight.w600,
+              fontSize: 15,
+            ),
+          ),
+          TextSpan(text: t),
+        ],
+      ),
+    );
+  }
+
+  String _resolveTaskLogActorName(TaskLog log, Map<String, String> nameById) {
+    final fromEmbed = log.actorUser?.name.trim();
+    if (fromEmbed != null && fromEmbed.isNotEmpty) return fromEmbed;
+
+    final id = log.actorUserId?.trim();
+    if (id != null && id.isNotEmpty) {
+      final fromMap = nameById[id]?.trim();
+      if (fromMap != null && fromMap.isNotEmpty) return fromMap;
+    }
+    return 'Unknown user';
   }
 
   Widget _buildInfoRow(
@@ -325,6 +730,7 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
                           isAdmin: isAdmin,
                           actorUserId: ref.read(currentUserIdProvider),
                         );
+                    ref.invalidate(taskLogsProvider(task.id));
 
                     if (!context.mounted) return;
                     if (status == 'completed') {

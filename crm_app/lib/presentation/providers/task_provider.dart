@@ -631,3 +631,54 @@ final taskDetailProvider = FutureProvider.family<Task, String>((ref, id) async {
   final taskRepository = ref.watch(taskRepositoryProvider);
   return taskRepository.getTaskById(id);
 });
+
+/// Activity / status change log for a task (`GET /api/tasks/:id/logs`).
+final taskLogsProvider =
+    FutureProvider.family<List<TaskLog>, String>((ref, taskId) async {
+  final taskRepository = ref.watch(taskRepositoryProvider);
+  final userRepository = ref.watch(userRepositoryProvider);
+  final logs = await taskRepository.getTaskLogs(taskId);
+  final epoch = DateTime.fromMillisecondsSinceEpoch(0);
+  DateTime sortKey(TaskLog l) => l.createdAt ?? l.updatedAt ?? epoch;
+
+  // Newest first (matches activity timeline: latest change at top).
+  // Tie-break with `_sourceIndex`: API arrays are usually oldest → newest, so a larger
+  // index is a newer event when timestamps match or are missing.
+  final sorted = [...logs]..sort((a, b) {
+        final c = sortKey(b).compareTo(sortKey(a));
+        if (c != 0) return c;
+        final ia = a.sourceIndex ?? -1;
+        final ib = b.sourceIndex ?? -1;
+        return ib.compareTo(ia);
+      });
+
+  final idsNeedingUser = <String>{};
+  for (final log in sorted) {
+    final id = log.actorUserId?.trim();
+    if (id == null || id.isEmpty) continue;
+    final hasName = log.actorUser?.name.trim().isNotEmpty ?? false;
+    if (!hasName) idsNeedingUser.add(id);
+  }
+
+  final userById = <String, User>{};
+  for (final id in idsNeedingUser) {
+    try {
+      final u = await userRepository.getUserById(id);
+      if (u != null) userById[id] = u;
+    } catch (_) {}
+  }
+
+  if (userById.isEmpty) return sorted;
+
+  return sorted
+      .map((log) {
+        final id = log.actorUserId?.trim();
+        if (id == null || id.isEmpty) return log;
+        final hasName = log.actorUser?.name.trim().isNotEmpty ?? false;
+        if (hasName) return log;
+        final u = userById[id];
+        if (u == null) return log;
+        return log.copyWith(actorUser: u);
+      })
+      .toList();
+});

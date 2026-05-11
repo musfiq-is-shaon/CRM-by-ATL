@@ -9,6 +9,32 @@ class TaskRepository {
 
   TaskRepository({required ApiClient apiClient}) : _apiClient = apiClient;
 
+  static dynamic _unwrap(dynamic raw) {
+    if (raw is Map && raw['data'] != null) return raw['data'];
+    return raw;
+  }
+
+  /// Task log GET responses sometimes wrap the array (`logs`, `items`, nested `data`).
+  static List<dynamic> _taskLogsList(dynamic raw) {
+    final u = _unwrap(raw);
+    if (u is List) return u;
+    if (u is Map) {
+      for (final key in ['logs', 'items', 'results', 'records', 'rows']) {
+        final v = u[key];
+        if (v is List) return v;
+      }
+      final inner = u['data'];
+      if (inner is List) return inner;
+      if (inner is Map) {
+        for (final key in ['logs', 'items', 'results']) {
+          final v = inner[key];
+          if (v is List) return v;
+        }
+      }
+    }
+    return [];
+  }
+
   Future<List<Task>> getTasks({
     String? status,
     String? companyId,
@@ -116,8 +142,16 @@ class TaskRepository {
 
   Future<List<TaskLog>> getTaskLogs(String taskId) async {
     final response = await _apiClient.get('${AppConstants.tasks}/$taskId/logs');
-    final List<dynamic> data = response.data;
-    return data.map((json) => TaskLog.fromJson(json)).toList();
+    final data = _taskLogsList(response.data);
+    var order = 0;
+    return data
+        .whereType<Map>()
+        .map((raw) {
+          final m = Map<String, dynamic>.from(raw);
+          m['_sourceIndex'] = order++;
+          return TaskLog.fromJson(m);
+        })
+        .toList();
   }
 
   Future<void> deleteTask(String id) async {
