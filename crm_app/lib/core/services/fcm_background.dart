@@ -5,6 +5,7 @@ import 'package:flutter/widgets.dart';
 
 import '../../firebase_options.dart';
 import 'fcm_data_message_display.dart';
+import 'fcm_notification_consent.dart';
 
 /// Must be a top-level function; registered before [runApp].
 ///
@@ -27,6 +28,12 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
       'FCM background data keys=${message.data.keys} '
       'messageId=${message.messageId}',
     );
+  }
+  if (!await userOptedInToAppNotifications()) {
+    if (kDebugMode) {
+      debugPrint('FCM background: skip show — user has not enabled notifications in-app');
+    }
+    return;
   }
   await showFcmDataMessageAsLocalNotification(message);
 }

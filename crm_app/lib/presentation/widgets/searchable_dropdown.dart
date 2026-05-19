@@ -2,13 +2,25 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../data/models/company_model.dart';
 
-/// An enhanced searchable dropdown widget with better UX:
+/// Shared searchable dropdown — **single implementation for the whole app**.
+/// All screens below import this file; behavior is identical everywhere:
+///
+/// - [task_detail_page] (company, assign to/by)
+/// - [tasks_list_page] (assignee filter)
+/// - [order_form_page], [sale_detail_page], [deals_page], [sales_funnel_tab], [renewal_form_page]
+/// - [expense_form_page], [expenses_list_page]
+/// - [contact_detail_page], [contacts_list_page]
+///
+/// Includes: separate search vs display controllers, keyboard-safe overlay,
+/// compact empty state, safe teardown on navigate back.
+///
 /// - Loading state indicator
 /// - Keyboard navigation support
 /// - Highlighted matching text in results
 /// - Improved empty state UI
 /// - Optional leading widget support
 /// - Debounced search
+/// - With IME open: panel stays below the field; short suggestion list under search
 class SearchableDropdown<T> extends StatefulWidget {
   final List<T> items;
   final T? value;
@@ -55,7 +67,11 @@ class SearchableDropdown<T> extends StatefulWidget {
 
 class _SearchableDropdownState<T> extends State<SearchableDropdown<T>>
     with WidgetsBindingObserver {
-  final TextEditingController _controller = TextEditingController();
+  final GlobalKey _anchorKey = GlobalKey();
+  /// Closed field — selected label only (read-only).
+  final TextEditingController _displayController = TextEditingController();
+  /// Overlay search — separate so typing does not update the closed field.
+  final TextEditingController _searchController = TextEditingController();
   final LayerLink _layerLink = LayerLink();
   final FocusNode _focusNode = FocusNode();
   final FocusNode _searchFocusNode = FocusNode();
@@ -75,53 +91,65 @@ class _SearchableDropdownState<T> extends State<SearchableDropdown<T>>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _filteredItems = widget.items;
-    _controller.text = widget.value != null
+    _syncDisplayFromValue();
+    _searchController.addListener(_onSearchChanged);
+  }
+
+  void _syncDisplayFromValue() {
+    _displayController.text = widget.value != null
         ? widget.itemLabelBuilder(widget.value as T)
         : '';
-    _controller.addListener(_onTextChanged);
   }
 
   @override
   void didChangeMetrics() {
-    // Keyboard open/close: reposition overlay above IME so search field stays visible.
+    // Keyboard dismiss on pop can rebuild overlay after this widget is inactive.
+    if (!mounted || !_isOpen || _overlayEntry == null) return;
     _overlayEntry?.markNeedsBuild();
+  }
+
+  @override
+  void deactivate() {
+    _detachOverlay();
+    super.deactivate();
   }
 
   @override
   void didUpdateWidget(SearchableDropdown<T> oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.value != oldWidget.value) {
-      _controller.text = widget.value != null
-          ? widget.itemLabelBuilder(widget.value as T)
-          : '';
+      _syncDisplayFromValue();
     }
     if (widget.items != oldWidget.items) {
-      _filterItems(_searchText);
+      _filterItems(_isOpen ? _searchController.text : '');
     }
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _controller.removeListener(_onTextChanged);
-    _controller.dispose();
+    _detachOverlay();
+    _searchController.removeListener(_onSearchChanged);
+    _displayController.dispose();
+    _searchController.dispose();
     _focusNode.dispose();
     _searchFocusNode.dispose();
     _scrollController.dispose();
-    _removeOverlay();
     super.dispose();
   }
 
-  void _onTextChanged() {
+  void _onSearchChanged() {
     final now = DateTime.now();
     final diff = now.difference(_lastSearchTime).inMilliseconds;
 
     if (diff >= _debounceMs) {
-      _filterItems(_controller.text);
+      _filterItems(_searchController.text);
     }
+    if (mounted) setState(() {});
   }
 
   void _filterItems(String searchText) {
+    if (!mounted) return;
     _searchText = searchText.toLowerCase();
     _lastSearchTime = DateTime.now();
 
@@ -134,8 +162,9 @@ class _SearchableDropdownState<T> extends State<SearchableDropdown<T>>
       }).toList();
       _highlightedIndex = _filteredItems.isNotEmpty ? 0 : -1;
     });
-    if (_isOpen) {
+    if (_isOpen && mounted) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_isOpen) return;
         _overlayEntry?.markNeedsBuild();
       });
     }
@@ -150,12 +179,19 @@ class _SearchableDropdownState<T> extends State<SearchableDropdown<T>>
   }
 
   void _showOverlay() {
-    _filterItems(_controller.text);
+    if (!mounted) return;
+    _searchController.clear();
+    _filterItems('');
 
     _overlayEntry = OverlayEntry(
       builder: (overlayContext) {
-        // Use the dropdown widget's context for geometry (overlayContext has correct viewInsets).
-        final renderBox = context.findRenderObject() as RenderBox?;
+        // Anchor key — avoid [State.context] after route pop (inactive element).
+        final anchorContext = _anchorKey.currentContext;
+        if (anchorContext == null || !anchorContext.mounted) {
+          WidgetsBinding.instance.addPostFrameCallback((_) => _detachOverlay());
+          return const SizedBox.shrink();
+        }
+        final renderBox = anchorContext.findRenderObject() as RenderBox?;
         if (renderBox == null || !renderBox.hasSize) {
           return const SizedBox.shrink();
         }
@@ -168,15 +204,26 @@ class _SearchableDropdownState<T> extends State<SearchableDropdown<T>>
 
         final bottomSpace = safeHeight - globalPosition.dy - size.height;
         final topSpace = globalPosition.dy;
+        final keyboardOpen = viewInsetsBottom > 0;
 
-        // Prefer opening above the field when the keyboard leaves little room below.
-        final showAbove = bottomSpace < 200 && topSpace > bottomSpace;
+        // With the keyboard up, keep the panel below the field (above the IME).
+        // Flipping above the field pushes the whole sheet too far up on long forms.
+        final showAbove = !keyboardOpen &&
+            bottomSpace < 140 &&
+            topSpace > bottomSpace + 80;
 
-        const searchAndChrome = 72.0;
-        final maxList =
-            (showAbove ? topSpace : bottomSpace) - searchAndChrome - 16;
-        final listMaxHeight = maxList.clamp(80.0, 220.0);
-        final panelHeight = (searchAndChrome + listMaxHeight).clamp(160.0, 360.0);
+        const searchAndChrome = 60.0;
+        final spaceForList = (showAbove ? topSpace : bottomSpace) -
+            searchAndChrome -
+            12;
+        // Shorter list when the keyboard is open — suggestions sit just under search.
+        final listCap = keyboardOpen ? 100.0 : 160.0;
+        final listMaxHeight = spaceForList.clamp(40.0, listCap);
+        final panelCap = keyboardOpen ? 200.0 : 260.0;
+        // Min height fits search row + compact empty state (avoids 31px overflow).
+        final panelMin = keyboardOpen ? 108.0 : 120.0;
+        final panelHeight =
+            (searchAndChrome + listMaxHeight).clamp(panelMin, panelCap);
 
         final offsetY = showAbove
             ? -(panelHeight + size.height + 4)
@@ -233,24 +280,39 @@ class _SearchableDropdownState<T> extends State<SearchableDropdown<T>>
     widget.onMenuOpened?.call();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_isOpen) return;
       _searchFocusNode.requestFocus();
       _overlayEntry?.markNeedsBuild();
     });
   }
 
+  /// Removes overlay without [setState] when the widget is tearing down.
+  void _detachOverlay() {
+    _searchFocusNode.unfocus();
+    _focusNode.unfocus();
+    _searchController.clear();
+    _overlayEntry?.remove();
+    _overlayEntry = null;
+    _isOpen = false;
+    _highlightedIndex = -1;
+    _searchText = '';
+  }
+
   Widget _buildSearchField() {
     return Padding(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 6),
       child: KeyboardListener(
         focusNode: FocusNode(),
         onKeyEvent: _handleKeyEvent,
         child: TextField(
-          controller: _controller,
+          controller: _searchController,
           focusNode: _searchFocusNode,
           style: TextStyle(color: widget.textColor),
           decoration: InputDecoration(
             hintText: 'Search...',
-            hintStyle: TextStyle(color: widget.hintColor.withValues(alpha: 0.6)),
+            hintStyle: TextStyle(
+              color: widget.hintColor.withValues(alpha: 0.6),
+            ),
             prefixIcon: widget.isLoading
                 ? SizedBox(
                     width: 20,
@@ -264,11 +326,11 @@ class _SearchableDropdownState<T> extends State<SearchableDropdown<T>>
                     ),
                   )
                 : Icon(Icons.search, color: widget.hintColor),
-            suffixIcon: _controller.text.isNotEmpty
+            suffixIcon: _searchController.text.isNotEmpty
                 ? IconButton(
                     icon: Icon(Icons.clear, color: widget.hintColor, size: 20),
                     onPressed: () {
-                      _controller.clear();
+                      _searchController.clear();
                       _filterItems('');
                       _searchFocusNode.requestFocus();
                     },
@@ -276,16 +338,20 @@ class _SearchableDropdownState<T> extends State<SearchableDropdown<T>>
                 : null,
             isDense: true,
             contentPadding: const EdgeInsets.symmetric(
-              horizontal: 14,
-              vertical: 12,
+              horizontal: 12,
+              vertical: 10,
             ),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: widget.hintColor.withValues(alpha: 0.3)),
+              borderSide: BorderSide(
+                color: widget.hintColor.withValues(alpha: 0.3),
+              ),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: widget.hintColor.withValues(alpha: 0.3)),
+              borderSide: BorderSide(
+                color: widget.hintColor.withValues(alpha: 0.3),
+              ),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
@@ -328,7 +394,7 @@ class _SearchableDropdownState<T> extends State<SearchableDropdown<T>>
 
   void _scrollToHighlighted() {
     if (_highlightedIndex >= 0 && _scrollController.hasClients) {
-      final itemHeight = 72.0; // Approximate height of each item
+      const itemHeight = 52.0;
       final targetOffset = _highlightedIndex * itemHeight;
       _scrollController.animateTo(
         targetOffset,
@@ -338,38 +404,52 @@ class _SearchableDropdownState<T> extends State<SearchableDropdown<T>>
     }
   }
 
-  Widget _buildResultsList({double maxHeight = 220}) {
+  Widget _buildResultsList({double maxHeight = 160}) {
     if (_filteredItems.isEmpty) {
-      return Container(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.search_off,
-              size: 48,
-              color: widget.hintColor.withValues(alpha: 0.5),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              _searchText.isEmpty
-                  ? 'No items available'
-                  : 'No results found for "$_searchText"',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: widget.hintColor, fontSize: 14),
-            ),
-            if (_searchText.isNotEmpty && widget.onAddNew != null) ...[
-              const SizedBox(height: 12),
-              Text(
-                'Press Enter or tap below to add new',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: widget.hintColor.withValues(alpha: 0.6),
-                  fontSize: 12,
+      return ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: maxHeight),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                Icons.search_off,
+                size: 22,
+                color: widget.hintColor.withValues(alpha: 0.5),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      _searchText.isEmpty
+                          ? 'No items available'
+                          : 'No results for "$_searchText"',
+                      style: TextStyle(
+                        color: widget.hintColor,
+                        fontSize: 13,
+                        height: 1.25,
+                      ),
+                    ),
+                    if (_searchText.isNotEmpty && widget.onAddNew != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          'Tap below to add new',
+                          style: TextStyle(
+                            color: widget.hintColor.withValues(alpha: 0.6),
+                            fontSize: 11,
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
             ],
-          ],
+          ),
         ),
       );
     }
@@ -398,7 +478,7 @@ class _SearchableDropdownState<T> extends State<SearchableDropdown<T>>
     return InkWell(
       onTap: () => _selectItem(item),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
           color: isHighlighted
               ? widget.textColor.withValues(alpha: 0.1)
@@ -417,15 +497,15 @@ class _SearchableDropdownState<T> extends State<SearchableDropdown<T>>
             Expanded(
               child: widget.highlightBuilder != null
                   ? (widget.highlightBuilder!(item, _searchText) ??
-                      Text(
-                        label,
-                        style: TextStyle(
-                          color: widget.textColor,
-                          fontWeight: isSelected
-                              ? FontWeight.bold
-                              : FontWeight.normal,
-                        ),
-                      ))
+                        Text(
+                          label,
+                          style: TextStyle(
+                            color: widget.textColor,
+                            fontWeight: isSelected
+                                ? FontWeight.bold
+                                : FontWeight.normal,
+                          ),
+                        ))
                   : _buildHighlightedText(label),
             ),
             if (isSelected)
@@ -499,7 +579,7 @@ class _SearchableDropdownState<T> extends State<SearchableDropdown<T>>
         InkWell(
           onTap: () {
             _removeOverlay();
-            _controller.clear();
+            _displayController.clear();
             widget.onAddNew?.call();
           },
           child: Container(
@@ -535,44 +615,46 @@ class _SearchableDropdownState<T> extends State<SearchableDropdown<T>>
   }
 
   void _selectItem(T item) {
-    _controller.text = widget.itemLabelBuilder(item);
+    _displayController.text = widget.itemLabelBuilder(item);
     widget.onChanged?.call(item);
     _removeOverlay();
   }
 
   void _removeOverlay() {
-    _overlayEntry?.remove();
-    _overlayEntry = null;
-    setState(() {
-      _isOpen = false;
-      _highlightedIndex = -1;
-    });
+    _detachOverlay();
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return CompositedTransformTarget(
+      key: _anchorKey,
       link: _layerLink,
       child: GestureDetector(
         onTap: _toggleDropdown,
         child: TextFormField(
-          controller: _controller,
+          controller: _displayController,
           focusNode: _focusNode,
           readOnly: true,
+          enableInteractiveSelection: false,
           style: TextStyle(color: widget.textColor),
           decoration: InputDecoration(
             labelText: widget.labelText,
             labelStyle: TextStyle(color: widget.hintColor),
             hintText: widget.hintText,
-            hintStyle: TextStyle(color: widget.hintColor.withValues(alpha: 0.6)),
+            hintStyle: TextStyle(
+              color: widget.hintColor.withValues(alpha: 0.6),
+            ),
             suffixIcon: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (_controller.text.isNotEmpty && !widget.required)
+                if (_displayController.text.isNotEmpty && !widget.required)
                   IconButton(
                     icon: Icon(Icons.clear, color: widget.hintColor, size: 20),
                     onPressed: () {
-                      _controller.clear();
+                      _displayController.clear();
                       widget.onChanged?.call(null);
                     },
                   ),
@@ -590,11 +672,15 @@ class _SearchableDropdownState<T> extends State<SearchableDropdown<T>>
             fillColor: widget.dropdownColor,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: widget.hintColor.withValues(alpha: 0.3)),
+              borderSide: BorderSide(
+                color: widget.hintColor.withValues(alpha: 0.3),
+              ),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: widget.hintColor.withValues(alpha: 0.3)),
+              borderSide: BorderSide(
+                color: widget.hintColor.withValues(alpha: 0.3),
+              ),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
@@ -769,7 +855,10 @@ class _CompanyListTile extends StatelessWidget {
           Text(
             _getLocationString(),
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(fontSize: 12, color: textColor.withValues(alpha: 0.5)),
+            style: TextStyle(
+              fontSize: 12,
+              color: textColor.withValues(alpha: 0.5),
+            ),
           ),
         ],
       ],

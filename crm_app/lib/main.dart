@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app.dart';
+import 'core/services/app_tracking_transparency_helper.dart';
 import 'core/services/fcm_background.dart';
 import 'core/services/fcm_service.dart';
 import 'core/services/location_service.dart';
@@ -21,9 +22,12 @@ void main() async {
 
   final notificationService = NotificationService();
   await notificationService.initialize();
-  await notificationService.requestPermissions();
+  // OS notification consent is requested only after the user enables alerts in-app
+  // (see [NotificationSettingsNotifier.setEnabled]) — App Store Review Guideline 4.5.4.
 
   await FcmService.instance.initialize();
+
+  await requestAppTrackingTransparencyIfNeeded();
 
   final locationService = LocationService();
   await locationService.init();

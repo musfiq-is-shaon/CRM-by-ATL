@@ -60,8 +60,9 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
   @override
   Widget build(BuildContext context) {
     final tasksState = ref.watch(tasksProvider);
-    final task =
-        tasksState.tasks.where((t) => t.id == widget.taskId).firstOrNull;
+    final task = tasksState.tasks
+        .where((t) => t.id == widget.taskId)
+        .firstOrNull;
     final isAdmin = ref.watch(rbacModuleAdminProvider(RbacPageKey.tasks));
 
     final bgColor = AppThemeColors.backgroundColor(context);
@@ -112,145 +113,148 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
               ),
           ],
         ),
-      body: task == null
-          ? const Center(child: LoadingWidget())
-          : SingleChildScrollView(
-              padding: AppThemeColors.pagePaddingAll,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Task Info Card
-                  CRMCard(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Expanded(
-                              child: Text(
-                                task.title,
-                                style: TextStyle(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.bold,
-                                  color: textPrimary,
+        body: task == null
+            ? const Center(child: LoadingWidget())
+            : SingleChildScrollView(
+                padding: AppThemeColors.pagePaddingAll,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Task Info Card
+                    CRMCard(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  task.title,
+                                  style: TextStyle(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold,
+                                    color: textPrimary,
+                                  ),
                                 ),
                               ),
+                              StatusBadge(status: task.status, type: 'task'),
+                            ],
+                          ),
+                          if (task.note != null && task.note!.isNotEmpty) ...[
+                            const SizedBox(height: 16),
+                            Text(
+                              task.note!,
+                              style: TextStyle(
+                                color: textSecondary,
+                                height: 1.5,
+                              ),
                             ),
-                            StatusBadge(status: task.status, type: 'task'),
                           ],
-                        ),
-                        if (task.note != null && task.note!.isNotEmpty) ...[
                           const SizedBox(height: 16),
-                          Text(
-                            task.note!,
-                            style: TextStyle(color: textSecondary, height: 1.5),
+                          Divider(color: textSecondary.withValues(alpha: 0.3)),
+                          const SizedBox(height: 16),
+                          _buildInfoRow(
+                            'Company',
+                            task.company?.name ?? 'N/A',
+                            textPrimary,
+                            textSecondary,
+                          ),
+                          _buildInfoRow(
+                            'Due Date',
+                            task.dueDatetime != null
+                                ? '${task.dueDatetime!.year}-${task.dueDatetime!.month.toString().padLeft(2, '0')}-${task.dueDatetime!.day.toString().padLeft(2, '0')}'
+                                : 'N/A',
+                            textPrimary,
+                            textSecondary,
+                          ),
+                          _buildInfoRow(
+                            'Assigned To',
+                            task.assignToUser?.name ?? 'N/A',
+                            textPrimary,
+                            textSecondary,
+                          ),
+                          _buildInfoRow(
+                            'Assigned By',
+                            task.assignByUser?.name ?? 'N/A',
+                            textPrimary,
+                            textSecondary,
                           ),
                         ],
-                        const SizedBox(height: 16),
-                        Divider(color: textSecondary.withValues(alpha: 0.3)),
-                        const SizedBox(height: 16),
-                        _buildInfoRow(
-                          'Company',
-                          task.company?.name ?? 'N/A',
-                          textPrimary,
-                          textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Status Actions
+                    Text(
+                      'Change Status',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: textPrimary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    if (task.status == 'completed' && !isAdmin) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        'Only an admin can change status after a task is completed.',
+                        style: TextStyle(
+                          color: textSecondary,
+                          fontSize: 13,
+                          height: 1.35,
                         ),
-                        _buildInfoRow(
-                          'Due Date',
-                          task.dueDatetime != null
-                              ? '${task.dueDatetime!.year}-${task.dueDatetime!.month.toString().padLeft(2, '0')}-${task.dueDatetime!.day.toString().padLeft(2, '0')}'
-                              : 'N/A',
+                      ),
+                    ],
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        _buildStatusButton(
+                          context,
+                          task,
+                          'pending',
+                          primaryColor,
                           textPrimary,
-                          textSecondary,
+                          isAdmin,
                         ),
-                        _buildInfoRow(
-                          'Assigned To',
-                          task.assignToUser?.name ?? 'N/A',
+                        _buildStatusButton(
+                          context,
+                          task,
+                          'in_progress',
+                          primaryColor,
                           textPrimary,
-                          textSecondary,
+                          isAdmin,
                         ),
-                        _buildInfoRow(
-                          'Assigned By',
-                          task.assignByUser?.name ?? 'N/A',
+                        _buildStatusButton(
+                          context,
+                          task,
+                          'completed',
+                          primaryColor,
                           textPrimary,
-                          textSecondary,
+                          isAdmin,
+                        ),
+                        _buildStatusButton(
+                          context,
+                          task,
+                          'cancelled',
+                          primaryColor,
+                          textPrimary,
+                          isAdmin,
                         ),
                       ],
                     ),
-                  ),
-                  const SizedBox(height: 24),
-
-                  // Status Actions
-                  Text(
-                    'Change Status',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: textPrimary,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  if (task.status == 'completed' && !isAdmin) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      'Only an admin can change status after a task is completed.',
-                      style: TextStyle(
-                        color: textSecondary,
-                        fontSize: 13,
-                        height: 1.35,
-                      ),
+                    const SizedBox(height: 24),
+                    _buildActivityLogSection(
+                      context,
+                      task,
+                      textPrimary,
+                      textSecondary,
+                      primaryColor,
                     ),
                   ],
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      _buildStatusButton(
-                        context,
-                        task,
-                        'pending',
-                        primaryColor,
-                        textPrimary,
-                        isAdmin,
-                      ),
-                      _buildStatusButton(
-                        context,
-                        task,
-                        'in_progress',
-                        primaryColor,
-                        textPrimary,
-                        isAdmin,
-                      ),
-                      _buildStatusButton(
-                        context,
-                        task,
-                        'completed',
-                        primaryColor,
-                        textPrimary,
-                        isAdmin,
-                      ),
-                      _buildStatusButton(
-                        context,
-                        task,
-                        'cancelled',
-                        primaryColor,
-                        textPrimary,
-                        isAdmin,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-                  _buildActivityLogSection(
-                    context,
-                    task,
-                    textPrimary,
-                    textSecondary,
-                    primaryColor,
-                  ),
-                ],
+                ),
               ),
-            ),
-    ),
+      ),
     );
   }
 
@@ -276,9 +280,9 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
         Text(
           'Activity log',
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                color: textPrimary,
-                fontWeight: FontWeight.w600,
-              ),
+            color: textPrimary,
+            fontWeight: FontWeight.w600,
+          ),
         ),
         const SizedBox(height: 12),
         logsAsync.when(
@@ -298,7 +302,10 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
           error: (e, _) => CRMCard(
             child: Row(
               children: [
-                Icon(Icons.error_outline, color: Theme.of(context).colorScheme.error),
+                Icon(
+                  Icons.error_outline,
+                  color: Theme.of(context).colorScheme.error,
+                ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
@@ -307,8 +314,7 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
                   ),
                 ),
                 TextButton(
-                  onPressed: () =>
-                      ref.invalidate(taskLogsProvider(task.id)),
+                  onPressed: () => ref.invalidate(taskLogsProvider(task.id)),
                   child: const Text('Retry'),
                 ),
               ],
@@ -318,7 +324,11 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
             if (logs.isEmpty) {
               return Text(
                 'No activity recorded yet.',
-                style: TextStyle(color: textSecondary, fontSize: 14, height: 1.4),
+                style: TextStyle(
+                  color: textSecondary,
+                  fontSize: 14,
+                  height: 1.4,
+                ),
               );
             }
             return _buildActivityTimeline(
@@ -394,9 +404,7 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
           left: 10,
           top: 14,
           bottom: 14,
-          child: IgnorePointer(
-            child: Container(width: 2, color: lineColor),
-          ),
+          child: IgnorePointer(child: Container(width: 2, color: lineColor)),
         ),
         Padding(
           padding: const EdgeInsets.only(left: 2),
@@ -460,22 +468,22 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
     String? fromNorm = fromChain;
     if (fromApi != null &&
         fromApi.isNotEmpty &&
-        (nextNorm == null ||
-            fromApi.toLowerCase() != nextNorm.toLowerCase())) {
+        (nextNorm == null || fromApi.toLowerCase() != nextNorm.toLowerCase())) {
       fromNorm = fromApi;
     }
     // When chain/API omit "before", infer from the next-older log row (list is newest-first).
-    if ((fromNorm == null || fromNorm.isEmpty) &&
-        index + 1 < logs.length) {
+    if ((fromNorm == null || fromNorm.isEmpty) && index + 1 < logs.length) {
       final olderStatus = logs[index + 1].status?.trim();
       if (olderStatus != null && olderStatus.isNotEmpty) {
         fromNorm = olderStatus;
       }
     }
 
-    final isCreation = creationId.isNotEmpty && log.id == creationId ||
+    final isCreation =
+        creationId.isNotEmpty && log.id == creationId ||
         (creationId.isEmpty && index == logs.length - 1);
-    final hasTransition = !isCreation &&
+    final hasTransition =
+        !isCreation &&
         hasStatus &&
         fromNorm != null &&
         fromNorm.isNotEmpty &&
@@ -494,8 +502,10 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
     final actionLabel = isCreation
         ? 'Created'
         : (hasTransition || hasStatus
-            ? 'Status changed'
-            : ((log.note?.trim().isNotEmpty ?? false) ? 'Note' : 'Status changed'));
+              ? 'Status changed'
+              : ((log.note?.trim().isNotEmpty ?? false)
+                    ? 'Note'
+                    : 'Status changed'));
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -534,15 +544,17 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
               ),
               const SizedBox(height: 6),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
                 decoration: BoxDecoration(
                   color: chipBg,
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
-                    color: Theme.of(context)
-                        .colorScheme
-                        .outline
-                        .withValues(alpha: 0.22),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.outline.withValues(alpha: 0.22),
                   ),
                 ),
                 child: Text(
@@ -724,7 +736,9 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
                       );
                       return;
                     }
-                    await ref.read(tasksProvider.notifier).changeTaskStatus(
+                    await ref
+                        .read(tasksProvider.notifier)
+                        .changeTaskStatus(
                           id: task.id,
                           status: status,
                           isAdmin: isAdmin,
@@ -925,8 +939,9 @@ class _TaskFormPageState extends ConsumerState<TaskFormPage> {
     String? selectedKamUserId = authState.user?.id;
     if (selectedKamUserId != null &&
         !usersState.users.any((u) => u.id == selectedKamUserId)) {
-      selectedKamUserId =
-          usersState.users.isNotEmpty ? usersState.users.first.id : null;
+      selectedKamUserId = usersState.users.isNotEmpty
+          ? usersState.users.first.id
+          : null;
     }
     if (selectedKamUserId == null && usersState.users.isNotEmpty) {
       selectedKamUserId = usersState.users.first.id;
@@ -948,109 +963,109 @@ class _TaskFormPageState extends ConsumerState<TaskFormPage> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-                TextField(
-                  controller: nameController,
-                  style: TextStyle(color: textPrimary),
-                  decoration: InputDecoration(
-                    labelText: 'Company Name *',
-                    labelStyle: TextStyle(color: textSecondary),
-                    border: OutlineInputBorder(
-                      borderSide: BorderSide(color: borderColor),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderSide: BorderSide(color: borderColor),
-                    ),
+              TextField(
+                controller: nameController,
+                style: TextStyle(color: textPrimary),
+                decoration: InputDecoration(
+                  labelText: 'Company Name *',
+                  labelStyle: TextStyle(color: textSecondary),
+                  border: OutlineInputBorder(
+                    borderSide: BorderSide(color: borderColor),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderSide: BorderSide(color: borderColor),
                   ),
                 ),
-                const SizedBox(height: 16),
-                // Currency Dropdown
-                DropdownButtonFormField<String>(
-                  isExpanded: true,
-                  initialValue: selectedCurrencyId,
-                  decoration: InputDecoration(
-                    labelText: 'Currency *',
-                    labelStyle: TextStyle(color: textSecondary),
-                    border: OutlineInputBorder(
-                      borderSide: BorderSide(color: borderColor),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderSide: BorderSide(color: borderColor),
-                    ),
+              ),
+              const SizedBox(height: 16),
+              // Currency Dropdown
+              DropdownButtonFormField<String>(
+                isExpanded: true,
+                initialValue: selectedCurrencyId,
+                decoration: InputDecoration(
+                  labelText: 'Currency *',
+                  labelStyle: TextStyle(color: textSecondary),
+                  border: OutlineInputBorder(
+                    borderSide: BorderSide(color: borderColor),
                   ),
-                  items: currenciesState.currencies.map((currency) {
-                    return DropdownMenuItem(
-                      value: currency.id,
-                      child: Text('${currency.code} - ${currency.name}'),
-                    );
-                  }).toList(),
-                  onChanged: (value) {
-                    setDialogState(() {
-                      selectedCurrencyId = value;
-                    });
-                  },
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: locationController,
-                  style: TextStyle(color: textPrimary),
-                  decoration: InputDecoration(
-                    labelText: 'Location',
-                    labelStyle: TextStyle(color: textSecondary),
-                    border: OutlineInputBorder(
-                      borderSide: BorderSide(color: borderColor),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderSide: BorderSide(color: borderColor),
-                    ),
+                  enabledBorder: OutlineInputBorder(
+                    borderSide: BorderSide(color: borderColor),
                   ),
                 ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: countryController,
-                  style: TextStyle(color: textPrimary),
-                  decoration: InputDecoration(
-                    labelText: 'Country',
-                    labelStyle: TextStyle(color: textSecondary),
-                    border: OutlineInputBorder(
-                      borderSide: BorderSide(color: borderColor),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderSide: BorderSide(color: borderColor),
-                    ),
+                items: currenciesState.currencies.map((currency) {
+                  return DropdownMenuItem(
+                    value: currency.id,
+                    child: Text('${currency.code} - ${currency.name}'),
+                  );
+                }).toList(),
+                onChanged: (value) {
+                  setDialogState(() {
+                    selectedCurrencyId = value;
+                  });
+                },
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: locationController,
+                style: TextStyle(color: textPrimary),
+                decoration: InputDecoration(
+                  labelText: 'Location',
+                  labelStyle: TextStyle(color: textSecondary),
+                  border: OutlineInputBorder(
+                    borderSide: BorderSide(color: borderColor),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderSide: BorderSide(color: borderColor),
                   ),
                 ),
-                const SizedBox(height: 16),
-                DropdownButtonFormField<String>(
-                  isExpanded: true,
-                  key: ValueKey(selectedKamUserId ?? 'kam'),
-                  initialValue: selectedKamUserId,
-                  decoration: InputDecoration(
-                    labelText: 'KAM (Key Account Manager) *',
-                    labelStyle: TextStyle(color: textSecondary),
-                    border: OutlineInputBorder(
-                      borderSide: BorderSide(color: borderColor),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderSide: BorderSide(color: borderColor),
-                    ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: countryController,
+                style: TextStyle(color: textPrimary),
+                decoration: InputDecoration(
+                  labelText: 'Country',
+                  labelStyle: TextStyle(color: textSecondary),
+                  border: OutlineInputBorder(
+                    borderSide: BorderSide(color: borderColor),
                   ),
-                  dropdownColor: surfaceColor,
-                  items: usersState.users
-                      .map(
-                        (user) => DropdownMenuItem(
-                          value: user.id,
-                          child: Text(user.name),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: usersState.users.isEmpty
-                      ? null
-                      : (value) {
-                          setDialogState(() => selectedKamUserId = value);
-                        },
+                  enabledBorder: OutlineInputBorder(
+                    borderSide: BorderSide(color: borderColor),
+                  ),
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                isExpanded: true,
+                key: ValueKey(selectedKamUserId ?? 'kam'),
+                initialValue: selectedKamUserId,
+                decoration: InputDecoration(
+                  labelText: 'KAM (Key Account Manager) *',
+                  labelStyle: TextStyle(color: textSecondary),
+                  border: OutlineInputBorder(
+                    borderSide: BorderSide(color: borderColor),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderSide: BorderSide(color: borderColor),
+                  ),
+                ),
+                dropdownColor: surfaceColor,
+                items: usersState.users
+                    .map(
+                      (user) => DropdownMenuItem(
+                        value: user.id,
+                        child: Text(user.name),
+                      ),
+                    )
+                    .toList(),
+                onChanged: usersState.users.isEmpty
+                    ? null
+                    : (value) {
+                        setDialogState(() => selectedKamUserId = value);
+                      },
+              ),
+            ],
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
@@ -1251,7 +1266,9 @@ class _TaskFormPageState extends ConsumerState<TaskFormPage> {
                   labelText: 'Title *',
                   labelStyle: TextStyle(color: textSecondary),
                   hintText: 'Enter task title',
-                  hintStyle: TextStyle(color: textSecondary.withValues(alpha: 0.6)),
+                  hintStyle: TextStyle(
+                    color: textSecondary.withValues(alpha: 0.6),
+                  ),
                 ),
                 validator: (value) {
                   if (value == null || value.isEmpty) {
@@ -1309,7 +1326,9 @@ class _TaskFormPageState extends ConsumerState<TaskFormPage> {
                   labelText: 'Due Date *',
                   labelStyle: TextStyle(color: textSecondary),
                   hintText: 'Select due date',
-                  hintStyle: TextStyle(color: textSecondary.withValues(alpha: 0.6)),
+                  hintStyle: TextStyle(
+                    color: textSecondary.withValues(alpha: 0.6),
+                  ),
                   suffixIcon: IconButton(
                     icon: Icon(Icons.calendar_today, color: textSecondary),
                     onPressed: _selectDueDate,
@@ -1348,7 +1367,9 @@ class _TaskFormPageState extends ConsumerState<TaskFormPage> {
                     onChanged: (user) {
                       if (kDebugMode) {
                         debugPrint('=== DROPDOWN ONCHANGE DEBUG ===');
-                        debugPrint('Selected user: ${user?.id} - ${user?.name}');
+                        debugPrint(
+                          'Selected user: ${user?.id} - ${user?.name}',
+                        );
                         debugPrint('================================');
                       }
                       setState(() {
@@ -1363,7 +1384,9 @@ class _TaskFormPageState extends ConsumerState<TaskFormPage> {
               // Assign By User Dropdown (Optional - Admin only)
               Consumer(
                 builder: (context, ref, child) {
-                  final isAdmin = ref.watch(rbacModuleAdminProvider(RbacPageKey.tasks));
+                  final isAdmin = ref.watch(
+                    rbacModuleAdminProvider(RbacPageKey.tasks),
+                  );
                   final usersState = ref.watch(usersProvider);
                   final selectedUser = _selectedAssignByUserId != null
                       ? usersState.users
@@ -1403,7 +1426,9 @@ class _TaskFormPageState extends ConsumerState<TaskFormPage> {
                   labelText: 'Note',
                   labelStyle: TextStyle(color: textSecondary),
                   hintText: 'Add notes about this task',
-                  hintStyle: TextStyle(color: textSecondary.withValues(alpha: 0.6)),
+                  hintStyle: TextStyle(
+                    color: textSecondary.withValues(alpha: 0.6),
+                  ),
                 ),
                 maxLines: 4,
               ),

@@ -158,7 +158,7 @@ Future<void> scheduleAttendanceReminders(AttendanceReminderRead read) async {
     }
 
     final json = await StorageService().getNotificationSettings();
-    final enabled = parseOptionalBool(json?['enabled']) ?? true;
+    final enabled = parseOptionalBool(json?['enabled']) ?? false;
     if (!enabled) {
       await NotificationService().cancelAttendanceCheckInReminders();
       return;

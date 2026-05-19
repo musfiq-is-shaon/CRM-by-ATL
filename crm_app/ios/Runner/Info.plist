@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>CRM Pro</string>
+	<string>CRM</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -15,7 +15,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>crm</string>
+	<string>CRM</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -29,15 +29,17 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>CRM Pro needs camera access when you choose to take a photo for an attachment.</string>
+	<string>CRM needs camera access when you choose to take a photo for an attachment.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>CRM Pro uses your location for attendance check-in and check-out.</string>
+	<string>CRM uses your location for attendance check-in and check-out.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>CRM Pro uses your location for attendance check-in and check-out.</string>
+	<string>CRM uses your location for attendance check-in and check-out.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>CRM Pro needs microphone access when you record a video attachment.</string>
+	<string>CRM needs microphone access when you record a video attachment.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>CRM Pro needs photo library access so you can attach files to leave requests.</string>
+	<string>CRM needs photo library access so you can attach files to leave requests.</string>
+	<key>NSUserTrackingUsageDescription</key>
+	<string>This lets CRM use the advertising identifier only for measurement and compatibility with optional analytics, in line with your App Store privacy choices. It is not used for attendance location.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

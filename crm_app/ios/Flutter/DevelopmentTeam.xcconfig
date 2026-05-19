@@ -1,0 +1,3 @@
+// Pin Apple Developer team for device signing.
+// Team ID from developer.apple.com → Membership. Update if org changes.
+DEVELOPMENT_TEAM = Q6PCL352DN

@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/json_parse.dart';
+import '../../core/services/fcm_service.dart';
 import '../../core/services/notification_service.dart';
 import '../../core/network/storage_service.dart';
 import '../../data/models/task_model.dart';
@@ -10,7 +11,7 @@ class NotificationSettings {
   final int
   daysBefore; // 0 = same day, 1 = 1 day before, 3 = 3 days before, 7 = 7 days before
 
-  const NotificationSettings({this.enabled = true, this.daysBefore = 1});
+  const NotificationSettings({this.enabled = false, this.daysBefore = 1});
 
   NotificationSettings copyWith({bool? enabled, int? daysBefore}) {
     return NotificationSettings(
@@ -25,7 +26,7 @@ class NotificationSettings {
 
   factory NotificationSettings.fromJson(Map<String, dynamic> json) {
     return NotificationSettings(
-      enabled: parseOptionalBool(json['enabled']) ?? true,
+      enabled: parseOptionalBool(json['enabled']) ?? false,
       daysBefore: parseOptionalInt(json['daysBefore']) ?? 1,
     );
   }
@@ -65,13 +66,23 @@ class NotificationSettingsNotifier extends StateNotifier<NotificationSettings> {
   }
 
   Future<void> setEnabled(bool enabled) async {
+    if (enabled) {
+      await _notificationService.initialize();
+      final granted = await _notificationService.requestPermissions();
+      if (!granted) {
+        state = state.copyWith(enabled: false);
+        await _saveSettings();
+        return;
+      }
+      await FcmService.instance.refreshFcmRegistrationIfPossible();
+    }
+
     state = state.copyWith(enabled: enabled);
     await _saveSettings();
 
     if (!enabled) {
       await _notificationService.cancelAllNotifications();
     } else {
-      // Trigger notification reschedule if callback is set
       _triggerReschedule();
     }
   }

@@ -179,7 +179,7 @@ class _CRMAppState extends ConsumerState<CRMApp> with WidgetsBindingObserver {
       builder: (ColorScheme? lightDynamic, ColorScheme? darkDynamic) {
         return MaterialApp(
           navigatorKey: appNavigatorKey,
-          title: 'CRM Pro',
+          title: 'CRM',
           debugShowCheckedModeBanner: false,
           theme: AppTheme.light(accent, lightDynamic),
           darkTheme: AppTheme.dark(

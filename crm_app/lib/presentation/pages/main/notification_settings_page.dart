@@ -70,7 +70,7 @@ class NotificationSettingsPage extends ConsumerWidget {
                             ),
                           ),
                           Text(
-                            'Task deadlines, shift check-in reminders, and server push (Firebase) when configured',
+                            'Turn this on to choose reminder timing and allow the system permission prompt. Task deadlines, shift check-in reminders, and server push (Firebase) when configured.',
                             style: TextStyle(
                               fontSize: 12,
                               color: textSecondary,
@@ -109,6 +109,16 @@ class NotificationSettingsPage extends ConsumerWidget {
                 value: 0,
                 selectedValue: settings.daysBefore,
                 onTap: () async {
+                  if (!settings.enabled) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Turn on notifications above to use these options.'),
+                        ),
+                      );
+                    }
+                    return;
+                  }
                   await settingsNotifier.setDaysBefore(0);
                   await _rescheduleTasksAndShiftAlerts(ref, tasksState.tasks);
                 },
@@ -123,6 +133,16 @@ class NotificationSettingsPage extends ConsumerWidget {
                 value: 1,
                 selectedValue: settings.daysBefore,
                 onTap: () async {
+                  if (!settings.enabled) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Turn on notifications above to use these options.'),
+                        ),
+                      );
+                    }
+                    return;
+                  }
                   await settingsNotifier.setDaysBefore(1);
                   await _rescheduleTasksAndShiftAlerts(ref, tasksState.tasks);
                 },
@@ -137,6 +157,16 @@ class NotificationSettingsPage extends ConsumerWidget {
                 value: 3,
                 selectedValue: settings.daysBefore,
                 onTap: () async {
+                  if (!settings.enabled) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Turn on notifications above to use these options.'),
+                        ),
+                      );
+                    }
+                    return;
+                  }
                   await settingsNotifier.setDaysBefore(3);
                   await _rescheduleTasksAndShiftAlerts(ref, tasksState.tasks);
                 },
@@ -151,6 +181,16 @@ class NotificationSettingsPage extends ConsumerWidget {
                 value: 7,
                 selectedValue: settings.daysBefore,
                 onTap: () async {
+                  if (!settings.enabled) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Turn on notifications above to use these options.'),
+                        ),
+                      );
+                    }
+                    return;
+                  }
                   await settingsNotifier.setDaysBefore(7);
                   await _rescheduleTasksAndShiftAlerts(ref, tasksState.tasks);
                 },
@@ -243,7 +283,34 @@ class NotificationSettingsPage extends ConsumerWidget {
             width: double.infinity,
             child: ElevatedButton.icon(
               onPressed: () async {
+                if (!settings.enabled) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Turn on “Enable Notifications” first, then allow alerts when the system asks.',
+                        ),
+                        duration: Duration(seconds: 3),
+                      ),
+                    );
+                  }
+                  return;
+                }
                 final notificationService = NotificationService();
+                await notificationService.initialize();
+                final ok = await notificationService.requestPermissions();
+                if (!context.mounted) return;
+                if (!ok) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'Notifications are not allowed for this app yet. Enable them in system Settings, then try again.',
+                      ),
+                      duration: Duration(seconds: 4),
+                    ),
+                  );
+                  return;
+                }
                 await notificationService.sendTestNotification();
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(

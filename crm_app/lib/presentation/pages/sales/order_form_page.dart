@@ -118,8 +118,8 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
     if (ctx == null || !ctx.mounted) return;
     Scrollable.ensureVisible(
       ctx,
-      alignment: 0.12,
-      duration: const Duration(milliseconds: 320),
+      alignment: 0.35,
+      duration: const Duration(milliseconds: 280),
       curve: Curves.easeOutCubic,
     );
   }
@@ -387,10 +387,6 @@ class _OrderFormPageState extends ConsumerState<OrderFormPage> {
                     WidgetsBinding.instance.addPostFrameCallback((_) {
                       _scrollAssignIntoView();
                     });
-                    Future<void>.delayed(
-                      const Duration(milliseconds: 160),
-                      _scrollAssignIntoView,
-                    );
                   },
                 ),
               ),

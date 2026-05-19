@@ -76,10 +76,12 @@ class NotificationService {
     const androidSettings = AndroidInitializationSettings(
       '@mipmap/ic_launcher',
     );
+    // Do not prompt on plugin init — OS consent runs after the user opts in in-app
+    // (App Store Review Guideline 4.5.4).
     const iosSettings = DarwinInitializationSettings(
-      requestAlertPermission: true,
-      requestBadgePermission: true,
-      requestSoundPermission: true,
+      requestAlertPermission: false,
+      requestBadgePermission: false,
+      requestSoundPermission: false,
     );
 
     const initSettings = InitializationSettings(
@@ -233,6 +235,10 @@ class NotificationService {
         badge: true,
         sound: true,
       );
+    }
+    // Android < 33: POST_NOTIFICATIONS does not exist; the plugin may return null (treat as allowed).
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      return granted ?? true;
     }
     return granted ?? false;
   }
