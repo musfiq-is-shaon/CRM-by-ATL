@@ -106,8 +106,28 @@ pw.Widget _pdfStat(String label, String value) {
 }
 
 String formatLunchVoteTime(DateTime? dt) {
-  if (dt == null) return '—';
-  return DateFormat.jm().format(dt.toLocal());
+  if (dt == null) return '';
+  final local = dt.toLocal();
+  final now = DateTime.now();
+  final sameDay =
+      local.year == now.year && local.month == now.month && local.day == now.day;
+  if (sameDay) return DateFormat.jm().format(local);
+  return DateFormat('MMM d, jm').format(local);
+}
+
+void showLunchVoteDisabledMessage(BuildContext context, LunchPoll poll) {
+  final String message;
+  if (poll.isCancelled) {
+    message = 'This poll was cancelled. Voting is not available.';
+  } else if (poll.isClosed) {
+    message = 'This poll is closed. Voting is no longer available.';
+  } else if (poll.isPastEndTime) {
+    message =
+        'Voting closed at ${formatLunchEndTimeDisplay(poll.endTime)}.';
+  } else {
+    message = 'Voting is not available for this poll.';
+  }
+  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
 }
 
 /// Display HH:mm or existing 12h string as 12-hour time (e.g. "6:30 PM").
@@ -156,6 +176,32 @@ TimeOfDay lunchEndTimeOfDay(String? raw) {
       minute: int.tryParse(parts.length > 1 ? parts[1] : '0') ?? 0,
     );
   }
+}
+
+/// Poll voting deadline on the poll date (local time).
+DateTime? lunchPollEndDateTime(DateTime? pollDate, String? endTime) {
+  if (endTime == null || endTime.trim().isEmpty) return null;
+  final base = (pollDate ?? DateTime.now()).toLocal();
+  final day = DateTime(base.year, base.month, base.day);
+  final tod = lunchEndTimeOfDay(endTime);
+  return DateTime(day.year, day.month, day.day, tod.hour, tod.minute);
+}
+
+extension LunchPollVoting on LunchPoll {
+  bool get isPastEndTime {
+    final deadline = lunchPollEndDateTime(date, endTime);
+    if (deadline == null) return false;
+    return DateTime.now().isAfter(deadline);
+  }
+
+  String get effectiveStatus {
+    if (isCancelled) return 'cancelled';
+    if (isClosed || isPastEndTime) return 'closed';
+    return status.toLowerCase();
+  }
+
+  bool get isVotingOpen =>
+      !isCancelled && status.toLowerCase() == 'active' && !isPastEndTime;
 }
 
 String formatLunchPollDate(DateTime? dt) {

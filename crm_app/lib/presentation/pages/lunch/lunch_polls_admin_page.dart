@@ -100,7 +100,7 @@ class _LunchPollsAdminPageState extends ConsumerState<LunchPollsAdminPage> {
                               ],
                             ),
                           ),
-                          lunchPollStatusBadge(poll.status),
+                          lunchPollStatusBadge(poll.effectiveStatus),
                         ],
                       ),
                       const SizedBox(height: 12),
@@ -125,14 +125,14 @@ class _LunchPollsAdminPageState extends ConsumerState<LunchPollsAdminPage> {
                               if (v == 'edit') {
                                 await showLunchPollFormSheet(context, ref, existing: poll);
                                 await _load();
-                              } else if (v == 'close' && poll.isActive) {
+                              } else if (v == 'close' && poll.isVotingOpen) {
                                 await ref.read(lunchProvider.notifier).closePoll(poll.id);
                                 await _load();
                               }
                             },
                             itemBuilder: (_) => [
                               const PopupMenuItem(value: 'edit', child: Text('Edit')),
-                              if (poll.isActive)
+                              if (poll.isVotingOpen)
                                 const PopupMenuItem(value: 'close', child: Text('Close poll')),
                             ],
                           ),

@@ -64,3 +64,26 @@ List<AttendanceRecord> filterAttendanceRecordsToYmdRange(
     return day.compareTo(from) >= 0 && day.compareTo(to) <= 0;
   }).toList();
 }
+
+/// History lists: newest calendar day first.
+List<AttendanceRecord> sortAttendanceRecordsByDateDesc(
+  List<AttendanceRecord> rows,
+) {
+  final copy = [...rows];
+  copy.sort((a, b) => b.date.compareTo(a.date));
+  return copy;
+}
+
+/// Whether a row should affect hub week stat chips (skip weekends, holidays, future days).
+bool attendanceRecordCountsTowardRollup(
+  AttendanceRecord r, {
+  String? todayYmd,
+}) {
+  if (r.isNonWorkingDay) return false;
+  final day = r.date.trim();
+  if (day.length < 10) return false;
+  final ymd = day.substring(0, 10);
+  final today = todayYmd ?? attendanceDateYmd(DateTime.now());
+  if (ymd.compareTo(today) > 0) return false;
+  return true;
+}

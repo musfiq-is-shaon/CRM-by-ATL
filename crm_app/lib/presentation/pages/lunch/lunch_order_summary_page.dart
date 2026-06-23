@@ -58,6 +58,13 @@ class _LunchOrderSummaryPageState extends ConsumerState<LunchOrderSummaryPage> {
   }
 
   Future<void> _pickPoll() async {
+    final now = DateTime.now();
+    await ref.read(lunchProvider.notifier).loadTodayPolls(silent: true);
+    await ref.read(lunchProvider.notifier).loadAdminPolls(
+      from: now.subtract(const Duration(days: 30)),
+      to: now.add(const Duration(days: 7)),
+    );
+    if (!mounted) return;
     final state = ref.read(lunchProvider);
     final polls = [
       ...state.todayPolls,
@@ -78,7 +85,7 @@ class _LunchOrderSummaryPageState extends ConsumerState<LunchOrderSummaryPage> {
                   (p) => ListTile(
                     title: Text(p.title),
                     subtitle: Text(formatLunchPollDateShort(p.date)),
-                    trailing: lunchPollStatusBadge(p.status),
+                    trailing: lunchPollStatusBadge(p.effectiveStatus),
                     onTap: () => Navigator.pop(ctx, p),
                   ),
                 )
@@ -98,6 +105,7 @@ class _LunchOrderSummaryPageState extends ConsumerState<LunchOrderSummaryPage> {
       await _bootstrap();
       return;
     }
+    await ref.read(lunchProvider.notifier).loadTodayPolls(silent: true);
     await ref.read(lunchProvider.notifier).loadOrderSummary(pollId);
   }
 
@@ -184,10 +192,20 @@ class _LunchOrderSummaryPageState extends ConsumerState<LunchOrderSummaryPage> {
             ],
           ),
           const SizedBox(height: 8),
-          OutlinedButton.icon(
-            onPressed: _pickPoll,
-            icon: const Icon(Icons.event_outlined, size: 18),
-            label: const Text('Choose poll'),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _pickPoll,
+                  icon: const Icon(Icons.event_outlined, size: 18),
+                  label: const Text('Choose poll'),
+                ),
+              ),
+              if (poll != null) ...[
+                const SizedBox(width: 8),
+                lunchPollStatusBadge(poll.effectiveStatus),
+              ],
+            ],
           ),
           if (summary != null) ...[
             const SizedBox(height: 16),
@@ -324,10 +342,11 @@ class _LunchOrderSummaryPageState extends ConsumerState<LunchOrderSummaryPage> {
                             ],
                           ),
                         ),
-                        Text(
-                          formatLunchVoteTime(v.votedAt),
-                          style: TextStyle(fontSize: 12, color: textSecondary),
-                        ),
+                        if (v.votedAt != null)
+                          Text(
+                            formatLunchVoteTime(v.votedAt),
+                            style: TextStyle(fontSize: 12, color: textSecondary),
+                          ),
                       ],
                     ),
                   ),

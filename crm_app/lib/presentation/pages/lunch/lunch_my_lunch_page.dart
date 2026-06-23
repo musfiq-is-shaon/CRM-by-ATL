@@ -109,7 +109,7 @@ class _LunchMyLunchPageState extends ConsumerState<LunchMyLunchPage> {
             padding: AppThemeColors.pagePaddingAll,
             children: [
               const LunchModuleHeader(),
-              const SizedBox(height: 20),
+              const SizedBox(height: 14),
               if (wide)
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -144,10 +144,23 @@ class _TodayPollCard extends ConsumerWidget {
   final String userName;
 
   String get _statusHint {
-    if (poll.isActive && poll.endTime != null && poll.endTime!.isNotEmpty) {
+    if (poll.isCancelled) return 'Poll cancelled — voting is disabled';
+    if (poll.effectiveStatus == 'closed') {
+      if (poll.isPastEndTime && poll.isActive) {
+        return 'Voting ended at ${formatLunchEndTimeDisplay(poll.endTime)}';
+      }
+      return 'Poll closed — voting has ended';
+    }
+    if (poll.isVotingOpen && poll.endTime != null && poll.endTime!.isNotEmpty) {
       return 'Closes at ${formatLunchEndTimeDisplay(poll.endTime)}';
     }
     return poll.statusHint;
+  }
+
+  IconData get _statusIcon {
+    if (poll.isCancelled) return Icons.cancel_outlined;
+    if (poll.effectiveStatus == 'closed') return Icons.lock_outline;
+    return Icons.schedule;
   }
 
   @override
@@ -157,13 +170,13 @@ class _TodayPollCard extends ConsumerWidget {
     final textPrimary = AppThemeColors.textPrimaryColor(context);
     final textSecondary = AppThemeColors.textSecondaryColor(context);
     final cs = Theme.of(context).colorScheme;
-    final canVote = poll.isActive;
+    final canVote = poll.isVotingOpen;
     final myOptionId = poll.myVote?.optionId;
     final options = poll.mergedOptions;
     final total = poll.totalVoteCount;
 
     return CRMCard(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -177,108 +190,145 @@ class _TodayPollCard extends ConsumerWidget {
                     Text(
                       userName,
                       style: const TextStyle(
-                        fontSize: 13,
+                        fontSize: 12,
                         fontWeight: FontWeight.w600,
                         color: lunchBrandGreen,
                       ),
                     ),
-                    const SizedBox(height: 2),
                     Text(
                       poll.title,
                       style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
                         color: textPrimary,
+                        height: 1.2,
                       ),
                     ),
                   ],
                 ),
               ),
-              lunchPollStatusBadge(poll.status),
+              lunchPollStatusBadge(poll.effectiveStatus),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 6),
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
               color: poll.isCancelled
                   ? cs.errorContainer.withValues(alpha: 0.35)
+                  : poll.effectiveStatus == 'closed'
+                  ? cs.surfaceContainerHighest
                   : cs.surfaceContainerHighest.withValues(alpha: 0.6),
               borderRadius: BorderRadius.circular(AppRadius.sm),
+              border: poll.effectiveStatus == 'closed'
+                  ? Border.all(color: cs.outline.withValues(alpha: 0.35))
+                  : null,
             ),
             child: Row(
               children: [
                 Icon(
-                  poll.isCancelled ? Icons.cancel_outlined : Icons.schedule,
-                  size: 16,
-                  color: poll.isCancelled ? cs.error : textSecondary,
+                  _statusIcon,
+                  size: 14,
+                  color: poll.isCancelled
+                      ? cs.error
+                      : poll.effectiveStatus == 'closed'
+                      ? cs.onSurfaceVariant
+                      : textSecondary,
                 ),
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
                     _statusHint,
                     style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                      color: poll.isCancelled ? cs.error : textSecondary,
+                      fontSize: 12,
+                      fontWeight: poll.effectiveStatus == 'closed' || poll.isCancelled
+                          ? FontWeight.w600
+                          : FontWeight.w500,
+                      color: poll.isCancelled
+                          ? cs.error
+                          : poll.effectiveStatus == 'closed'
+                          ? cs.onSurfaceVariant
+                          : textSecondary,
                     ),
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 10),
           if (voting)
             const Center(
               child: Padding(
-                padding: EdgeInsets.all(12),
+                padding: EdgeInsets.symmetric(vertical: 8),
                 child: CircularProgressIndicator(strokeWidth: 2),
               ),
             )
           else if (options.isEmpty)
             Text('No menu options yet', style: TextStyle(color: textSecondary))
           else
-            ...options.map(
-              (opt) => LunchPollOptionRow(
-                option: opt,
-                selected: myOptionId == opt.id,
-                totalVotes: total,
-                enabled: canVote,
-                onTap: () async {
-                  if (!canVote) return;
-                  if (!poll.allowVoteChange &&
-                      myOptionId != null &&
-                      myOptionId != opt.id) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Vote changes are not allowed'),
-                      ),
-                    );
-                    return;
-                  }
-                  await ref.read(lunchProvider.notifier).vote(poll.id, opt.id);
-                },
+            AbsorbPointer(
+              absorbing: !canVote,
+              child: Opacity(
+                opacity: canVote ? 1 : 0.42,
+                child: Column(
+                  children: options
+                      .map(
+                        (opt) => LunchPollOptionRow(
+                          option: opt,
+                          selected: myOptionId == opt.id,
+                          totalVotes: total,
+                          enabled: canVote,
+                          compact: true,
+                          onTap: () async {
+                            if (!canVote) {
+                              showLunchVoteDisabledMessage(context, poll);
+                              return;
+                            }
+                            if (!poll.allowVoteChange &&
+                                myOptionId != null &&
+                                myOptionId != opt.id) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Vote changes are not allowed'),
+                                ),
+                              );
+                              return;
+                            }
+                            await ref
+                                .read(lunchProvider.notifier)
+                                .vote(poll.id, opt.id);
+                          },
+                        ),
+                      )
+                      .toList(),
+                ),
               ),
             ),
           if (poll.myVote?.votedAt != null) ...[
-            const SizedBox(height: 8),
+            const SizedBox(height: 4),
             Align(
               alignment: Alignment.centerRight,
               child: Text(
                 'Voted ${formatLunchVoteTime(poll.myVote!.votedAt)}',
-                style: TextStyle(fontSize: 11, color: textSecondary),
+                style: TextStyle(fontSize: 10, color: textSecondary),
               ),
             ),
           ],
           if (total > 0) ...[
-            const SizedBox(height: 8),
+            const SizedBox(height: 2),
             Center(
               child: TextButton(
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
                 onPressed: () => _showVotesSheet(context, poll),
                 child: const Text(
                   'View all votes',
                   style: TextStyle(
+                    fontSize: 13,
                     color: lunchBrandGreen,
                     fontWeight: FontWeight.w600,
                   ),
@@ -298,6 +348,8 @@ class _TodayPollCard extends ConsumerWidget {
       isScrollControlled: true,
       builder: (ctx) {
         final options = poll.mergedOptions;
+        final textPrimary = AppThemeColors.textPrimaryColor(ctx);
+        final textSecondary = AppThemeColors.textSecondaryColor(ctx);
         return SafeArea(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -315,25 +367,62 @@ class _TodayPollCard extends ConsumerWidget {
                 Flexible(
                   child: ListView(
                     shrinkWrap: true,
-                    children: options.expand((opt) {
-                      if (opt.voters.isEmpty) {
-                        return [
-                          ListTile(
-                            title: Text(opt.label),
-                            trailing: Text('${opt.voteCount} votes'),
-                          ),
-                        ];
-                      }
-                      return opt.voters.map(
-                        (v) => ListTile(
-                          leading: CircleAvatar(
-                            child: Text(
-                              v.name.isNotEmpty ? v.name[0].toUpperCase() : '?',
-                              style: const TextStyle(fontSize: 12),
+                    children: options.map((opt) {
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    opt.label,
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 15,
+                                      color: textPrimary,
+                                    ),
+                                  ),
+                                ),
+                                Text(
+                                  '${opt.voteCount > 0 ? opt.voteCount : opt.voters.length} vote${(opt.voteCount > 0 ? opt.voteCount : opt.voters.length) == 1 ? '' : 's'}',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 13,
+                                    color: textSecondary,
+                                  ),
+                                ),
+                              ],
                             ),
-                          ),
-                          title: Text(v.name),
-                          subtitle: Text(opt.label),
+                            const SizedBox(height: 6),
+                            if (opt.voters.isEmpty)
+                              Text(
+                                'No votes yet',
+                                style: TextStyle(fontSize: 13, color: textSecondary),
+                              )
+                            else
+                              ...opt.voters.map(
+                                (v) => ListTile(
+                                  contentPadding: EdgeInsets.zero,
+                                  dense: true,
+                                  leading: CircleAvatar(
+                                    radius: 16,
+                                    child: Text(
+                                      v.name.isNotEmpty ? v.name[0].toUpperCase() : '?',
+                                      style: const TextStyle(fontSize: 12),
+                                    ),
+                                  ),
+                                  title: Text(
+                                    v.name,
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w500,
+                                      color: textPrimary,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
                         ),
                       );
                     }).toList(),

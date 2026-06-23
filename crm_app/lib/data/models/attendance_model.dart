@@ -925,8 +925,18 @@ bool _isLateAttendanceJson(Map<String, dynamic> json) {
   return _lateMinutesFromAttendanceJson(json) > 0;
 }
 
+bool _recordOptionalBool(dynamic v) {
+  if (v == null) return false;
+  if (v is bool) return v;
+  final s = v.toString().toLowerCase();
+  return s == 'true' || s == '1';
+}
+
 /// Maps `/attendance/records` row status to UI + week rollup (`present`, `late`, …).
 String _attendanceRecordStatusFromJson(Map<String, dynamic> json) {
+  final isWeekend = _recordOptionalBool(json['isWeekend'] ?? json['is_weekend']);
+  final isHoliday = _recordOptionalBool(json['isHoliday'] ?? json['is_holiday']);
+
   String raw = '';
   for (final k in [
     'status',
@@ -945,7 +955,17 @@ String _attendanceRecordStatusFromJson(Map<String, dynamic> json) {
       break;
     }
   }
-  if (raw.isEmpty) return 'absent';
+
+  if (raw.isEmpty) {
+    if (isWeekend || isHoliday) return 'exempt';
+    final cin = _parseAttendanceDateTime(
+      json['checkInTime'] ?? json['check_in_time'],
+    );
+    if (cin != null) {
+      return _isLateAttendanceJson(json) ? 'late' : 'present';
+    }
+    return 'absent';
+  }
 
   var s = raw.toLowerCase().trim().replaceAll(' ', '_').replaceAll('-', '_');
 
@@ -955,8 +975,21 @@ String _attendanceRecordStatusFromJson(Map<String, dynamic> json) {
     'absent',
     'early_leave',
     'half_day',
+    'exempt',
   };
   if (canonical.contains(s)) return s;
+
+  if (s == 'weekend' ||
+      s == 'holiday' ||
+      s == 'off' ||
+      s == 'non_working' ||
+      s == 'non_working_day') {
+    return 'exempt';
+  }
+
+  if (s == 'leave' || s == 'on_leave' || s == 'onleave') {
+    return 'other';
+  }
 
   if (s == 'completed' ||
       s == 'checked_out' ||
@@ -972,10 +1005,7 @@ String _attendanceRecordStatusFromJson(Map<String, dynamic> json) {
     final cin = _parseAttendanceDateTime(
       json['checkInTime'] ?? json['check_in_time'],
     );
-    final cout = _parseAttendanceDateTime(
-      json['checkOutTime'] ?? json['check_out_time'],
-    );
-    if (cin != null && cout != null) {
+    if (cin != null) {
       return _isLateAttendanceJson(json) ? 'late' : 'present';
     }
   }
@@ -984,10 +1014,118 @@ String _attendanceRecordStatusFromJson(Map<String, dynamic> json) {
       s == 'no_shift' ||
       s == 'no_show' ||
       s == 'noshow') {
+    if (isWeekend || isHoliday) return 'exempt';
     return 'absent';
   }
 
+  if (isWeekend || isHoliday) return 'exempt';
+
   return s;
+}
+
+/// Optional counts from `GET /api/attendance/records` response wrapper.
+class AttendanceRecordsSummary {
+  const AttendanceRecordsSummary({
+    required this.present,
+    required this.late,
+    required this.absent,
+    required this.other,
+  });
+
+  final int present;
+  final int late;
+  final int absent;
+  final int other;
+
+  int get attended => present + late;
+
+  int get total => present + late + absent + other;
+
+  static AttendanceRecordsSummary? tryParseFromResponse(dynamic body) {
+    if (body is! Map) return null;
+    final root = Map<String, dynamic>.from(body);
+    final nested = [
+      root['summary'],
+      root['stats'],
+      root['counts'],
+      root['totals'],
+      root['meta'] is Map ? (root['meta'] as Map)['summary'] : null,
+    ];
+    for (final candidate in nested) {
+      final parsed = _fromMap(candidate);
+      if (parsed != null) return parsed;
+    }
+    return _fromMap(root);
+  }
+
+  static AttendanceRecordsSummary? _fromMap(dynamic raw) {
+    if (raw is! Map) return null;
+    final m = Map<String, dynamic>.from(raw);
+    final present = _pickInt(m, const [
+      'present',
+      'presentCount',
+      'present_count',
+      'onTime',
+      'on_time',
+    ]);
+    final late = _pickInt(m, const ['late', 'lateCount', 'late_count']);
+    final absent = _pickInt(m, const ['absent', 'absentCount', 'absent_count']);
+    final attended = _pickInt(m, const [
+      'attended',
+      'attendedCount',
+      'attended_count',
+      'presentTotal',
+      'present_total',
+    ]);
+    final other = _pickInt(m, const [
+      'other',
+      'otherCount',
+      'other_count',
+      'halfDay',
+      'half_day',
+    ]);
+    if (present == null &&
+        late == null &&
+        absent == null &&
+        attended == null &&
+        other == null) {
+      return null;
+    }
+    final lateN = late ?? 0;
+    var presentN = present ?? 0;
+    if (attended != null && attended > 0) {
+      presentN = attended > lateN ? attended - lateN : attended;
+    }
+    return AttendanceRecordsSummary(
+      present: presentN,
+      late: lateN,
+      absent: absent ?? 0,
+      other: other ?? 0,
+    );
+  }
+
+  static int? _pickInt(Map<String, dynamic> m, List<String> keys) {
+    for (final k in keys) {
+      final v = m[k];
+      if (v == null) continue;
+      if (v is int) return v;
+      if (v is double) return v.round();
+      final parsed = int.tryParse(v.toString());
+      if (parsed != null) return parsed;
+    }
+    return null;
+  }
+}
+
+/// Parsed `GET /api/attendance/records` payload.
+class AttendanceRecordsResult {
+  const AttendanceRecordsResult({
+    required this.records,
+    this.summary,
+  });
+
+  final List<AttendanceRecord> records;
+  final AttendanceRecordsSummary? summary;
 }
 
 class AttendanceRecord {
@@ -998,6 +1136,9 @@ class AttendanceRecord {
   final DateTime? checkOutTime;
   final double? durationHours;
   final String status; // 'present', 'late', 'early_leave', 'absent', 'half_day'
+  final bool? isWeekend;
+  final bool? isHoliday;
+  final bool? isLate;
   final String? locationIn;
   final String? locationOut;
   final DateTime createdAt;
@@ -1011,11 +1152,19 @@ class AttendanceRecord {
     this.checkOutTime,
     this.durationHours,
     required this.status,
+    this.isWeekend,
+    this.isHoliday,
+    this.isLate,
     this.locationIn,
     this.locationOut,
     required this.createdAt,
     this.user,
   });
+
+  bool get isNonWorkingDay =>
+      isWeekend == true ||
+      isHoliday == true ||
+      status == 'exempt';
 
   factory AttendanceRecord.fromJson(Map<String, dynamic> raw) {
     final json = _unwrapAttendanceRecordJson(raw);
@@ -1041,6 +1190,9 @@ class AttendanceRecord {
             json['total_hours'],
       ),
       status: _attendanceRecordStatusFromJson(json),
+      isWeekend: parseOptionalBool(json['isWeekend'] ?? json['is_weekend']),
+      isHoliday: parseOptionalBool(json['isHoliday'] ?? json['is_holiday']),
+      isLate: _isLateAttendanceJson(json) ? true : null,
       locationIn: _pickLocationFromJson(
         json,
         const [

@@ -91,6 +91,17 @@ class LunchNotifier extends StateNotifier<LunchState> {
 
   final LunchRepository _repo;
 
+  void _upsertPoll(LunchPoll poll) {
+    if (poll.id.isEmpty) return;
+    final today = [
+      for (final p in state.todayPolls) p.id == poll.id ? poll : p,
+    ];
+    final admin = [
+      for (final p in state.adminPolls) p.id == poll.id ? poll : p,
+    ];
+    state = state.copyWith(todayPolls: today, adminPolls: admin);
+  }
+
   Future<void> bootstrapUser() async {
     state = state.copyWith(status: LunchLoadStatus.loading, clearError: true);
     try {
@@ -153,6 +164,7 @@ class LunchNotifier extends StateNotifier<LunchState> {
       }
       poll ??= await _repo.getPoll(pollId);
       final summary = await _repo.getPollSummary(pollId, poll: poll);
+      _upsertPoll(summary.poll);
       state = state.copyWith(
         status: LunchLoadStatus.loaded,
         orderSummary: summary,
@@ -170,7 +182,7 @@ class LunchNotifier extends StateNotifier<LunchState> {
   }) async {
     state = state.copyWith(status: LunchLoadStatus.loading, clearError: true);
     try {
-      final polls = await _repo.listPolls(from: from, to: to, status: status);
+      final polls = await _repo.listPollsHydrated(from: from, to: to, status: status);
       state = state.copyWith(
         status: LunchLoadStatus.loaded,
         adminPolls: polls,
@@ -277,7 +289,7 @@ class LunchNotifier extends StateNotifier<LunchState> {
   }
 
   Future<LunchPoll> updatePoll(String pollId, LunchPoll poll) async {
-    final updated = await _repo.updatePoll(pollId, poll.toCreateJson());
+    final updated = await _repo.updatePoll(pollId, poll.toUpdateJson());
     await loadTodayPolls(silent: true);
     return updated;
   }

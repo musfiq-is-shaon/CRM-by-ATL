@@ -190,23 +190,9 @@ class AttendanceNotifier extends StateNotifier<AttendanceState> {
     }
     state = state.copyWith(isLoading: true, error: null);
     try {
-      List<AttendanceRecord> records;
-      if (period == 'week') {
-        final range = sundayWeekRangeContaining(DateTime.now());
-        records = await _repository.getRecords(
-          dateFrom: range.dateFrom,
-          dateTo: range.dateTo,
-        );
-        records = filterAttendanceRecordsToYmdRange(
-          records,
-          range.dateFrom,
-          range.dateTo,
-        );
-      } else {
-        records = await _repository.getRecords(period: period);
-      }
+      final result = await _repository.getRecords(period: period);
       state = state.copyWith(
-        records: records,
+        records: sortAttendanceRecordsByDateDesc(result.records),
         period: period,
         isLoading: false,
       );
@@ -444,11 +430,24 @@ class AttendanceWeekRollup {
 
   int get total => present + absent + other;
 
+  factory AttendanceWeekRollup.fromSummary(AttendanceRecordsSummary summary) {
+    return AttendanceWeekRollup(
+      present: summary.attended,
+      late: summary.late,
+      absent: summary.absent,
+      other: summary.other,
+    );
+  }
+
   factory AttendanceWeekRollup.fromRecords(List<AttendanceRecord> rows) {
     var onTime = 0, late = 0, absent = 0, other = 0;
+    final today = attendanceDateYmd(DateTime.now());
     for (final r in rows) {
+      if (!attendanceRecordCountsTowardRollup(r, todayYmd: today)) continue;
       final s = r.status.toLowerCase().trim();
       switch (s) {
+        case 'exempt':
+          break;
         case 'present':
           onTime++;
           break;
@@ -460,11 +459,16 @@ class AttendanceWeekRollup {
           break;
         case 'early_leave':
         case 'half_day':
+        case 'other':
           other++;
           break;
         default:
-          if (r.checkInTime != null && r.checkOutTime != null) {
-            onTime++;
+          if (r.checkInTime != null) {
+            if (r.isLate == true) {
+              late++;
+            } else {
+              onTime++;
+            }
           } else {
             other++;
           }
@@ -483,17 +487,10 @@ class AttendanceWeekRollup {
 final attendanceWeekRollupProvider =
     FutureProvider.autoDispose<AttendanceWeekRollup>((ref) async {
       final repo = ref.read(attendanceRepositoryProvider);
-      final range = sundayWeekRangeContaining(DateTime.now());
-      // Always Sun–Sat via explicit dates. Do not fall back to `period=week` — APIs often
-      // use ISO (Mon–Sun), which misaligns the hub “This week” counts with the history filter.
-      final rows = await repo.getRecords(
-        dateFrom: range.dateFrom,
-        dateTo: range.dateTo,
-      );
-      final filtered = filterAttendanceRecordsToYmdRange(
-        rows,
-        range.dateFrom,
-        range.dateTo,
-      );
-      return AttendanceWeekRollup.fromRecords(filtered);
+      final result = await repo.getRecords(period: 'week');
+      final summary = result.summary;
+      if (summary != null && summary.total > 0) {
+        return AttendanceWeekRollup.fromSummary(summary);
+      }
+      return AttendanceWeekRollup.fromRecords(result.records);
     });

@@ -35,7 +35,7 @@ class AttendanceRepository {
 
   /// My records: `GET /api/attendance/records` — either `period=...` or
   /// `dateFrom` + `dateTo` (YYYY-MM-DD) for an explicit range (e.g. Sun–Sat week).
-  Future<List<AttendanceRecord>> getRecords({
+  Future<AttendanceRecordsResult> getRecords({
     String period = 'month',
     String? dateFrom,
     String? dateTo,
@@ -49,14 +49,13 @@ class AttendanceRepository {
       qp['dateFrom'] = df;
       qp['dateTo'] = dt;
     } else {
-      qp['period'] = period;
+      qp['period'] = _normalizeAttendancePeriod(period);
     }
     final response = await _apiClient.get(
       AppConstants.attendanceRecords,
       queryParameters: qp,
     );
-    final rows = _recordsListFromResponse(response.data);
-    return rows.map(AttendanceRecord.fromJson).toList();
+    return _recordsResultFromResponse(response.data);
   }
 
   /// Admin: `GET /api/attendance/all` — `period` or `dateFrom`/`dateTo` + optional `userId`.
@@ -75,7 +74,7 @@ class AttendanceRepository {
       qp['dateFrom'] = df;
       qp['dateTo'] = dt;
     } else {
-      qp['period'] = period;
+      qp['period'] = _normalizeAttendancePeriod(period);
     }
     if (userId != null && userId.isNotEmpty) qp['userId'] = userId;
     final response = await _apiClient.get(
@@ -162,6 +161,26 @@ List<Map<String, dynamic>> _recordsListFromResponse(dynamic body) {
     }
   }
   return [];
+}
+
+AttendanceRecordsResult _recordsResultFromResponse(dynamic body) {
+  final rows = _recordsListFromResponse(body);
+  final records = rows.map(AttendanceRecord.fromJson).toList();
+  final summary = AttendanceRecordsSummary.tryParseFromResponse(body);
+  return AttendanceRecordsResult(records: records, summary: summary);
+}
+
+String _normalizeAttendancePeriod(String period) {
+  final p = period.trim().toLowerCase();
+  return switch (p) {
+    'w' => 'week',
+    'lw' => 'last_week',
+    'm' => 'month',
+    'lm' => 'last_month',
+    'y' => 'year',
+    'ly' => 'last_year',
+    _ => p,
+  };
 }
 
 final attendanceRepositoryProvider = Provider<AttendanceRepository>((ref) {

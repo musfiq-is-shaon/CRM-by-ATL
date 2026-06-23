@@ -15,6 +15,7 @@ class LunchPollOptionRow extends StatelessWidget {
     required this.totalVotes,
     required this.enabled,
     required this.onTap,
+    this.compact = false,
   });
 
   final LunchPollOption option;
@@ -22,6 +23,7 @@ class LunchPollOptionRow extends StatelessWidget {
   final int totalVotes;
   final bool enabled;
   final VoidCallback? onTap;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -30,73 +32,85 @@ class LunchPollOptionRow extends StatelessWidget {
     final textSecondary = AppThemeColors.textSecondaryColor(context);
     final accent = lunchOptionKindColor(option.kind, cs);
     final fraction = totalVotes > 0 ? option.voteCount / totalVotes : 0.0;
+    final labelColor = enabled ? textPrimary : textSecondary;
+    final radioColor = enabled
+        ? (selected ? lunchBrandGreen : textSecondary)
+        : textSecondary.withValues(alpha: 0.45);
+    final rowPad = compact ? 5.0 : 10.0;
+    final radioSize = compact ? 20.0 : 22.0;
+    final labelSize = compact ? 13.0 : 14.0;
+    final gap = compact ? 4.0 : 8.0;
+    final barHeight = compact ? 6.0 : 8.0;
 
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: enabled ? onTap : null,
+        onTap: onTap,
         borderRadius: BorderRadius.circular(AppRadius.sm),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(top: 2),
-                child: Icon(
-                  selected
-                      ? Icons.radio_button_checked
-                      : Icons.radio_button_off_outlined,
-                  size: 22,
-                  color: selected ? lunchBrandGreen : textSecondary,
+        child: Opacity(
+          opacity: enabled ? 1 : 0.55,
+          child: Padding(
+            padding: EdgeInsets.symmetric(vertical: rowPad),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: EdgeInsets.only(top: compact ? 1 : 2),
+                  child: Icon(
+                    selected
+                        ? Icons.radio_button_checked
+                        : Icons.radio_button_off_outlined,
+                    size: radioSize,
+                    color: radioColor,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      option.label,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                        color: textPrimary,
+                SizedBox(width: compact ? 8 : 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        option.label,
+                        style: TextStyle(
+                          fontSize: labelSize,
+                          fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                          color: labelColor,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(4),
-                            child: LinearProgressIndicator(
-                              value: fraction.clamp(0.0, 1.0),
-                              minHeight: 8,
-                              backgroundColor: cs.surfaceContainerHighest,
-                              color: accent,
+                      SizedBox(height: gap),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(4),
+                              child: LinearProgressIndicator(
+                                value: fraction.clamp(0.0, 1.0),
+                                minHeight: barHeight,
+                                backgroundColor: cs.surfaceContainerHighest,
+                                color: enabled ? accent : textSecondary.withValues(alpha: 0.35),
+                              ),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          '${option.voteCount}',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 13,
-                            color: textPrimary,
+                          SizedBox(width: compact ? 6 : 8),
+                          Text(
+                            '${option.voteCount}',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: compact ? 12 : 13,
+                              color: labelColor,
+                            ),
                           ),
-                        ),
+                        ],
+                      ),
+                      if (option.voters.isNotEmpty) ...[
+                        SizedBox(height: gap),
+                        _VoterAvatarStack(voters: option.voters, compact: compact),
                       ],
-                    ),
-                    if (option.voters.isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      _VoterAvatarStack(voters: option.voters),
                     ],
-                  ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -105,41 +119,48 @@ class LunchPollOptionRow extends StatelessWidget {
 }
 
 class _VoterAvatarStack extends StatelessWidget {
-  const _VoterAvatarStack({required this.voters});
+  const _VoterAvatarStack({required this.voters, this.compact = false});
 
   final List<LunchOptionVoter> voters;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     final shown = voters.take(6).toList();
+    final size = compact ? 20.0 : 24.0;
+    final step = compact ? 16.0 : 20.0;
+    final stackHeight = compact ? 22.0 : 28.0;
     return SizedBox(
-      height: 28,
+      height: stackHeight,
       child: Stack(
         clipBehavior: Clip.none,
         children: [
           for (var i = 0; i < shown.length; i++)
             Positioned(
-              left: i * 20.0,
+              left: i * step,
               child: Container(
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   border: Border.all(
                     color: AppThemeColors.cardColor(context),
-                    width: 2,
+                    width: compact ? 1.5 : 2,
                   ),
                 ),
-                child: AvatarWidget(name: shown[i].name, size: 24),
+                child: AvatarWidget(name: shown[i].name, size: size),
               ),
             ),
           if (voters.length > 6)
             Positioned(
-              left: shown.length * 20.0,
+              left: shown.length * step,
               child: CircleAvatar(
-                radius: 12,
+                radius: compact ? 10 : 12,
                 backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
                 child: Text(
                   '+${voters.length - 6}',
-                  style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w700),
+                  style: TextStyle(
+                    fontSize: compact ? 8 : 9,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
             ),

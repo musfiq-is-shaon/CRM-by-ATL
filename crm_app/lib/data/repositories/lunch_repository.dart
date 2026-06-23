@@ -64,14 +64,48 @@ class LunchRepository {
     return out;
   }
 
-  Future<LunchPoll> _ensurePollOptions(LunchPoll poll) async {
-    if (poll.mergedOptions.isNotEmpty || poll.id.isEmpty) return poll;
+  Future<LunchPoll> _hydratePoll(LunchPoll poll) async {
+    if (poll.id.isEmpty) return poll;
     try {
       final full = await getPoll(poll.id);
       return LunchPoll.merge(poll, full);
     } catch (_) {
       return poll;
     }
+  }
+
+  Future<LunchPoll> _ensurePollOptions(LunchPoll poll) async {
+    if (poll.id.isEmpty) return poll;
+    if (poll.mergedOptions.isNotEmpty && poll.totalVoteCount > 0) return poll;
+    return _hydratePoll(poll);
+  }
+
+  Future<List<LunchPoll>> listPollsHydrated({
+    DateTime? from,
+    DateTime? to,
+    String? status,
+  }) async {
+    final polls = await listPolls(from: from, to: to, status: status);
+    final out = <LunchPoll>[];
+    for (final poll in polls) {
+      out.add(await _hydratePollWithVoteTotal(poll));
+    }
+    return out;
+  }
+
+  Future<LunchPoll> _hydratePollWithVoteTotal(LunchPoll poll) async {
+    var hydrated = await _hydratePoll(poll);
+    if (hydrated.id.isEmpty || hydrated.totalVoteCount > 0) return hydrated;
+    try {
+      final summary = await getPollSummary(hydrated.id, poll: hydrated);
+      if (summary.totalVotes > 0) {
+        hydrated = LunchPoll.merge(summary.poll, hydrated)
+            .withReportedTotalVotes(summary.totalVotes);
+      } else {
+        hydrated = LunchPoll.merge(summary.poll, hydrated);
+      }
+    } catch (_) {}
+    return hydrated;
   }
 
   Future<List<LunchPoll>> listPolls({
@@ -166,7 +200,71 @@ class LunchRepository {
         );
       }
     }
-    return summary;
+    final pollDate = summary.poll.date ?? enriched?.date;
+    if (pollDate != null && summary.employeeVotes.any((v) => v.votedAt == null)) {
+      final withTimes = await _enrichEmployeeVoteTimes(
+        summary.employeeVotes,
+        pollDate,
+        pollId,
+      );
+      summary = LunchOrderSummary(
+        poll: summary.poll,
+        officeOrders: summary.officeOrders,
+        personalCount: summary.personalCount,
+        totalVotes: summary.totalVotes,
+        menuBreakdown: summary.menuBreakdown,
+        employeeVotes: withTimes,
+      );
+    }
+    var canonical = enriched != null
+        ? LunchPoll.merge(summary.poll, enriched)
+        : summary.poll;
+    if (summary.totalVotes > 0 && canonical.totalVoteCount == 0) {
+      canonical = canonical.withReportedTotalVotes(summary.totalVotes);
+    }
+    return LunchOrderSummary(
+      poll: canonical,
+      officeOrders: summary.officeOrders,
+      personalCount: summary.personalCount,
+      totalVotes: summary.totalVotes,
+      menuBreakdown: summary.menuBreakdown,
+      employeeVotes: summary.employeeVotes,
+    );
+  }
+
+  Future<List<LunchEmployeeVoteRow>> _enrichEmployeeVoteTimes(
+    List<LunchEmployeeVoteRow> votes,
+    DateTime date,
+    String pollId,
+  ) async {
+    try {
+      final rows = await getVoteHistory(from: date, to: date, userId: 'all');
+      final history = LunchOrderSummary.fromVoteHistoryRows(rows, pollId: pollId);
+      if (history.isEmpty) return votes;
+
+      LunchEmployeeVoteRow match(LunchEmployeeVoteRow vote) {
+        for (final h in history) {
+          final sameUser = vote.userId.isNotEmpty &&
+              h.userId.isNotEmpty &&
+              vote.userId == h.userId;
+          final sameName = vote.userName.toLowerCase() == h.userName.toLowerCase();
+          if ((sameUser || sameName) && h.votedAt != null) {
+            return LunchEmployeeVoteRow(
+              userId: vote.userId,
+              userName: vote.userName,
+              choice: vote.choice.isNotEmpty ? vote.choice : h.choice,
+              optionType: vote.optionType.isNotEmpty ? vote.optionType : h.optionType,
+              votedAt: h.votedAt,
+            );
+          }
+        }
+        return vote;
+      }
+
+      return votes.map(match).toList();
+    } catch (_) {
+      return votes;
+    }
   }
 
   Future<List<LunchEmployeeVoteRow>> _employeeVotesFromHistory(

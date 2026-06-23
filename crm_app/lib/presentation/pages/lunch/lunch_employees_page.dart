@@ -236,60 +236,52 @@ class _LunchEmployeesPageState extends ConsumerState<LunchEmployeesPage> {
           else
             ...rows.map(
               (row) => Padding(
-                padding: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.only(bottom: 6),
                 child: CRMCard(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  child: Row(
                     children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          CircleAvatar(
-                            backgroundColor: cs.primaryContainer,
-                            child: Text(
-                              row.userName.isNotEmpty ? row.userName[0].toUpperCase() : '?',
-                              style: TextStyle(
-                                color: cs.onPrimaryContainer,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
+                      CircleAvatar(
+                        radius: 18,
+                        backgroundColor: cs.primaryContainer,
+                        child: Text(
+                          row.userName.isNotEmpty ? row.userName[0].toUpperCase() : '?',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: cs.onPrimaryContainer,
+                            fontWeight: FontWeight.w700,
                           ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  row.userName,
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    color: textPrimary,
-                                  ),
-                                ),
-                                Text(
-                                  'Net change: ${row.netChange} ${AppConstants.currencySymbol}',
-                                  style: TextStyle(fontSize: 12, color: textSecondary),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Text(
-                            '${row.balance} ${AppConstants.currencySymbol}',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 16,
-                              color: row.balance < 0 ? cs.error : textPrimary,
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
-                      const SizedBox(height: 10),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: TextButton.icon(
-                          onPressed: () => _showAdjustDialog(row),
-                          icon: const Icon(Icons.tune, size: 18),
-                          label: const Text('Adjust balance'),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          row.userName,
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: textPrimary,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      Text(
+                        '${row.balance} ${AppConstants.currencySymbol}',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 15,
+                          color: row.balance < 0 ? cs.error : textPrimary,
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => _showAdjustDialog(row),
+                        icon: const Icon(Icons.tune, size: 18),
+                        tooltip: 'Adjust balance',
+                        visualDensity: VisualDensity.compact,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(
+                          minWidth: 32,
+                          minHeight: 32,
                         ),
                       ),
                     ],

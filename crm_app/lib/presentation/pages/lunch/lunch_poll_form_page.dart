@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme_colors.dart';
 import '../../../core/theme/design_tokens.dart';
 import '../../../data/models/lunch_model.dart';
+import '../../../data/repositories/lunch_repository.dart';
 import '../../providers/lunch_provider.dart';
 import '../../widgets/crm_text_field.dart';
 import 'lunch_poll_option_row.dart';
@@ -59,6 +60,7 @@ class _LunchPollFormSheetState extends ConsumerState<LunchPollFormSheet> {
   late DateTime _date;
   bool _allowVoteChange = true;
   bool _saving = false;
+  bool _loadingPoll = false;
   final List<_OptionRow> _options = [];
 
   @override
@@ -73,15 +75,10 @@ class _LunchPollFormSheetState extends ConsumerState<LunchPollFormSheet> {
     );
     _date = e?.date ?? DateTime.now();
     _allowVoteChange = e?.allowVoteChange ?? true;
-    if (e != null && e.options.isNotEmpty) {
-      for (final o in e.options) {
-        _options.add(
-          _OptionRow(
-            label: o.label,
-            kind: lunchOptionKindFrom(o.optionType),
-          ),
-        );
-      }
+    if (e != null) {
+      _loadingPoll = true;
+      _populateFromPoll(e);
+      WidgetsBinding.instance.addPostFrameCallback((_) => _loadExistingPoll());
     } else {
       _options.addAll([
         _OptionRow(label: 'Personal', kind: LunchOptionKind.personal),
@@ -91,6 +88,67 @@ class _LunchPollFormSheetState extends ConsumerState<LunchPollFormSheet> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(lunchProvider.notifier).loadSettings();
     });
+  }
+
+  Future<void> _loadExistingPoll() async {
+    final existing = widget.existing;
+    if (existing == null || existing.id.isEmpty) {
+      if (mounted) setState(() => _loadingPoll = false);
+      return;
+    }
+    try {
+      final full = await ref.read(lunchRepositoryProvider).getPoll(existing.id);
+      if (!mounted) return;
+      setState(() {
+        _populateFromPoll(full);
+        _loadingPoll = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _loadingPoll = false);
+    }
+  }
+
+  void _populateFromPoll(LunchPoll poll) {
+    _titleCtrl.text = poll.title;
+    if (poll.endTime != null && poll.endTime!.isNotEmpty) {
+      _endTimeCtrl.text = formatLunchEndTimeDisplay(poll.endTime);
+    }
+    _date = poll.date ?? _date;
+    _allowVoteChange = poll.allowVoteChange;
+    for (final o in _options) {
+      o.labelCtrl.dispose();
+    }
+    _options.clear();
+    final merged = poll.mergedOptions;
+    if (merged.isNotEmpty) {
+      for (final o in merged) {
+        _options.add(
+          _OptionRow(
+            id: o.id,
+            label: o.label,
+            kind: lunchOptionKindFrom(o.optionType),
+            voteCount: o.voteCount,
+          ),
+        );
+      }
+    } else if (poll.options.isNotEmpty) {
+      for (final o in poll.options) {
+        _options.add(
+          _OptionRow(
+            id: o.id,
+            label: o.label,
+            kind: lunchOptionKindFrom(o.optionType),
+            voteCount: o.voteCount,
+          ),
+        );
+      }
+    }
+    if (_options.isEmpty) {
+      _options.addAll([
+        _OptionRow(label: 'Personal', kind: LunchOptionKind.personal),
+        _OptionRow(label: 'Off', kind: LunchOptionKind.offAbsent),
+      ]);
+    }
   }
 
   static String _defaultEndTime() {
@@ -153,9 +211,10 @@ class _LunchPollFormSheetState extends ConsumerState<LunchPollFormSheet> {
         options: _options
             .map(
               (o) => LunchPollOption(
-                id: '',
+                id: o.id,
                 label: o.labelCtrl.text.trim(),
                 optionType: lunchOptionKindApiValue(o.kind),
+                voteCount: o.voteCount,
               ),
             )
             .where((o) => o.label.isNotEmpty)
@@ -304,7 +363,13 @@ class _LunchPollFormSheetState extends ConsumerState<LunchPollFormSheet> {
             ),
           ),
           const SizedBox(height: 16),
-          _FormSection(
+          if (_loadingPoll)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+            )
+          else
+            _FormSection(
             title: 'Menu options',
             trailing: TextButton.icon(
               onPressed: () => setState(
@@ -358,6 +423,17 @@ class _LunchPollFormSheetState extends ConsumerState<LunchPollFormSheet> {
                         selected: row.kind,
                         onChanged: (k) => setState(() => row.kind = k),
                       ),
+                      if (isEdit && row.voteCount > 0) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          '${row.voteCount} vote${row.voteCount == 1 ? '' : 's'}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: textSecondary,
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 );
@@ -481,11 +557,17 @@ class _DurationChip extends StatelessWidget {
 }
 
 class _OptionRow {
-  _OptionRow({required String label, required this.kind})
-      : labelCtrl = TextEditingController(text: label);
+  _OptionRow({
+    this.id = '',
+    required String label,
+    required this.kind,
+    this.voteCount = 0,
+  }) : labelCtrl = TextEditingController(text: label);
 
+  final String id;
   final TextEditingController labelCtrl;
   LunchOptionKind kind;
+  final int voteCount;
 }
 
 /// Legacy full-page route — delegates to sheet when pushed.

@@ -57,37 +57,12 @@ class _TeamAttendanceTabState extends ConsumerState<TeamAttendanceTab> {
       if (!mounted || gen != _loadGeneration) return;
 
       final repo = ref.read(attendanceRepositoryProvider);
-      List<AttendanceRecord> rows;
-      if (_period == 'week') {
-        final range = sundayWeekRangeContaining(DateTime.now());
-        rows = await repo.getAllAttendance(
-          dateFrom: range.dateFrom,
-          dateTo: range.dateTo,
-          userId: _filterUserId,
-        );
-        rows = filterAttendanceRecordsToYmdRange(
-          rows,
-          range.dateFrom,
-          range.dateTo,
-        );
-      } else if (_period == 'last_week') {
-        final range = previousSundayWeekRange(DateTime.now());
-        rows = await repo.getAllAttendance(
-          dateFrom: range.dateFrom,
-          dateTo: range.dateTo,
-          userId: _filterUserId,
-        );
-        rows = filterAttendanceRecordsToYmdRange(
-          rows,
-          range.dateFrom,
-          range.dateTo,
-        );
-      } else {
-        rows = await repo.getAllAttendance(
+      final rows = sortAttendanceRecordsByDateDesc(
+        await repo.getAllAttendance(
           period: _period,
           userId: _filterUserId,
-        );
-      }
+        ),
+      );
       if (!mounted || gen != _loadGeneration) return;
       setState(() {
         _rows = rows;

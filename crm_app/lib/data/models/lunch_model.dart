@@ -19,6 +19,16 @@ String _id(dynamic v) {
   return _str(v);
 }
 
+DateTime? _parseDateTime(dynamic v) {
+  if (v == null) return null;
+  if (v is int) {
+    return DateTime.fromMillisecondsSinceEpoch(v > 9999999999 ? v : v * 1000);
+  }
+  final s = _str(v);
+  if (s.isEmpty) return null;
+  return DateTime.tryParse(s);
+}
+
 List<Map<String, dynamic>> _mapList(dynamic raw, [List<String> keys = const []]) {
   if (raw is List) {
     return raw.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
@@ -233,7 +243,7 @@ class LunchMyVote {
   factory LunchMyVote.fromJson(Map<String, dynamic> json) {
     return LunchMyVote(
       optionId: _id(json['optionId'] ?? json['option_id'] ?? json['selectedOptionId']),
-      votedAt: DateTime.tryParse(_str(json['votedAt'] ?? json['voted_at'])),
+      votedAt: _parseDateTime(json['votedAt'] ?? json['voted_at']),
     );
   }
 }
@@ -250,6 +260,7 @@ class LunchPoll {
     this.options = const [],
     this.myVote,
     this.results = const [],
+    this.reportedTotalVotes,
   });
 
   final String id;
@@ -262,6 +273,7 @@ class LunchPoll {
   final List<LunchPollOption> options;
   final LunchMyVote? myVote;
   final List<LunchPollOption> results;
+  final int? reportedTotalVotes;
 
   bool get isActive => status.toLowerCase() == 'active';
   bool get isClosed => status.toLowerCase() == 'closed';
@@ -286,8 +298,14 @@ class LunchPoll {
     }).toList();
   }
 
-  int get totalVoteCount =>
-      mergedOptions.fold<int>(0, (sum, o) => sum + o.voteCount);
+  int get totalVoteCount {
+    if (reportedTotalVotes != null && reportedTotalVotes! > 0) {
+      return reportedTotalVotes!;
+    }
+    final fromCounts = mergedOptions.fold<int>(0, (sum, o) => sum + o.voteCount);
+    if (fromCounts > 0) return fromCounts;
+    return mergedOptions.fold<int>(0, (sum, o) => sum + o.voters.length);
+  }
 
   String get statusHint {
     switch (status.toLowerCase()) {
@@ -314,11 +332,51 @@ class LunchPoll {
       costAmount: primary.costAmount ?? secondary.costAmount,
       allowVoteChange: primary.allowVoteChange,
       endTime: primary.endTime ?? secondary.endTime,
-      status: primary.status.isNotEmpty ? primary.status : secondary.status,
+      status: _pickStatus(primary.status, secondary.status),
       options: primary.options.isNotEmpty ? primary.options : secondary.options,
-      results: primary.results.isNotEmpty ? primary.results : secondary.results,
+      results: _pickRicherResults(primary.results, secondary.results),
       myVote: primary.myVote ?? secondary.myVote,
+      reportedTotalVotes: primary.reportedTotalVotes ?? secondary.reportedTotalVotes,
     );
+  }
+
+  static String _pickStatus(String a, String b) {
+    const terminal = {'closed', 'cancelled'};
+    final al = a.toLowerCase();
+    final bl = b.toLowerCase();
+    if (terminal.contains(bl)) return bl;
+    if (terminal.contains(al)) return al;
+    return al.isNotEmpty ? al : bl;
+  }
+
+  LunchPoll withReportedTotalVotes(int total) {
+    return LunchPoll(
+      id: id,
+      title: title,
+      date: date,
+      costAmount: costAmount,
+      allowVoteChange: allowVoteChange,
+      endTime: endTime,
+      status: status,
+      options: options,
+      myVote: myVote,
+      results: results,
+      reportedTotalVotes: total,
+    );
+  }
+
+  static List<LunchPollOption> _pickRicherResults(
+    List<LunchPollOption> a,
+    List<LunchPollOption> b,
+  ) {
+    if (a.isEmpty) return b;
+    if (b.isEmpty) return a;
+    final aVotes = a.fold<int>(0, (s, o) => s + o.voteCount);
+    final bVotes = b.fold<int>(0, (s, o) => s + o.voteCount);
+    final aVoters = a.fold<int>(0, (s, o) => s + o.voters.length);
+    final bVoters = b.fold<int>(0, (s, o) => s + o.voters.length);
+    if (bVotes > aVotes || bVoters > aVoters) return b;
+    return a;
   }
 
   factory LunchPoll.fromJson(Map<String, dynamic> json) {
@@ -346,6 +404,9 @@ class LunchPoll {
       options: _parsePollOptions(optsRaw),
       myVote: vote,
       results: _parsePollOptions(resultsRaw),
+      reportedTotalVotes: parseOptionalInt(
+        m['totalVotes'] ?? m['total_votes'] ?? m['voteCount'] ?? m['vote_count'],
+      ),
     );
   }
 
@@ -357,6 +418,29 @@ class LunchPoll {
     if (endTime != null && endTime!.isNotEmpty) 'endTime': endTime,
     'options': options.map((o) => o.toCreateJson()).toList(),
   };
+
+  /// Update payload — keeps existing option ids via `optionUpdates`.
+  Map<String, dynamic> toUpdateJson() {
+    final newOptions = <Map<String, dynamic>>[];
+    final optionUpdates = <Map<String, dynamic>>[];
+    for (final o in options) {
+      final json = o.toCreateJson();
+      if (o.id.isNotEmpty) {
+        optionUpdates.add({...json, 'id': o.id});
+      } else {
+        newOptions.add(json);
+      }
+    }
+    return {
+      if (date != null) 'date': _dateOnly(date!),
+      'title': title,
+      if (costAmount != null) 'costAmount': costAmount,
+      'allowVoteChange': allowVoteChange,
+      if (endTime != null && endTime!.isNotEmpty) 'endTime': endTime,
+      'options': newOptions,
+      if (optionUpdates.isNotEmpty) 'optionUpdates': optionUpdates,
+    };
+  }
 
   static String _dateOnly(DateTime d) {
     final l = d.toLocal();
@@ -531,8 +615,16 @@ class LunchEmployeeVoteRow {
       userName: name.isEmpty ? 'Unknown' : name,
       choice: choice,
       optionType: optionType,
-      votedAt: DateTime.tryParse(
-        _str(json['votedAt'] ?? json['voted_at'] ?? json['createdAt'] ?? json['created_at']),
+      votedAt: _parseDateTime(
+        json['votedAt'] ??
+            json['voted_at'] ??
+            json['voteTime'] ??
+            json['vote_time'] ??
+            json['timestamp'] ??
+            json['createdAt'] ??
+            json['created_at'] ??
+            json['updatedAt'] ??
+            json['updated_at'],
       ),
     );
   }
@@ -908,7 +1000,7 @@ class LunchVoteHistoryRow {
       pollId: _id(json['pollId'] ?? json['poll_id']).isEmpty
           ? null
           : _id(json['pollId'] ?? json['poll_id']),
-      votedAt: DateTime.tryParse(_str(json['votedAt'] ?? json['voted_at'])),
+      votedAt: _parseDateTime(json['votedAt'] ?? json['voted_at']),
     );
   }
 }

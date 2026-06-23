@@ -106,7 +106,7 @@ class RecordsList extends ConsumerWidget {
             physics: const NeverScrollableScrollPhysics(),
             itemCount: state.records.length,
             itemBuilder: (context, index) {
-              final record = state.records.reversed.toList()[index];
+              final record = state.records[index];
               return RecordTile(record: record);
             },
           ),
@@ -141,6 +141,7 @@ class RecordTile extends StatelessWidget {
       'early_leave' => Colors.orange,
       'half_day' => Colors.blue,
       'absent' => Colors.red,
+      'exempt' => Colors.blueGrey,
       _ => Colors.grey,
     };
   }
@@ -152,6 +153,7 @@ class RecordTile extends StatelessWidget {
       'early_leave' => Icons.logout,
       'half_day' => Icons.schedule,
       'absent' => Icons.close,
+      'exempt' => Icons.weekend_outlined,
       _ => Icons.help_outline,
     };
   }
