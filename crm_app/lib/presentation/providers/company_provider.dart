@@ -80,16 +80,20 @@ class CompaniesState {
 class CompaniesNotifier extends StateNotifier<CompaniesState> {
   final CompanyRepository _companyRepository;
   final UserRepository _userRepository;
+  int _loadGeneration = 0;
 
   CompaniesNotifier(this._companyRepository, this._userRepository)
     : super(const CompaniesState());
 
   Future<void> loadCompanies() async {
+    final generation = ++_loadGeneration;
     state = state.copyWith(isLoading: true, error: null);
     try {
       final companies = await _companyRepository.getCompanies(
         forceRefresh: true,
       );
+
+      if (generation != _loadGeneration) return;
 
       // Fetch users to get KAM data
       List<User> users = [];
@@ -98,6 +102,8 @@ class CompaniesNotifier extends StateNotifier<CompaniesState> {
       } catch (e) {
         // Ignore user fetch error
       }
+
+      if (generation != _loadGeneration) return;
 
       // Map users by ID for quick lookup
       final usersMap = {for (var u in users) u.id: u};
@@ -121,10 +127,25 @@ class CompaniesNotifier extends StateNotifier<CompaniesState> {
         );
       }).toList();
 
-      state = state.copyWith(companies: companiesWithKam, isLoading: false);
+      state = state.copyWith(
+        companies: _mergeFetchedCompanies(companiesWithKam),
+        isLoading: false,
+      );
     } catch (e) {
+      if (generation != _loadGeneration) return;
       state = state.copyWith(isLoading: false, error: e.toString());
     }
+  }
+
+  /// Keeps freshly created companies visible if a background [loadCompanies]
+  /// finishes before the server list includes them.
+  List<Company> _mergeFetchedCompanies(List<Company> fetched) {
+    final fetchedIds = fetched.map((c) => c.id).where((id) => id.isNotEmpty).toSet();
+    final localOnly = state.companies
+        .where((c) => c.id.isNotEmpty && !fetchedIds.contains(c.id))
+        .toList();
+    if (localOnly.isEmpty) return fetched;
+    return [...localOnly, ...fetched];
   }
 
   void setSearchQuery(String? query) {
@@ -147,7 +168,7 @@ class CompaniesNotifier extends StateNotifier<CompaniesState> {
     );
   }
 
-  Future<void> createCompany({
+  Future<Company?> createCompany({
     required String name,
     String? location,
     String? country,
@@ -155,6 +176,8 @@ class CompaniesNotifier extends StateNotifier<CompaniesState> {
     required String currencyId,
     String? createdByUserId,
   }) async {
+    _loadGeneration++;
+    state = state.copyWith(error: null);
     try {
       final company = await _companyRepository.createCompany(
         name: name,
@@ -164,9 +187,35 @@ class CompaniesNotifier extends StateNotifier<CompaniesState> {
         currencyId: currencyId,
         createdByUserId: createdByUserId,
       );
-      state = state.copyWith(companies: [company, ...state.companies]);
+      User? kamUser;
+      try {
+        kamUser = await _userRepository.getUserById(kamUserId);
+      } catch (_) {
+        // KAM lookup is optional for display
+      }
+      final companyWithKam = Company(
+        id: company.id,
+        name: company.name,
+        location: company.location,
+        country: company.country,
+        kamUserId: company.kamUserId,
+        kamUser: kamUser,
+        currencyId: company.currencyId,
+        currency: company.currency,
+        createdAt: company.createdAt,
+        updatedAt: company.updatedAt,
+      );
+      state = state.copyWith(
+        companies: [
+          companyWithKam,
+          ...state.companies.where((c) => c.id != companyWithKam.id),
+        ],
+        error: null,
+      );
+      return companyWithKam;
     } catch (e) {
       state = state.copyWith(error: e.toString());
+      return null;
     }
   }
 

@@ -96,9 +96,14 @@ class _SearchableDropdownState<T> extends State<SearchableDropdown<T>>
   }
 
   void _syncDisplayFromValue() {
-    _displayController.text = widget.value != null
-        ? widget.itemLabelBuilder(widget.value as T)
-        : '';
+    if (widget.value == null) {
+      _displayController.text = '';
+      return;
+    }
+    final label = widget.itemLabelBuilder(widget.value as T);
+    if (label.isNotEmpty) {
+      _displayController.text = label;
+    }
   }
 
   @override
@@ -121,6 +126,7 @@ class _SearchableDropdownState<T> extends State<SearchableDropdown<T>>
       _syncDisplayFromValue();
     }
     if (widget.items != oldWidget.items) {
+      _syncDisplayFromValue();
       _filterItems(_isOpen ? _searchController.text : '');
     }
   }

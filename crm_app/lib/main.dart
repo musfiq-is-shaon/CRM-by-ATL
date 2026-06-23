@@ -1,3 +1,4 @@
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
@@ -14,6 +15,12 @@ import 'firebase_options.dart';
 void main() async {
   // Required before any plugin/async work (Firebase, FCM background handler, etc.).
   WidgetsFlutterBinding.ensureInitialized();
+
+  try {
+    await dotenv.load(fileName: '.env');
+  } catch (_) {
+    // Optional — use --dart-define-from-file=.env or --dart-define instead.
+  }
 
   // Must be registered before [runApp], as early as possible after binding init.
   FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);

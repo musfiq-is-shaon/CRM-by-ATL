@@ -4,16 +4,19 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/rbac_page_keys.dart';
 import '../../../core/theme/app_theme_colors.dart';
 import '../../../data/models/contact_model.dart';
+import '../../../core/utils/business_card_ocr_canonical.dart';
 import '../../providers/contact_provider.dart';
 import '../../providers/rbac_provider.dart'
     show rbacAccessDigestProvider, rbacModuleAdminProvider;
 import '../../providers/company_provider.dart';
-import '../../providers/user_provider.dart';
-import '../../providers/auth_provider.dart';
 import '../../providers/currency_provider.dart';
+import '../../providers/user_provider.dart';
 import '../../widgets/crm_card.dart';
 import '../../widgets/loading_widget.dart';
 import '../../widgets/searchable_dropdown.dart';
+import '../../widgets/create_company_dialog.dart';
+
+import 'business_card_scan_flow.dart';
 
 class ContactDetailPage extends ConsumerWidget {
   final String contactId;
@@ -25,14 +28,18 @@ class ContactDetailPage extends ConsumerWidget {
     ref.watch(rbacAccessDigestProvider);
     ref.watch(rbacModuleAdminProvider(RbacPageKey.contacts));
     final contactsState = ref.watch(contactsProvider);
+    final companiesState = ref.watch(companiesProvider);
     final contact = contactsState.contacts
         .where((c) => c.id == contactId)
         .firstOrNull;
+    final companyName =
+        contact?.companyDisplayName(companiesState.companies);
 
     final bgColor = AppThemeColors.backgroundColor(context);
     final textPrimary = AppThemeColors.textPrimaryColor(context);
             final textSecondary = AppThemeColors.textSecondaryColor(context);
     final primaryColor = Theme.of(context).colorScheme.primary;
+    final errorColor = Theme.of(context).colorScheme.error;
 
     return Scaffold(
       backgroundColor: bgColor,
@@ -47,14 +54,23 @@ class ContactDetailPage extends ConsumerWidget {
         actions: [
           IconButton(
             icon: Icon(Icons.edit_outlined, color: textPrimary),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => ContactFormPage(contact: contact),
-                ),
-              );
-            },
+            onPressed: contact != null
+                ? () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => ContactFormPage(contact: contact),
+                      ),
+                    );
+                  }
+                : null,
+          ),
+          IconButton(
+            tooltip: 'Delete contact',
+            icon: Icon(Icons.delete_outline, color: errorColor),
+            onPressed: contact != null
+                ? () => _showDeleteConfirmation(context, ref, contact)
+                : null,
           ),
         ],
       ),
@@ -131,12 +147,12 @@ class ContactDetailPage extends ConsumerWidget {
                             const SizedBox(width: 4),
                             Flexible(
                               child: Text(
-                                contact.company?.name ?? 'No Company',
+                                companyName ?? 'No Company',
                                 textAlign: TextAlign.center,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                   fontSize: 14,
-                                  color: contact.company != null
+                                  color: companyName != null
                                       ? primaryColor
                                       : textSecondary,
                                   fontWeight: FontWeight.w500,
@@ -212,11 +228,11 @@ class ContactDetailPage extends ConsumerWidget {
                             textPrimary,
                             textSecondary,
                           ),
-                        if (contact.company != null)
+                        if (companyName != null)
                           _buildInfoRow(
                             Icons.business_outlined,
                             'Company',
-                            contact.company!.name,
+                            companyName,
                             primaryColor,
                             textPrimary,
                             textSecondary,
@@ -224,7 +240,7 @@ class ContactDetailPage extends ConsumerWidget {
                         // Show placeholder if no contact info
                         if (contact.email == null &&
                             contact.mobile == null &&
-                            contact.company == null)
+                            companyName == null)
                           Padding(
                             padding: const EdgeInsets.symmetric(vertical: 16),
                             child: Text(
@@ -241,6 +257,45 @@ class ContactDetailPage extends ConsumerWidget {
                 ],
               ),
             ),
+    );
+  }
+
+  void _showDeleteConfirmation(
+    BuildContext context,
+    WidgetRef ref,
+    Contact contact,
+  ) {
+    final surfaceColor = AppThemeColors.surfaceColor(context);
+    final textPrimary = AppThemeColors.textPrimaryColor(context);
+    final textSecondary = AppThemeColors.textSecondaryColor(context);
+    final cs = Theme.of(context).colorScheme;
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: surfaceColor,
+        title: Text('Delete Contact', style: TextStyle(color: textPrimary)),
+        content: Text(
+          'Are you sure you want to delete "${contact.name}"? This action cannot be undone.',
+          style: TextStyle(color: textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Cancel', style: TextStyle(color: textSecondary)),
+          ),
+          TextButton(
+            onPressed: () async {
+              await ref.read(contactsProvider.notifier).deleteContact(contact.id);
+              if (context.mounted) {
+                Navigator.pop(context); // Close dialog
+                Navigator.pop(context); // Back to list
+              }
+            },
+            child: Text('Delete', style: TextStyle(color: cs.error)),
+          ),
+        ],
+      ),
     );
   }
 
@@ -356,8 +411,9 @@ class _ActionButton extends StatelessWidget {
 
 class ContactFormPage extends ConsumerStatefulWidget {
   final Contact? contact;
+  final CanonicalBusinessCardContact? initialScan;
 
-  const ContactFormPage({super.key, this.contact});
+  const ContactFormPage({super.key, this.contact, this.initialScan});
 
   @override
   ConsumerState<ContactFormPage> createState() => _ContactFormPageState();
@@ -371,6 +427,8 @@ class _ContactFormPageState extends ConsumerState<ContactFormPage> {
   late TextEditingController _designationController;
   String? _selectedCompanyId;
   bool _isLoading = false;
+  String? _ocrCompanySuggestion;
+  String? _ocrCompanyLocationSuggestion;
 
   @override
   void initState() {
@@ -385,10 +443,20 @@ class _ContactFormPageState extends ConsumerState<ContactFormPage> {
     );
     _selectedCompanyId = widget.contact?.companyId;
 
-    // Load companies if not loaded
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(companiesProvider.notifier).loadCompanies();
-      ref.read(currenciesProvider.notifier).loadCurrencies();
+    // Preload dropdown data in parallel so create-company opens instantly.
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final loads = <Future<void>>[
+        ref.read(currenciesProvider.notifier).loadCurrencies(),
+        ref.read(usersProvider.notifier).loadUsers(),
+      ];
+      if (ref.read(companiesProvider).companies.isEmpty) {
+        loads.add(ref.read(companiesProvider.notifier).loadCompanies());
+      }
+      await Future.wait(loads);
+      final scan = widget.initialScan;
+      if (scan != null && mounted) {
+        await _applyBusinessCardScan(scan);
+      }
     });
   }
 
@@ -401,198 +469,92 @@ class _ContactFormPageState extends ConsumerState<ContactFormPage> {
     super.dispose();
   }
 
-  Future<void> _showCreateCompanyDialog(BuildContext context) async {
-    final usersState = ref.read(usersProvider);
-    final currenciesState = ref.read(currenciesProvider);
-    final authState = ref.read(authProvider);
-    final surfaceColor = AppThemeColors.surfaceColor(context);
-    final textPrimary = AppThemeColors.textPrimaryColor(context);
-    final textSecondary = AppThemeColors.textSecondaryColor(context);
-    final borderColor = AppThemeColors.borderColor(context);
-    final primaryColor = Theme.of(context).colorScheme.primary;
-
-    final nameController = TextEditingController();
-    final locationController = TextEditingController();
-    final countryController = TextEditingController();
-
-    String? selectedKamUserId = authState.user?.id;
-    if (selectedKamUserId != null &&
-        !usersState.users.any((u) => u.id == selectedKamUserId)) {
-      selectedKamUserId =
-          usersState.users.isNotEmpty ? usersState.users.first.id : null;
-    }
-    if (selectedKamUserId == null && usersState.users.isNotEmpty) {
-      selectedKamUserId = usersState.users.first.id;
-    }
-
-    // Set default currency if available
-    String? selectedCurrencyId;
-    if (currenciesState.currencies.isNotEmpty) {
-      selectedCurrencyId = currenciesState.currencies.first.id;
-    }
-
-    final result = await showDialog<String>(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          scrollable: true,
-          title: Text('Create Company', style: TextStyle(color: textPrimary)),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-                TextField(
-                  controller: nameController,
-                  style: TextStyle(color: textPrimary),
-                  decoration: InputDecoration(
-                    labelText: 'Company Name *',
-                    labelStyle: TextStyle(color: textSecondary),
-                    border: OutlineInputBorder(
-                      borderSide: BorderSide(color: borderColor),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderSide: BorderSide(color: borderColor),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                // Currency Dropdown
-                DropdownButtonFormField<String>(
-                  isExpanded: true,
-                  initialValue: selectedCurrencyId,
-                  decoration: InputDecoration(
-                    labelText: 'Currency *',
-                    labelStyle: TextStyle(color: textSecondary),
-                    border: OutlineInputBorder(
-                      borderSide: BorderSide(color: borderColor),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderSide: BorderSide(color: borderColor),
-                    ),
-                  ),
-                  items: currenciesState.currencies.map((currency) {
-                    return DropdownMenuItem(
-                      value: currency.id,
-                      child: Text('${currency.code} - ${currency.name}'),
-                    );
-                  }).toList(),
-                  onChanged: (value) {
-                    setDialogState(() {
-                      selectedCurrencyId = value;
-                    });
-                  },
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: locationController,
-                  style: TextStyle(color: textPrimary),
-                  decoration: InputDecoration(
-                    labelText: 'Location',
-                    labelStyle: TextStyle(color: textSecondary),
-                    border: OutlineInputBorder(
-                      borderSide: BorderSide(color: borderColor),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderSide: BorderSide(color: borderColor),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: countryController,
-                  style: TextStyle(color: textPrimary),
-                  decoration: InputDecoration(
-                    labelText: 'Country',
-                    labelStyle: TextStyle(color: textSecondary),
-                    border: OutlineInputBorder(
-                      borderSide: BorderSide(color: borderColor),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderSide: BorderSide(color: borderColor),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                DropdownButtonFormField<String>(
-                  isExpanded: true,
-                  key: ValueKey(selectedKamUserId ?? 'kam'),
-                  initialValue: selectedKamUserId,
-                  decoration: InputDecoration(
-                    labelText: 'KAM (Key Account Manager) *',
-                    labelStyle: TextStyle(color: textSecondary),
-                    border: OutlineInputBorder(
-                      borderSide: BorderSide(color: borderColor),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderSide: BorderSide(color: borderColor),
-                    ),
-                  ),
-                  dropdownColor: surfaceColor,
-                  items: usersState.users
-                      .map(
-                        (user) => DropdownMenuItem(
-                          value: user.id,
-                          child: Text(
-                            user.name,
-                            style: TextStyle(color: textPrimary),
-                          ),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: usersState.users.isEmpty
-                      ? null
-                      : (value) {
-                          setDialogState(() => selectedKamUserId = value);
-                        },
-                ),
-              ],
-            ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text('Cancel', style: TextStyle(color: primaryColor)),
-            ),
-            TextButton(
-              onPressed: () async {
-                if (nameController.text.isNotEmpty &&
-                    selectedCurrencyId != null &&
-                    selectedKamUserId != null &&
-                    selectedKamUserId!.isNotEmpty) {
-                  await ref
-                      .read(companiesProvider.notifier)
-                      .createCompany(
-                        name: nameController.text,
-                        location: locationController.text.isNotEmpty
-                            ? locationController.text
-                            : null,
-                        country: countryController.text.isNotEmpty
-                            ? countryController.text
-                            : null,
-                        kamUserId: selectedKamUserId!,
-                        currencyId: selectedCurrencyId!,
-                        createdByUserId: authState.user?.id,
-                      );
-                  // Get the newly created company (first in the list)
-                  final companies = ref.read(companiesProvider).companies;
-                  if (companies.isNotEmpty && context.mounted) {
-                    Navigator.pop(context, companies.first.id);
-                  } else if (context.mounted) {
-                    Navigator.pop(context);
-                  }
-                }
-              },
-              child: Text('Create', style: TextStyle(color: primaryColor)),
-            ),
-          ],
-        ),
-      ),
+  Future<void> _showCreateCompanyDialog(
+    BuildContext context, {
+    String? initialName,
+    String? initialLocation,
+  }) async {
+    final result = await showCreateCompanyDialog(
+      context,
+      ref,
+      initialName: initialName,
+      initialLocation: initialLocation,
     );
-
-    if (result != null && mounted) {
+    if (result != null && result.isNotEmpty && mounted) {
       setState(() {
         _selectedCompanyId = result;
+        _ocrCompanySuggestion = null;
+        _ocrCompanyLocationSuggestion = null;
       });
     }
+  }
+
+  Future<void> _applyBusinessCardScan(CanonicalBusinessCardContact card) async {
+    if (card.name != null) _nameController.text = card.name!;
+    if (card.designation != null) {
+      _designationController.text = card.designation!;
+    }
+    if (card.mobile != null) _mobileController.text = card.mobile!;
+    if (card.email != null) _emailController.text = card.email!;
+
+    final companies = ref.read(companiesProvider).companies;
+    final matchedId = matchCompanyIdByName(
+      companies.map((c) => (id: c.id, name: c.name)).toList(),
+      card.companyName,
+    );
+
+    setState(() {
+      _ocrCompanySuggestion = card.companyName;
+      _ocrCompanyLocationSuggestion = card.companyLocation;
+      if (matchedId != null) {
+        _selectedCompanyId = matchedId;
+      }
+    });
+
+    if (!mounted) return;
+
+    final filled = card.toFieldMap().entries
+        .where((e) => e.value != null)
+        .map((e) => e.key)
+        .join(', ');
+
+    if (matchedId == null && card.companyName != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Filled $filled. Company "${card.companyName}" not found — tap + on Company to create it.',
+          ),
+          duration: const Duration(seconds: 5),
+          action: SnackBarAction(
+            label: 'Create',
+            onPressed: () => _showCreateCompanyDialog(
+              context,
+              initialName: card.companyName,
+              initialLocation: card.companyLocation,
+            ),
+          ),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Filled from card: $filled')),
+      );
+    }
+  }
+
+  Future<void> _scanBusinessCard() async {
+    await BusinessCardScanFlow.showSourceSheet(
+      context,
+      onSource: (source) async {
+        final card = await BusinessCardScanFlow.pickAndExtract(
+          context,
+          source: source,
+        );
+        if (card != null && mounted) {
+          await _applyBusinessCardScan(card);
+        }
+      },
+    );
   }
 
   Future<void> _saveContact() async {
@@ -679,6 +641,11 @@ class _ContactFormPageState extends ConsumerState<ContactFormPage> {
           onPressed: () => Navigator.pop(context),
         ),
         actions: [
+          IconButton(
+            tooltip: 'Scan business card',
+            onPressed: _isLoading ? null : _scanBusinessCard,
+            icon: const Icon(Icons.document_scanner_outlined),
+          ),
           TextButton(
             onPressed: _isLoading ? null : _saveContact,
             child: _isLoading
@@ -699,6 +666,40 @@ class _ContactFormPageState extends ConsumerState<ContactFormPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                if (_ocrCompanySuggestion != null &&
+                    _selectedCompanyId == null) ...[
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context)
+                          .colorScheme
+                          .tertiaryContainer
+                          .withValues(alpha: 0.5),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.business_outlined,
+                          size: 20,
+                          color: Theme.of(context).colorScheme.tertiary,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'OCR company: $_ocrCompanySuggestion — select or create below.',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: textSecondary,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
                 // Name Field (Required)
                 TextFormField(
                   controller: _nameController,
@@ -723,6 +724,9 @@ class _ContactFormPageState extends ConsumerState<ContactFormPage> {
                   builder: (context, ref, child) {
                     final companiesState = ref.watch(companiesProvider);
                     return SearchableDropdown<String>(
+                      key: ValueKey(
+                        'company-${companiesState.companies.length}-$_selectedCompanyId',
+                      ),
                       items: companiesState.companies.map((c) => c.id).toList(),
                       value: _selectedCompanyId,
                       hintText: 'Select a company',
@@ -740,6 +744,10 @@ class _ContactFormPageState extends ConsumerState<ContactFormPage> {
                       onChanged: (value) {
                         setState(() {
                           _selectedCompanyId = value;
+                          if (value != null) {
+                            _ocrCompanySuggestion = null;
+                            _ocrCompanyLocationSuggestion = null;
+                          }
                         });
                       },
                       validator: (value) {
@@ -748,10 +756,11 @@ class _ContactFormPageState extends ConsumerState<ContactFormPage> {
                         }
                         return null;
                       },
-                      onAddNew: () async {
-                        ref.read(usersProvider.notifier).loadUsers();
-                        await _showCreateCompanyDialog(context);
-                      },
+                      onAddNew: () => _showCreateCompanyDialog(
+                        context,
+                        initialName: _ocrCompanySuggestion,
+                        initialLocation: _ocrCompanyLocationSuggestion,
+                      ),
                     );
                   },
                 ),

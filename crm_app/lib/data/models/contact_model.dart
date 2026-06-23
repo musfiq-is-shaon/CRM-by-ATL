@@ -56,11 +56,15 @@ class Contact {
     };
   }
 
-  String get initials {
-    final parts = name.split(' ');
-    if (parts.length >= 2) {
-      return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+  /// Resolves company name from embedded [company] or a known company list.
+  String? companyDisplayName([List<Company>? companies]) {
+    final embedded = company?.name.trim();
+    if (embedded != null && embedded.isNotEmpty) return embedded;
+    final id = companyId;
+    if (id == null || id.isEmpty || companies == null) return null;
+    for (final c in companies) {
+      if (c.id == id) return c.name;
     }
-    return name.isNotEmpty ? name[0].toUpperCase() : '?';
+    return null;
   }
 }

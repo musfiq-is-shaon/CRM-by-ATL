@@ -29,7 +29,7 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>CRM needs camera access when you choose to take a photo for an attachment.</string>
+	<string>CRM uses the camera to scan business cards and attach photos.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>CRM uses your location for attendance check-in and check-out.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>

@@ -31,7 +31,8 @@ class CurrenciesNotifier extends StateNotifier<CurrenciesState> {
 
   CurrenciesNotifier(this._currencyRepository) : super(const CurrenciesState());
 
-  Future<void> loadCurrencies() async {
+  Future<void> loadCurrencies({bool forceRefresh = false}) async {
+    if (!forceRefresh && state.currencies.isNotEmpty) return;
     state = state.copyWith(isLoading: true, error: null);
     try {
       final currencies = await _currencyRepository.getCurrencies();

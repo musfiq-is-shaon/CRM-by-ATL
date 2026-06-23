@@ -28,8 +28,8 @@ class Company {
 
   factory Company.fromJson(Map<String, dynamic> json) {
     return Company(
-      id: json['id']?.toString() ?? '',
-      name: json['name'] ?? '',
+      id: json['id']?.toString() ?? json['_id']?.toString() ?? '',
+      name: json['name']?.toString() ?? '',
       location: json['location'],
       country: json['country'],
       kamUserId: json['kamUserId']?.toString(),

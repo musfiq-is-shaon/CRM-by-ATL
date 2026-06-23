@@ -107,11 +107,11 @@ class CompanyRepository {
     String? createdByUserId,
   }) async {
     final data = <String, dynamic>{
-      'name': name,
+      'name': name.trim(),
+      'location': location?.trim() ?? '',
+      'country': country?.trim() ?? '',
       'kamUserId': kamUserId,
       'currencyId': currencyId,
-      'location': location,
-      'country': country,
       if (createdByUserId != null && createdByUserId.isNotEmpty)
         'createdByUserId': createdByUserId,
     };
@@ -119,7 +119,49 @@ class CompanyRepository {
       AppConstants.companies,
       data: data,
     );
-    return Company.fromJson(response.data);
+    var company = Company.fromJson(_unwrapCompanyJson(response.data));
+    if (company.name.trim().isEmpty) {
+      company = Company(
+        id: company.id,
+        name: name.trim(),
+        location: company.location ?? location?.trim(),
+        country: company.country ?? country?.trim(),
+        kamUserId: company.kamUserId ?? kamUserId,
+        currencyId: company.currencyId ?? currencyId,
+        createdAt: company.createdAt,
+        updatedAt: company.updatedAt,
+      );
+    }
+
+    if (company.id.isEmpty) {
+      final resolved = await _findCompanyByName(company.name);
+      if (resolved != null) company = resolved;
+    }
+
+    if (company.id.isEmpty) {
+      throw Exception(
+        'Company was saved but the server did not return an id. '
+        'Pull to refresh the company list and try again.',
+      );
+    }
+
+    _companyCache[company.id] = company;
+    _cachedCompanies = [
+      company,
+      ...?(_cachedCompanies?.where((c) => c.id != company.id)),
+    ];
+    return company;
+  }
+
+  Future<Company?> _findCompanyByName(String name) async {
+    final norm = name.trim().toLowerCase();
+    if (norm.isEmpty) return null;
+
+    final companies = await getCompanies(forceRefresh: true);
+    for (final company in companies) {
+      if (company.name.trim().toLowerCase() == norm) return company;
+    }
+    return null;
   }
 
   Future<Company> updateCompany({
@@ -150,3 +192,27 @@ final companyRepositoryProvider = Provider<CompanyRepository>((ref) {
   final apiClient = ref.watch(apiClientProvider);
   return CompanyRepository(apiClient: apiClient);
 });
+
+Map<String, dynamic> _unwrapCompanyJson(dynamic data) {
+  if (data is! Map) return {};
+  var current = Map<String, dynamic>.from(data);
+
+  for (var depth = 0; depth < 4; depth++) {
+    if (current.containsKey('id') || current.containsKey('_id')) {
+      return current;
+    }
+
+    Map<String, dynamic>? nested;
+    for (final key in ['company', 'data', 'result', 'item']) {
+      final inner = current[key];
+      if (inner is Map) {
+        nested = Map<String, dynamic>.from(inner);
+        break;
+      }
+    }
+    if (nested == null) return current;
+    current = nested;
+  }
+
+  return current;
+}

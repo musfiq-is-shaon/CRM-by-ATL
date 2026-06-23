@@ -18,6 +18,12 @@ dependencies:
   
   # Network
   dio: ^5.8.0+1
+  http: ^1.2.2
+  http_parser: ^4.1.2
+
+  # OCR / business card scan
+  image_picker: ^1.1.2
+  flutter_dotenv: ^5.2.1
   
   # Secure Storage
   flutter_secure_storage: ^9.2.4
@@ -79,6 +85,7 @@ flutter:
   assets:
     - assets/images/
     - assets/crm_icon.png
+    - .env
   
 flutter_launcher_icons:
   android: true

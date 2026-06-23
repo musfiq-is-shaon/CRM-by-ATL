@@ -23,10 +23,11 @@ class UsersNotifier extends StateNotifier<UsersState> {
 
   UsersNotifier(this._userRepository) : super(const UsersState());
 
-  Future<void> loadUsers() async {
+  Future<void> loadUsers({bool forceRefresh = false}) async {
+    if (!forceRefresh && state.users.isNotEmpty) return;
     state = state.copyWith(isLoading: true, error: null);
     try {
-      final users = await _userRepository.getUsers(forceRefresh: true);
+      final users = await _userRepository.getUsers(forceRefresh: forceRefresh);
       state = state.copyWith(users: users, isLoading: false);
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());

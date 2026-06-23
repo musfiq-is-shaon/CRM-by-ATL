@@ -14,6 +14,7 @@ import '../../widgets/loading_widget.dart';
 import '../../widgets/error_widget.dart' as app_widgets;
 import '../../widgets/searchable_dropdown.dart';
 import '../../widgets/app_search_filter_bar.dart';
+import 'business_card_scan_flow.dart';
 import 'contact_detail_page.dart';
 
 class ContactsListPage extends ConsumerStatefulWidget {
@@ -46,6 +47,7 @@ class _ContactsListPageState extends ConsumerState<ContactsListPage> {
     ref.watch(rbacAccessDigestProvider);
     ref.watch(rbacModuleAdminProvider(RbacPageKey.contacts));
     final contactsState = ref.watch(contactsProvider);
+    final companiesState = ref.watch(companiesProvider);
 
     final bgColor = AppThemeColors.backgroundColor(context);
     final textPrimary = AppThemeColors.textPrimaryColor(context);
@@ -57,7 +59,22 @@ class _ContactsListPageState extends ConsumerState<ContactsListPage> {
 
     return Scaffold(
       backgroundColor: bgColor,
-      appBar: AppThemeColors.appBarTitle(context, 'Contacts'),
+      appBar: AppThemeColors.appBarTitle(
+        context,
+        'Contacts',
+        actions: [
+          IconButton(
+            tooltip: 'Scan business card',
+            onPressed: _scanBusinessCard,
+            icon: Icon(Icons.document_scanner_outlined, color: textPrimary),
+          ),
+          IconButton(
+            tooltip: 'Add contact',
+            onPressed: _openAddContact,
+            icon: Icon(Icons.add, color: textPrimary),
+          ),
+        ],
+      ),
       body: Column(
         children: [
           AppSearchFilterBar(
@@ -83,7 +100,7 @@ class _ContactsListPageState extends ConsumerState<ContactsListPage> {
                     subtitle: 'Add your first contact',
                     icon: Icons.people_outline,
                     buttonText: 'Add Contact',
-                    onButtonPressed: () {},
+                    onButtonPressed: _openAddContact,
                   )
                 : RefreshIndicator(
                     onRefresh: () =>
@@ -93,6 +110,9 @@ class _ContactsListPageState extends ConsumerState<ContactsListPage> {
                       itemCount: contactsState.filteredContacts.length,
                       itemBuilder: (context, index) {
                         final contact = contactsState.filteredContacts[index];
+                        final companyName = contact.companyDisplayName(
+                          companiesState.companies,
+                        );
                         return Padding(
                           padding: const EdgeInsets.only(bottom: 12),
                           child: CRMCard(
@@ -131,9 +151,9 @@ class _ContactsListPageState extends ConsumerState<ContactsListPage> {
                                             color: textSecondary,
                                           ),
                                         ),
-                                      if (contact.company != null)
+                                      if (companyName != null)
                                         Text(
-                                          contact.company!.name,
+                                          companyName,
                                           style: TextStyle(
                                             fontSize: 12,
                                             color: textTertiary,
@@ -173,15 +193,33 @@ class _ContactsListPageState extends ConsumerState<ContactsListPage> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          Navigator.push(
+    );
+  }
+
+  void _openAddContact() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const ContactFormPage()),
+    );
+  }
+
+  Future<void> _scanBusinessCard() async {
+    await BusinessCardScanFlow.showSourceSheet(
+      context,
+      onSource: (source) async {
+        final card = await BusinessCardScanFlow.pickAndExtract(
+          context,
+          source: source,
+        );
+        if (card != null && mounted) {
+          await Navigator.push(
             context,
-            MaterialPageRoute(builder: (context) => const ContactFormPage()),
+            MaterialPageRoute(
+              builder: (context) => ContactFormPage(initialScan: card),
+            ),
           );
-        },
-        child: const Icon(Icons.add),
-      ),
+        }
+      },
     );
   }
 

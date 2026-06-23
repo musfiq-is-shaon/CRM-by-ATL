@@ -118,6 +118,33 @@ class ContactsNotifier extends StateNotifier<ContactsState> {
     state = state.copyWith(searchQuery: null, companyIdFilter: null);
   }
 
+  Future<Contact> _withCompany(Contact contact) async {
+    if (contact.company != null) return contact;
+    final companyId = contact.companyId;
+    if (companyId == null || companyId.isEmpty) return contact;
+
+    Company? company;
+    try {
+      company = await _companyRepository.getCompanyById(companyId);
+    } catch (_) {
+      // Fall through — company name resolved in UI if still missing.
+    }
+
+    if (company == null) return contact;
+
+    return Contact(
+      id: contact.id,
+      name: contact.name,
+      companyId: contact.companyId,
+      company: company,
+      designation: contact.designation,
+      mobile: contact.mobile,
+      email: contact.email,
+      createdAt: contact.createdAt,
+      updatedAt: contact.updatedAt,
+    );
+  }
+
   Future<void> createContact({
     required String name,
     required String companyId,
@@ -133,7 +160,10 @@ class ContactsNotifier extends StateNotifier<ContactsState> {
         mobile: mobile,
         email: email,
       );
-      state = state.copyWith(contacts: [contact, ...state.contacts]);
+      final contactWithCompany = await _withCompany(contact);
+      state = state.copyWith(
+        contacts: [contactWithCompany, ...state.contacts],
+      );
     } catch (e) {
       state = state.copyWith(error: e.toString());
     }
@@ -156,8 +186,9 @@ class ContactsNotifier extends StateNotifier<ContactsState> {
         mobile: mobile,
         email: email,
       );
+      final contactWithCompany = await _withCompany(contact);
       final updatedContacts = state.contacts
-          .map((c) => c.id == id ? contact : c)
+          .map((c) => c.id == id ? contactWithCompany : c)
           .toList();
       state = state.copyWith(contacts: updatedContacts);
     } catch (e) {
