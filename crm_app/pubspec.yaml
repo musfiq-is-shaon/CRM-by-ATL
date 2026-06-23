@@ -51,6 +51,8 @@ dependencies:
   google_fonts: ^8.0.2
   dynamic_color: ^1.8.1
   confetti: ^0.8.0
+  pdf: ^3.11.3
+  printing: ^5.14.2
   flutter_map: ^8.2.2
   latlong2: ^0.9.1
   firebase_core: ^4.6.0

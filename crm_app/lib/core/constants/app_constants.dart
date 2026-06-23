@@ -92,6 +92,24 @@ class AppConstants {
   static String leavesApprove(String leaveId) => '/api/leaves/$leaveId/approve';
   static String leavesReject(String leaveId) => '/api/leaves/$leaveId/reject';
 
+  // Lunch module (`pageKey: lunch`)
+  static const String lunchSettings = '/api/lunch/settings';
+  static const String lunchDashboard = '/api/lunch/dashboard';
+  static const String lunchPollsToday = '/api/lunch/polls/today';
+  static const String lunchPolls = '/api/lunch/polls';
+  static String lunchPollById(String pollId) => '/api/lunch/polls/$pollId';
+  static String lunchPollStatus(String pollId) =>
+      '/api/lunch/polls/$pollId/status';
+  static String lunchPollVote(String pollId) => '/api/lunch/polls/$pollId/vote';
+  static String lunchPollSummary(String pollId) =>
+      '/api/lunch/polls/$pollId/summary';
+  static const String lunchVotesHistory = '/api/lunch/votes/history';
+  static const String lunchBalanceMe = '/api/lunch/balance/me';
+  static const String lunchBalanceTransactions =
+      '/api/lunch/balance/transactions';
+  static const String lunchBalanceEmployees = '/api/lunch/balance/employees';
+  static const String lunchBalanceAdjust = '/api/lunch/balance/adjust';
+
   // Storage Keys
   static const String tokenKey = 'auth_token';
   static const String userKey = 'user_data';

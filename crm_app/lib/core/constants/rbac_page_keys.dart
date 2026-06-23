@@ -11,4 +11,5 @@ class RbacPageKey {
   static const String leaves = 'leaves';
   static const String hr = 'hr';
   static const String attendance = 'attendance';
+  static const String lunch = 'lunch';
 }

@@ -16,15 +16,14 @@ import '../../providers/rbac_prefetch.dart';
 import '../../providers/rbac_provider.dart'
     show rbacProvider, RbacState, RbacLoadStatus, rbacAccessDigestProvider;
 import '../../providers/auth_provider.dart';
+import '../../providers/lunch_provider.dart';
 import '../../providers/sale_provider.dart';
-import '../../providers/order_provider.dart';
-import '../../providers/renewal_provider.dart';
 import '../../providers/shift_provider.dart';
 import '../../providers/task_provider.dart';
 import '../attendance/attendance_hub_page.dart';
 import '../dashboard/dashboard_page.dart';
 import '../expenses/expenses_list_page.dart';
-import '../sales/sales_list_page.dart';
+import '../lunch/lunch_hub_page.dart';
 import 'more_page.dart';
 
 final selectedTabProvider = StateProvider<int>((ref) => 0);
@@ -64,9 +63,9 @@ class ShellPage extends ConsumerStatefulWidget {
 class _ShellPageState extends ConsumerState<ShellPage>
     with WidgetsBindingObserver {
   static const _kDashboard = 'dashboard';
-  static const _kSales = 'sales';
-  static const _kExpenses = 'expenses';
   static const _kAttendance = 'attendance';
+  static const _kLunch = 'lunch';
+  static const _kExpenses = 'expenses';
   static const _kMore = 'more';
 
   Timer? _rbacForegroundPollTimer;
@@ -263,19 +262,21 @@ class _ShellPageState extends ConsumerState<ShellPage>
     final jwtGlobalAdmin = ref.read(authProvider).user?.isAdmin ?? false;
     final ids = <String>[_kDashboard];
 
-    // Global JWT admin: full bottom nav (API may still send explicit RBAC only).
-    if (jwtGlobalAdmin) {
-      ids
-        ..add(_kSales)
-        ..add(_kExpenses)
-        ..add(_kAttendance);
-    } else if (me != null) {
-      if (me.hasNav(RbacPageKey.sales)) ids.add(_kSales);
-      if (me.hasNav(RbacPageKey.expenses)) ids.add(_kExpenses);
-      if (me.hasNav(RbacPageKey.attendance) || me.hasNav(RbacPageKey.hr)) {
-        ids.add(_kAttendance);
-      }
+    void addIf(bool condition, String id) {
+      if (condition) ids.add(id);
     }
+
+    final showAttendance = jwtGlobalAdmin ||
+        (me != null &&
+            (me.hasNav(RbacPageKey.attendance) || me.hasNav(RbacPageKey.hr)));
+    final showLunch =
+        jwtGlobalAdmin || (me != null && me.hasNav(RbacPageKey.lunch));
+    final showExpenses =
+        jwtGlobalAdmin || (me != null && me.hasNav(RbacPageKey.expenses));
+
+    addIf(showAttendance, _kAttendance);
+    addIf(showLunch, _kLunch);
+    addIf(showExpenses, _kExpenses);
 
     ids.add(_kMore);
     return ids;
@@ -286,12 +287,12 @@ class _ShellPageState extends ConsumerState<ShellPage>
       switch (id) {
         case _kDashboard:
           return DashboardPage();
-        case _kSales:
-          return SalesListPage();
-        case _kExpenses:
-          return ExpensesListPage();
         case _kAttendance:
           return const AttendanceHubPage();
+        case _kLunch:
+          return const LunchHubPage();
+        case _kExpenses:
+          return ExpensesListPage();
         case _kMore:
           return MorePage();
         default:
@@ -329,23 +330,23 @@ class _ShellPageState extends ConsumerState<ShellPage>
             selectedIcon: Icons.dashboard,
             label: 'Dashboard',
           );
-        case _kSales:
+        case _kAttendance:
           return const _ShellNavItem(
-            icon: Icons.trending_up_outlined,
-            selectedIcon: Icons.trending_up,
-            label: 'Deals',
+            icon: Icons.access_time_outlined,
+            selectedIcon: Icons.access_time_filled,
+            label: 'Attendance',
+          );
+        case _kLunch:
+          return const _ShellNavItem(
+            icon: Icons.lunch_dining_outlined,
+            selectedIcon: Icons.lunch_dining,
+            label: 'Lunch',
           );
         case _kExpenses:
           return const _ShellNavItem(
             icon: Icons.receipt_long_outlined,
             selectedIcon: Icons.receipt_long,
             label: 'Expense',
-          );
-        case _kAttendance:
-          return const _ShellNavItem(
-            icon: Icons.access_time_outlined,
-            selectedIcon: Icons.access_time_filled,
-            label: 'Attendance',
           );
         case _kMore:
           return const _ShellNavItem(
@@ -409,14 +410,12 @@ class _ShellPageState extends ConsumerState<ShellPage>
     ref.read(loadedTabsProvider.notifier).update((s) => {...s, id});
 
     switch (id) {
-      case _kSales:
-        ref.read(salesProvider.notifier).loadSales();
-        ref.read(ordersProvider.notifier).loadOrders();
-        ref.read(renewalsProvider.notifier).loadRenewals();
-        break;
       case _kAttendance:
         ref.read(attendanceProvider.notifier).loadToday();
         unawaited(ref.read(shiftProvider.notifier).loadShifts());
+        break;
+      case _kLunch:
+        ref.read(lunchProvider.notifier).bootstrapUser();
         break;
       case _kExpenses:
         break;
