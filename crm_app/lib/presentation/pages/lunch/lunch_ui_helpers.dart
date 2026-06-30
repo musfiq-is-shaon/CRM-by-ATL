@@ -5,6 +5,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
 import '../../../core/theme/app_theme_colors.dart';
+import '../../../core/theme/design_tokens.dart';
 import '../../../data/models/lunch_model.dart';
 
 /// Web lunch module accent colors.
@@ -26,12 +27,37 @@ String lunchOptionKindApiValue(LunchOptionKind kind) {
 
 LunchOptionKind lunchOptionKindFromApiValue(String? raw) => lunchOptionKindFrom(raw);
 
+pw.ThemeData? _lunchPdfThemeCache;
+
+Future<pw.ThemeData> _loadLunchPdfTheme() async {
+  if (_lunchPdfThemeCache != null) return _lunchPdfThemeCache!;
+
+  final base = await PdfGoogleFonts.notoSansRegular();
+  final bold = await PdfGoogleFonts.notoSansBold();
+  final bengali = await PdfGoogleFonts.notoSansBengaliRegular();
+  final bengaliBold = await PdfGoogleFonts.notoSansBengaliBold();
+
+  _lunchPdfThemeCache = pw.ThemeData.withFont(
+    base: base,
+    bold: bold,
+    fontFallback: [bengali, bengaliBold, base],
+  );
+  return _lunchPdfThemeCache!;
+}
+
+final pw.TextStyle _pdfTableHeaderStyle = pw.TextStyle(
+  fontSize: 10,
+  fontWeight: pw.FontWeight.bold,
+);
+final pw.TextStyle _pdfTableCellStyle = pw.TextStyle(fontSize: 9);
+
 Future<void> exportLunchOrderSummaryPdf(LunchOrderSummary summary) async {
+  final theme = await _loadLunchPdfTheme();
   final poll = summary.poll;
   final dateStr = poll.date != null
       ? DateFormat('EEEE, MMMM d, yyyy').format(poll.date!.toLocal())
       : 'Lunch order';
-  final doc = pw.Document();
+  final doc = pw.Document(theme: theme);
 
   doc.addPage(
     pw.MultiPage(
@@ -40,7 +66,7 @@ Future<void> exportLunchOrderSummaryPdf(LunchOrderSummary summary) async {
         pw.Header(
           level: 0,
           child: pw.Text(
-            'Order Summary — ${poll.title}',
+            'Order Summary - ${poll.title}',
             style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
           ),
         ),
@@ -58,23 +84,27 @@ Future<void> exportLunchOrderSummaryPdf(LunchOrderSummary summary) async {
         ),
         pw.SizedBox(height: 20),
         pw.Text('Menu breakdown', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-        pw.Table.fromTextArray(
+        pw.TableHelper.fromTextArray(
           headers: const ['Menu item', 'Type', 'Votes', 'Share %'],
+          headerStyle: _pdfTableHeaderStyle,
+          cellStyle: _pdfTableCellStyle,
           data: summary.menuBreakdown
               .map(
                 (r) => [
                   r.label,
                   lunchOptionKindLabel(r.kind),
                   '${r.votes}',
-                  r.share.toStringAsFixed(0),
+                  '${r.share.toStringAsFixed(0)}%',
                 ],
               )
               .toList(),
         ),
         pw.SizedBox(height: 20),
         pw.Text('Employee votes', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-        pw.Table.fromTextArray(
+        pw.TableHelper.fromTextArray(
           headers: const ['Employee', 'Choice', 'Type', 'Voted'],
+          headerStyle: _pdfTableHeaderStyle,
+          cellStyle: _pdfTableCellStyle,
           data: summary.employeeVotes
               .map(
                 (r) => [
@@ -83,7 +113,7 @@ Future<void> exportLunchOrderSummaryPdf(LunchOrderSummary summary) async {
                   lunchOptionKindLabel(r.kind),
                   r.votedAt != null
                       ? DateFormat.jm().format(r.votedAt!.toLocal())
-                      : '—',
+                      : '-',
                 ],
               )
               .toList(),
@@ -315,22 +345,223 @@ class LunchModuleHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final textPrimary = AppThemeColors.textPrimaryColor(context);
     final textSecondary = AppThemeColors.textSecondaryColor(context);
+    final cs = Theme.of(context).colorScheme;
     final d = date ?? DateTime.now();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(subtitle, style: TextStyle(fontSize: 14, color: textSecondary)),
-        const SizedBox(height: 4),
-        Text(
-          formatLunchPollDate(d),
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w500,
-            color: textSecondary,
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: AppThemeColors.heroSurface(context),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          AppThemeColors.iconChip(
+            context,
+            icon: Icons.restaurant_menu_rounded,
+            accent: lunchBrandGreen,
+            size: 44,
+            iconSize: 22,
           ),
-        ),
-      ],
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Today\'s lunch',
+                  style: AppTypography.sectionTitle(context)?.copyWith(
+                        color: textPrimary,
+                      ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: textSecondary,
+                        height: 1.35,
+                      ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  formatLunchPollDate(d),
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: cs.primary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
+}
+
+/// Compact read-only vote bars for poll list cards.
+class LunchPollVoteBreakdown extends StatelessWidget {
+  const LunchPollVoteBreakdown({super.key, required this.poll, this.compact = true});
+
+  final LunchPoll poll;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final options = poll.mergedOptions;
+    if (options.isEmpty) return const SizedBox.shrink();
+
+    final total = poll.totalVoteCount;
+    final cs = Theme.of(context).colorScheme;
+    final textPrimary = AppThemeColors.textPrimaryColor(context);
+    final textSecondary = AppThemeColors.textSecondaryColor(context);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: options.map((opt) {
+        final count = opt.effectiveVoteCount;
+        final fraction = total > 0 ? count / total : 0.0;
+        final accent = lunchOptionKindColor(opt.kind, cs);
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      opt.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: compact ? 12 : 13,
+                        fontWeight: FontWeight.w600,
+                        color: textPrimary,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    '$count',
+                    style: TextStyle(
+                      fontSize: compact ? 12 : 13,
+                      fontWeight: FontWeight.w700,
+                      color: textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(
+                  value: fraction.clamp(0.0, 1.0),
+                  minHeight: compact ? 5 : 6,
+                  backgroundColor: cs.surfaceContainerHighest,
+                  color: accent,
+                ),
+              ),
+            ],
+          ),
+        );
+      }).toList(),
+    );
+  }
+}
+
+void showLunchPollVotesSheet(BuildContext context, LunchPoll poll) {
+  showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    isScrollControlled: true,
+    builder: (ctx) {
+      final options = poll.mergedOptions;
+      final textPrimary = AppThemeColors.textPrimaryColor(ctx);
+      final textSecondary = AppThemeColors.textSecondaryColor(ctx);
+      return SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'All votes — ${poll.title}',
+                style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Flexible(
+                child: ListView(
+                  shrinkWrap: true,
+                  children: options.map((opt) {
+                    final count = opt.effectiveVoteCount;
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  opt.label,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 15,
+                                    color: textPrimary,
+                                  ),
+                                ),
+                              ),
+                              Text(
+                                '$count vote${count == 1 ? '' : 's'}',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 13,
+                                  color: textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          if (opt.voters.isEmpty)
+                            Text(
+                              'No votes yet',
+                              style: TextStyle(fontSize: 13, color: textSecondary),
+                            )
+                          else
+                            ...opt.voters.map(
+                              (v) => ListTile(
+                                contentPadding: EdgeInsets.zero,
+                                dense: true,
+                                leading: CircleAvatar(
+                                  radius: 16,
+                                  child: Text(
+                                    v.name.isNotEmpty ? v.name[0].toUpperCase() : '?',
+                                    style: const TextStyle(fontSize: 12),
+                                  ),
+                                ),
+                                title: Text(
+                                  v.name,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w500,
+                                    color: textPrimary,
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
 }

@@ -525,7 +525,7 @@ class _LeaveApplyPageState extends ConsumerState<LeaveApplyPage> {
         messenger.showSnackBar(
           SnackBar(
             content: Text(e.toString().replaceFirst('Exception: ', '')),
-            backgroundColor: Colors.red.shade700,
+            backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
       }
@@ -794,7 +794,7 @@ class _LeaveApplyPageState extends ConsumerState<LeaveApplyPage> {
                   _nonWorkingDayMessage!,
                   style: TextStyle(
                     fontSize: 13,
-                    color: Colors.red.shade800,
+                    color: Theme.of(context).colorScheme.error,
                     height: 1.35,
                     fontWeight: FontWeight.w600,
                   ),
@@ -832,7 +832,7 @@ class _LeaveApplyPageState extends ConsumerState<LeaveApplyPage> {
                     'Selected date(s) overlap with your existing leave ($rangeText, ${overlap.status}).',
                     style: TextStyle(
                       fontSize: 13,
-                      color: Colors.red.shade800,
+                      color: Theme.of(context).colorScheme.error,
                       height: 1.35,
                     ),
                   ),

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_theme_colors.dart';
+import '../../../../core/theme/color_scheme_semantics.dart';
+import '../../../../core/theme/design_tokens.dart';
 import '../../../widgets/crm_card.dart';
 import '../../../../data/models/shift_model.dart';
 import '../../../providers/attendance_provider.dart';
@@ -228,26 +230,26 @@ class _AttendanceHubHeaderState extends ConsumerState<AttendanceHubHeader> {
                       label: 'Attended',
                       count: r.present,
                       icon: Icons.check_circle_rounded,
-                      accent: const Color(0xFF2E7D32),
+                      tone: SemanticTone.success,
                     ),
                     _WeekStatChip(
                       label: 'Late',
                       count: r.late,
                       icon: Icons.schedule_rounded,
-                      accent: const Color(0xFFE65100),
+                      tone: SemanticTone.warning,
                     ),
                     _WeekStatChip(
                       label: 'Absent',
                       count: r.absent,
                       icon: Icons.event_busy_rounded,
-                      accent: const Color(0xFFC62828),
+                      tone: SemanticTone.danger,
                     ),
                     if (r.other > 0)
                       _WeekStatChip(
                         label: 'Other',
                         count: r.other,
                         icon: Icons.more_horiz_rounded,
-                        accent: const Color(0xFF546E7A),
+                        tone: SemanticTone.neutral,
                       ),
                   ],
                 );
@@ -270,23 +272,19 @@ class _WeekStatChip extends StatelessWidget {
     required this.label,
     required this.count,
     required this.icon,
-    required this.accent,
+    required this.tone,
   });
 
   final String label;
   final int count;
   final IconData icon;
-  final Color accent;
+  final SemanticTone tone;
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bg = Color.alphaBlend(
-      accent.withValues(alpha: isDark ? 0.28 : 0.14),
-      cs.surfaceContainerHighest,
-    );
-    final fg = isDark ? Color.lerp(accent, cs.onSurface, 0.15)! : accent;
+    final pair = AppThemeColors.semanticTone(context, tone);
+    final bg = pair.background;
+    final fg = pair.foreground;
 
     return ConstrainedBox(
       constraints: const BoxConstraints(minWidth: 92),
@@ -294,7 +292,7 @@ class _WeekStatChip extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
           color: bg,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(AppRadius.md),
           border: Border.all(color: fg.withValues(alpha: 0.2)),
         ),
         child: Row(

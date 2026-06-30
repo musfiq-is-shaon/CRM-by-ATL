@@ -97,18 +97,33 @@ class _LunchPollFormSheetState extends ConsumerState<LunchPollFormSheet> {
       return;
     }
     try {
-      final full = await ref.read(lunchRepositoryProvider).getPoll(existing.id);
+      final repo = ref.read(lunchRepositoryProvider);
+      final summary = await repo.getPollSummary(existing.id, poll: existing);
       if (!mounted) return;
       setState(() {
-        _populateFromPoll(full);
+        _populateFromPoll(summary.poll, breakdown: summary.menuBreakdown);
         _loadingPoll = false;
       });
     } catch (_) {
-      if (mounted) setState(() => _loadingPoll = false);
+      try {
+        final full = await ref.read(lunchRepositoryProvider).refreshPollHydrated(
+              existing.id,
+            );
+        if (!mounted) return;
+        setState(() {
+          _populateFromPoll(full);
+          _loadingPoll = false;
+        });
+      } catch (_) {
+        if (mounted) setState(() => _loadingPoll = false);
+      }
     }
   }
 
-  void _populateFromPoll(LunchPoll poll) {
+  void _populateFromPoll(
+    LunchPoll poll, {
+    List<LunchMenuBreakdownRow>? breakdown,
+  }) {
     _titleCtrl.text = poll.title;
     if (poll.endTime != null && poll.endTime!.isNotEmpty) {
       _endTimeCtrl.text = formatLunchEndTimeDisplay(poll.endTime);
@@ -119,9 +134,9 @@ class _LunchPollFormSheetState extends ConsumerState<LunchPollFormSheet> {
       o.labelCtrl.dispose();
     }
     _options.clear();
-    final merged = poll.mergedOptions;
-    if (merged.isNotEmpty) {
-      for (final o in merged) {
+    final options = poll.optionsWithVoteTotals(breakdown);
+    if (options.isNotEmpty) {
+      for (final o in options) {
         _options.add(
           _OptionRow(
             id: o.id,
@@ -423,7 +438,7 @@ class _LunchPollFormSheetState extends ConsumerState<LunchPollFormSheet> {
                         selected: row.kind,
                         onChanged: (k) => setState(() => row.kind = k),
                       ),
-                      if (isEdit && row.voteCount > 0) ...[
+                      if (isEdit) ...[
                         const SizedBox(height: 8),
                         Text(
                           '${row.voteCount} vote${row.voteCount == 1 ? '' : 's'}',

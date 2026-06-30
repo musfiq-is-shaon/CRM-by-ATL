@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/theme/design_tokens.dart';
 import '../../core/theme/theme_extensions.dart';
 
 class CRMTextField extends StatelessWidget {
@@ -46,17 +47,12 @@ class CRMTextField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = context.colors;
+    final singleLine = maxLines == 1;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w500,
-                color: cs.onSurfaceVariant,
-              ),
-        ),
-        const SizedBox(height: 8),
+        Text(label, style: AppTypography.label(context)),
+        const SizedBox(height: AppSpacing.sm),
         TextFormField(
           controller: controller,
           validator: validator,
@@ -73,14 +69,46 @@ class CRMTextField extends StatelessWidget {
           autofillHints: disableAutofill ? const [] : null,
           enableSuggestions: !disableAutofill,
           autocorrect: !disableAutofill,
-          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                color: cs.onSurface,
-              ),
+          style: AppTypography.input(context),
           cursorColor: cs.primary,
           decoration: InputDecoration(
             hintText: hint,
             prefixIcon: prefixIcon,
             suffixIcon: suffixIcon,
+            filled: true,
+            fillColor: cs.surfaceContainerHighest,
+            constraints: singleLine
+                ? const BoxConstraints(minHeight: AppSizes.textFieldHeight)
+                : null,
+            contentPadding: EdgeInsets.symmetric(
+              horizontal: AppSpacing.lg,
+              vertical: singleLine ? AppSpacing.md : AppSpacing.lg,
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              borderSide: BorderSide(
+                color: cs.outlineVariant.withValues(alpha: 0.65),
+              ),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              borderSide: BorderSide(
+                color: cs.outlineVariant.withValues(alpha: 0.55),
+              ),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              borderSide: BorderSide(color: cs.primary, width: 2),
+            ),
+            errorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              borderSide: BorderSide(color: cs.error),
+            ),
+            focusedErrorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              borderSide: BorderSide(color: cs.error, width: 2),
+            ),
+            errorStyle: AppTypography.error(context),
           ),
         ),
       ],

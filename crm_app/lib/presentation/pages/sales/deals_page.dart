@@ -806,12 +806,12 @@ class _OrdersPane extends StatelessWidget {
     return RefreshIndicator(
       onRefresh: onRefresh,
       child: ListView.builder(
-        padding: AppThemeColors.pagePaddingAll,
+        padding: AppThemeColors.listPagePadding,
         itemCount: rows.length,
         itemBuilder: (context, index) {
           final o = rows[index];
           return Padding(
-            padding: const EdgeInsets.only(bottom: 12),
+            padding: AppThemeColors.cardListItemMargin,
             child: CRMCard(
               onTap: () => onOpenDetail(o.id),
               child: Column(
@@ -982,12 +982,12 @@ class _RenewalsPane extends StatelessWidget {
     return RefreshIndicator(
       onRefresh: onRefresh,
       child: ListView.builder(
-        padding: AppThemeColors.pagePaddingAll,
+        padding: AppThemeColors.listPagePadding,
         itemCount: rows.length,
         itemBuilder: (context, index) {
           final r = rows[index];
           return Padding(
-            padding: const EdgeInsets.only(bottom: 12),
+            padding: AppThemeColors.cardListItemMargin,
             child: CRMCard(
               onTap: () => onOpenRenewal(r),
               child: Column(
@@ -1041,7 +1041,7 @@ class _RenewalsPane extends StatelessWidget {
                         ),
                     ],
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: AppSpacing.xs),
                   if (r.renewalDate != null)
                     Text(
                       'Renewal: ${_fmt(r.renewalDate!)}',

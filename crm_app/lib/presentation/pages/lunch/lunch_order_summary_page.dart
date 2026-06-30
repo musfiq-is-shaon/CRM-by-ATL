@@ -7,6 +7,7 @@ import '../../../core/theme/design_tokens.dart';
 import '../../../data/models/lunch_model.dart';
 import '../../providers/lunch_provider.dart';
 import '../../widgets/app_search_filter_bar.dart';
+import '../../widgets/app_section_header.dart';
 import '../../widgets/avatar_widget.dart';
 import '../../widgets/crm_card.dart';
 import '../../widgets/loading_widget.dart';
@@ -25,6 +26,7 @@ class LunchOrderSummaryPage extends ConsumerStatefulWidget {
 class _LunchOrderSummaryPageState extends ConsumerState<LunchOrderSummaryPage> {
   final _searchController = TextEditingController();
   String _search = '';
+  bool _initialLoadComplete = false;
 
   @override
   void initState() {
@@ -33,22 +35,8 @@ class _LunchOrderSummaryPageState extends ConsumerState<LunchOrderSummaryPage> {
   }
 
   Future<void> _bootstrap() async {
-    await ref.read(lunchProvider.notifier).loadTodayPolls();
-    final state = ref.read(lunchProvider);
-    final pollId = state.selectedPollId ?? state.todayPolls.firstOrNull?.id;
-    if (pollId != null && pollId.isNotEmpty) {
-      await ref.read(lunchProvider.notifier).loadOrderSummary(pollId);
-    } else {
-      final now = DateTime.now();
-      await ref.read(lunchProvider.notifier).loadAdminPolls(
-        from: now.subtract(const Duration(days: 7)),
-        to: now,
-      );
-      final adminPoll = ref.read(lunchProvider).adminPolls.firstOrNull;
-      if (adminPoll != null) {
-        await ref.read(lunchProvider.notifier).loadOrderSummary(adminPoll.id);
-      }
-    }
+    await ref.read(lunchProvider.notifier).bootstrapOrderSummary();
+    if (mounted) setState(() => _initialLoadComplete = true);
   }
 
   @override
@@ -58,45 +46,45 @@ class _LunchOrderSummaryPageState extends ConsumerState<LunchOrderSummaryPage> {
   }
 
   Future<void> _pickPoll() async {
-    final now = DateTime.now();
-    await ref.read(lunchProvider.notifier).loadTodayPolls(silent: true);
-    await ref.read(lunchProvider.notifier).loadAdminPolls(
-      from: now.subtract(const Duration(days: 30)),
-      to: now.add(const Duration(days: 7)),
-    );
     if (!mounted) return;
-    final state = ref.read(lunchProvider);
-    final polls = [
-      ...state.todayPolls,
-      ...state.adminPolls.where(
-        (p) => !state.todayPolls.any((t) => t.id == p.id),
-      ),
-    ];
-    if (polls.isEmpty) return;
+    final now = DateTime.now();
+    final from = now.subtract(const Duration(days: 30));
+    final to = now.add(const Duration(days: 7));
+    final cached = _pollPickerCandidates(ref.read(lunchProvider));
+
     final selected = await showModalBottomSheet<LunchPoll>(
       context: context,
       showDragHandle: true,
-      builder: (ctx) {
-        return SafeArea(
-          child: ListView(
-            shrinkWrap: true,
-            children: polls
-                .map(
-                  (p) => ListTile(
-                    title: Text(p.title),
-                    subtitle: Text(formatLunchPollDateShort(p.date)),
-                    trailing: lunchPollStatusBadge(p.effectiveStatus),
-                    onTap: () => Navigator.pop(ctx, p),
-                  ),
-                )
-                .toList(),
-          ),
-        );
-      },
+      isScrollControlled: true,
+      builder: (ctx) => _PollPickerSheet(
+        initialPolls: cached,
+        loadPolls: () => ref.read(lunchProvider.notifier).loadPollPickerOptions(
+          from: from,
+          to: to,
+        ),
+      ),
     );
     if (selected != null && mounted) {
-      await ref.read(lunchProvider.notifier).loadOrderSummary(selected.id);
+      await ref
+          .read(lunchProvider.notifier)
+          .loadOrderSummary(selected.id, silent: false);
     }
+  }
+
+  List<LunchPoll> _pollPickerCandidates(LunchState state) {
+    final byId = <String, LunchPoll>{};
+    for (final poll in state.todayPolls) {
+      if (poll.id.isNotEmpty) byId[poll.id] = poll;
+    }
+    for (final poll in state.adminPolls) {
+      if (poll.id.isNotEmpty) byId[poll.id] = poll;
+    }
+    return byId.values.toList()
+      ..sort((a, b) {
+        final ad = a.date ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final bd = b.date ?? DateTime.fromMillisecondsSinceEpoch(0);
+        return bd.compareTo(ad);
+      });
   }
 
   Future<void> _refresh() async {
@@ -106,7 +94,9 @@ class _LunchOrderSummaryPageState extends ConsumerState<LunchOrderSummaryPage> {
       return;
     }
     await ref.read(lunchProvider.notifier).loadTodayPolls(silent: true);
-    await ref.read(lunchProvider.notifier).loadOrderSummary(pollId);
+    await ref
+        .read(lunchProvider.notifier)
+        .loadOrderSummary(pollId, silent: ref.read(lunchProvider).orderSummary != null);
   }
 
   @override
@@ -129,11 +119,15 @@ class _LunchOrderSummaryPageState extends ConsumerState<LunchOrderSummaryPage> {
       }
     });
 
-    if (state.status == LunchLoadStatus.loading && summary == null) {
+    if ((state.orderSummaryLoading || !_initialLoadComplete) &&
+        summary == null &&
+        state.error == null) {
       return const LoadingWidget(message: 'Loading order summary…');
     }
 
-    if (summary == null && state.status == LunchLoadStatus.error) {
+    if (summary == null &&
+        !state.orderSummaryLoading &&
+        state.error != null) {
       return app_widgets.ErrorWidget(
         message: state.error ?? 'Could not load order summary',
         onRetry: _bootstrap,
@@ -148,12 +142,12 @@ class _LunchOrderSummaryPageState extends ConsumerState<LunchOrderSummaryPage> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(Icons.lunch_dining_outlined, size: 48, color: textSecondary),
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpacing.sm),
               Text(
                 'No lunch poll for this date',
                 style: TextStyle(color: textPrimary, fontWeight: FontWeight.w600),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpacing.xs),
               Text(
                 'Create a poll or pick another date.',
                 style: TextStyle(color: textSecondary),
@@ -191,7 +185,7 @@ class _LunchOrderSummaryPageState extends ConsumerState<LunchOrderSummaryPage> {
                 ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.xs),
           Row(
             children: [
               Expanded(
@@ -201,14 +195,12 @@ class _LunchOrderSummaryPageState extends ConsumerState<LunchOrderSummaryPage> {
                   label: const Text('Choose poll'),
                 ),
               ),
-              if (poll != null) ...[
-                const SizedBox(width: 8),
-                lunchPollStatusBadge(poll.effectiveStatus),
-              ],
+              const SizedBox(width: AppSpacing.xs),
+              lunchPollStatusBadge(poll.effectiveStatus),
             ],
           ),
           if (summary != null) ...[
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.md),
             Row(
               children: [
                 Expanded(
@@ -218,7 +210,7 @@ class _LunchOrderSummaryPageState extends ConsumerState<LunchOrderSummaryPage> {
                     color: cs.primary,
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: AppSpacing.xs),
                 Expanded(
                   child: _StatCard(
                     label: 'Personal',
@@ -226,7 +218,7 @@ class _LunchOrderSummaryPageState extends ConsumerState<LunchOrderSummaryPage> {
                     color: cs.secondary,
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: AppSpacing.xs),
                 Expanded(
                   child: _StatCard(
                     label: 'Total votes',
@@ -236,12 +228,9 @@ class _LunchOrderSummaryPageState extends ConsumerState<LunchOrderSummaryPage> {
                 ),
               ],
             ),
-            const SizedBox(height: 20),
-            Text(
-              'Menu breakdown',
-              style: TextStyle(fontWeight: FontWeight.w600, color: textPrimary),
-            ),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppThemeColors.sectionGap),
+            const AppSectionHeader(title: 'Menu breakdown'),
+            const SizedBox(height: AppSpacing.xs),
             if (summary.menuBreakdown.isEmpty)
               CRMCard(
                 child: Text('No menu data', style: TextStyle(color: textSecondary)),
@@ -249,7 +238,7 @@ class _LunchOrderSummaryPageState extends ConsumerState<LunchOrderSummaryPage> {
             else
               ...summary.menuBreakdown.map(
                 (row) => Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
+                  padding: AppThemeColors.cardListItemMargin,
                   child: CRMCard(
                     child: Row(
                       children: [
@@ -282,12 +271,11 @@ class _LunchOrderSummaryPageState extends ConsumerState<LunchOrderSummaryPage> {
                   ),
                 ),
               ),
-            const SizedBox(height: 20),
-            Text(
-              'Employee votes (${employeeVotes.length})',
-              style: TextStyle(fontWeight: FontWeight.w600, color: textPrimary),
+            const SizedBox(height: AppThemeColors.sectionGap),
+            AppSectionHeader(
+              title: 'Employee votes (${employeeVotes.length})',
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpacing.xs),
             AppSearchFilterBar(
               controller: _searchController,
               hintText: 'Search employees…',
@@ -299,7 +287,7 @@ class _LunchOrderSummaryPageState extends ConsumerState<LunchOrderSummaryPage> {
               },
               padding: EdgeInsets.zero,
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpacing.xs),
             if (filteredVotes.isEmpty)
               CRMCard(
                 child: Text(
@@ -312,13 +300,13 @@ class _LunchOrderSummaryPageState extends ConsumerState<LunchOrderSummaryPage> {
             else
               ...filteredVotes.map(
                 (v) => Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
+                  padding: AppThemeColors.cardListItemMargin,
                   child: CRMCard(
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         AvatarWidget(name: v.userName, size: 36),
-                        const SizedBox(width: 12),
+                        const SizedBox(width: AppSpacing.sm),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -353,7 +341,111 @@ class _LunchOrderSummaryPageState extends ConsumerState<LunchOrderSummaryPage> {
                 ),
               ),
           ],
-          const SizedBox(height: 24),
+          const SizedBox(height: AppSpacing.lg),
+        ],
+      ),
+    );
+  }
+}
+
+class _PollPickerSheet extends StatefulWidget {
+  const _PollPickerSheet({
+    required this.initialPolls,
+    required this.loadPolls,
+  });
+
+  final List<LunchPoll> initialPolls;
+  final Future<List<LunchPoll>> Function() loadPolls;
+
+  @override
+  State<_PollPickerSheet> createState() => _PollPickerSheetState();
+}
+
+class _PollPickerSheetState extends State<_PollPickerSheet> {
+  late List<LunchPoll> _polls;
+  late bool _loading;
+  var _refreshing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _polls = widget.initialPolls;
+    _loading = widget.initialPolls.isEmpty;
+    _refresh();
+  }
+
+  Future<void> _refresh() async {
+    if (_polls.isEmpty) {
+      setState(() => _loading = true);
+    } else {
+      setState(() => _refreshing = true);
+    }
+    try {
+      final fresh = await widget.loadPolls();
+      if (mounted) {
+        setState(() {
+          _polls = fresh;
+          _loading = false;
+          _refreshing = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _refreshing = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final textSecondary = AppThemeColors.textSecondaryColor(context);
+
+    if (_loading && _polls.isEmpty) {
+      return const SafeArea(
+        child: SizedBox(
+          height: 160,
+          child: Center(child: CircularProgressIndicator()),
+        ),
+      );
+    }
+
+    if (_polls.isEmpty) {
+      return SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text(
+            'No polls found',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: textSecondary),
+          ),
+        ),
+      );
+    }
+
+    return SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (_refreshing)
+            const LinearProgressIndicator(minHeight: 2),
+          Flexible(
+            child: ListView(
+              shrinkWrap: true,
+              children: _polls
+                  .map(
+                    (p) => ListTile(
+                      title: Text(p.title),
+                      subtitle: Text(formatLunchPollDateShort(p.date)),
+                      trailing: lunchPollStatusBadge(p.effectiveStatus),
+                      onTap: () => Navigator.pop(context, p),
+                    ),
+                  )
+                  .toList(),
+            ),
+          ),
         ],
       ),
     );
@@ -397,13 +489,5 @@ class _StatCard extends StatelessWidget {
         ],
       ),
     );
-  }
-}
-
-extension _FirstOrNull<E> on Iterable<E> {
-  E? get firstOrNull {
-    final it = iterator;
-    if (it.moveNext()) return it.current;
-    return null;
   }
 }

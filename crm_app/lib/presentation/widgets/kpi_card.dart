@@ -26,22 +26,19 @@ class KPICard extends StatelessWidget {
   Widget build(BuildContext context) {
     final cardColor = AppThemeColors.cardColor(context);
     final borderColor = AppThemeColors.borderColor(context);
-    final textPrimary = AppThemeColors.textPrimaryColor(context);
-    final textSecondary = AppThemeColors.textSecondaryColor(context);
     final textTertiary = AppThemeColors.textTertiaryColor(context);
     final cs = Theme.of(context).colorScheme;
-    final primaryColor = context.colors.primary;
-    final accent = iconColor ?? primaryColor;
+    final accent = iconColor ?? context.colors.primary;
     final tonal = AppThemeColors.tonalForAccent(context, accent);
     final shadows = context.isDark
         ? AppElevation.cardDark(accent)
         : AppElevation.cardLight;
 
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(AppSpacing.cardPadding),
       decoration: BoxDecoration(
         color: cardColor,
-        borderRadius: BorderRadius.circular(AppRadius.md),
+        borderRadius: BorderRadius.circular(AppRadius.lg),
         border: Border.all(color: borderColor),
         boxShadow: shadows,
       ),
@@ -49,7 +46,7 @@ class KPICard extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(AppRadius.md),
+          borderRadius: BorderRadius.circular(AppRadius.lg),
           splashColor: cs.primary.withValues(alpha: 0.08),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -59,38 +56,33 @@ class KPICard extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(8),
+                    width: AppSizes.iconChip,
+                    height: AppSizes.iconChip,
                     decoration: BoxDecoration(
                       color: tonal.background,
                       borderRadius: BorderRadius.circular(AppRadius.sm),
                     ),
-                    child: Icon(icon, color: tonal.foreground, size: 18),
+                    child: Icon(
+                      icon,
+                      color: tonal.foreground,
+                      size: AppSizes.iconChipIcon,
+                    ),
                   ),
                   if (onTap != null)
                     Icon(
                       Icons.arrow_forward_ios,
-                      size: 12,
+                      size: AppTypography.captionSize,
                       color: textTertiary,
                     ),
                 ],
               ),
-              const SizedBox(height: 8),
-              Text(
-                value,
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: textPrimary,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(title, style: TextStyle(fontSize: 12, color: textSecondary)),
+              const SizedBox(height: AppSpacing.sm),
+              Text(value, style: AppTypography.kpiNumber(context)),
+              const SizedBox(height: AppSpacing.xs),
+              Text(title, style: AppTypography.kpiLabel(context)),
               if (subtitle != null) ...[
-                const SizedBox(height: 4),
-                Text(
-                  subtitle!,
-                  style: TextStyle(fontSize: 11, color: textTertiary),
-                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(subtitle!, style: AppTypography.caption(context)),
               ],
             ],
           ),

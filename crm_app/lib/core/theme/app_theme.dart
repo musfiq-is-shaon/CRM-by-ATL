@@ -1,5 +1,4 @@
 import 'package:dynamic_color/dynamic_color.dart';
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -94,8 +93,8 @@ class AppTheme {
         foregroundColor: cs.onSurface,
         surfaceTintColor: amoledBlack ? Colors.transparent : cs.surfaceTint,
         titleTextStyle: gSans(
-          fontSize: 20,
-          fontWeight: FontWeight.w500,
+          fontSize: AppTypography.screenTitleSize,
+          fontWeight: FontWeight.w700,
           color: cs.onSurface,
         ),
         iconTheme: IconThemeData(color: cs.onSurface),
@@ -112,7 +111,7 @@ class AppTheme {
               ),
       ),
       navigationBarTheme: NavigationBarThemeData(
-        height: 80,
+        height: AppSizes.navBarHeight,
         elevation: amoledBlack ? 0 : 1,
         shadowColor: Colors.transparent,
         backgroundColor: scaffoldBg,
@@ -169,58 +168,74 @@ class AppTheme {
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
+          minimumSize: const Size(64, AppSizes.buttonHeight),
           elevation: 0,
           padding: const EdgeInsets.symmetric(
             horizontal: AppSpacing.lg,
-            vertical: AppSpacing.sm + 2,
+            vertical: AppSpacing.sm,
           ),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppRadius.md),
           ),
-          textStyle: gSans(fontWeight: FontWeight.w600, fontSize: 14),
+          textStyle: gSans(
+            fontWeight: FontWeight.w600,
+            fontSize: AppTypography.buttonSize,
+          ),
         ),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
+          minimumSize: const Size(64, AppSizes.buttonHeight),
           elevation: 0,
           padding: const EdgeInsets.symmetric(
             horizontal: AppSpacing.lg,
-            vertical: AppSpacing.sm + 2,
+            vertical: AppSpacing.sm,
           ),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppRadius.md),
           ),
-          textStyle: gSans(fontWeight: FontWeight.w600, fontSize: 14),
+          textStyle: gSans(
+            fontWeight: FontWeight.w600,
+            fontSize: AppTypography.buttonSize,
+          ),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
+          minimumSize: const Size(64, AppSizes.buttonHeight),
           padding: const EdgeInsets.symmetric(
             horizontal: AppSpacing.lg,
-            vertical: AppSpacing.sm + 2,
+            vertical: AppSpacing.sm,
           ),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(AppRadius.md),
           ),
           side: BorderSide(color: cs.outline),
-          textStyle: gSans(fontWeight: FontWeight.w600, fontSize: 14),
+          textStyle: gSans(
+            fontWeight: FontWeight.w600,
+            fontSize: AppTypography.buttonSize,
+          ),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
+          minimumSize: const Size(48, AppSizes.buttonHeightSmall),
           padding: const EdgeInsets.symmetric(
             horizontal: AppSpacing.md,
-            vertical: AppSpacing.xs,
+            vertical: AppSpacing.sm,
           ),
-          textStyle: gSans(fontWeight: FontWeight.w600, fontSize: 14),
+          textStyle: gSans(
+            fontWeight: FontWeight.w600,
+            fontSize: AppTypography.buttonSize,
+          ),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: cs.surfaceContainerHighest,
         contentPadding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.md,
-          vertical: AppSpacing.sm + 2,
+          horizontal: AppSpacing.lg,
+          vertical: AppSpacing.md,
         ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.md),
@@ -243,17 +258,17 @@ class AppTheme {
           borderSide: BorderSide(color: cs.error, width: 2),
         ),
         labelStyle: gSans(
-          fontSize: 14,
+          fontSize: AppTypography.bodySmallSize,
           fontWeight: FontWeight.w500,
           color: cs.onSurfaceVariant,
         ),
         hintStyle: gSans(
-          fontSize: 14,
+          fontSize: AppTypography.inputSize,
           fontWeight: FontWeight.w400,
           color: cs.onSurfaceVariant.withValues(alpha: 0.72),
         ),
         floatingLabelStyle: gSans(
-          fontSize: 14,
+          fontSize: AppTypography.bodySmallSize,
           fontWeight: FontWeight.w500,
           color: cs.primary,
         ),

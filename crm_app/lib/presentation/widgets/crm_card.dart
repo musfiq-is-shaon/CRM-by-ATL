@@ -19,7 +19,7 @@ class CRMCard extends StatelessWidget {
     this.margin,
     this.onTap,
     this.backgroundColor,
-    this.borderRadius = AppRadius.md,
+    this.borderRadius = AppRadius.lg,
     this.hasShadow = true,
   });
 
@@ -34,9 +34,6 @@ class CRMCard extends StatelessWidget {
         ? AppElevation.cardDark(accent)
         : AppElevation.cardLight;
 
-    // Use [Container], not [AnimatedContainer]. Theme mode changes already run
-    // through MaterialApp's AnimatedTheme; animating the same colors again here
-    // stacks animations and makes cards (e.g. pending tasks) look wrong.
     return Container(
       margin: margin,
       decoration: BoxDecoration(
@@ -49,11 +46,10 @@ class CRMCard extends StatelessWidget {
         color: Colors.transparent,
         borderRadius: BorderRadius.circular(borderRadius),
         clipBehavior: Clip.antiAlias,
-        // Avoid [InkWell] when there is no tap handler — it can steal gestures from
-        // nested controls (e.g. [DropdownButton], [TextField]) on some devices.
         child: onTap == null
             ? Padding(
-                padding: padding ?? const EdgeInsets.all(AppSpacing.md),
+                padding: padding ??
+                    const EdgeInsets.all(AppSpacing.cardPadding),
                 child: child,
               )
             : InkWell(
@@ -62,7 +58,8 @@ class CRMCard extends StatelessWidget {
                 splashColor: accent.withValues(alpha: 0.08),
                 highlightColor: accent.withValues(alpha: 0.04),
                 child: Padding(
-                  padding: padding ?? const EdgeInsets.all(AppSpacing.md),
+                  padding: padding ??
+                      const EdgeInsets.all(AppSpacing.cardPadding),
                   child: child,
                 ),
               ),

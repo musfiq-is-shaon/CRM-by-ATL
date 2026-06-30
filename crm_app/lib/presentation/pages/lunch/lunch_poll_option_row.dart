@@ -31,7 +31,8 @@ class LunchPollOptionRow extends StatelessWidget {
     final textPrimary = AppThemeColors.textPrimaryColor(context);
     final textSecondary = AppThemeColors.textSecondaryColor(context);
     final accent = lunchOptionKindColor(option.kind, cs);
-    final fraction = totalVotes > 0 ? option.voteCount / totalVotes : 0.0;
+    final count = option.effectiveVoteCount;
+    final fraction = totalVotes > 0 ? count / totalVotes : 0.0;
     final labelColor = enabled ? textPrimary : textSecondary;
     final radioColor = enabled
         ? (selected ? lunchBrandGreen : textSecondary)
@@ -93,7 +94,7 @@ class LunchPollOptionRow extends StatelessWidget {
                           ),
                           SizedBox(width: compact ? 6 : 8),
                           Text(
-                            '${option.voteCount}',
+                            '$count',
                             style: TextStyle(
                               fontWeight: FontWeight.w700,
                               fontSize: compact ? 12 : 13,

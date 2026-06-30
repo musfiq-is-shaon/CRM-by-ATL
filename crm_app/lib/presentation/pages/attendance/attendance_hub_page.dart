@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme_colors.dart';
+import '../../widgets/error_widget.dart' as app_widgets;
+import '../../widgets/loading_widget.dart';
 import '../../providers/attendance_provider.dart';
 import '../../providers/attendance_reconciliation_provider.dart';
 import '../../providers/shift_provider.dart';
@@ -146,23 +148,26 @@ class _ReconciliationRequestsTabState
     return RefreshIndicator(
       onRefresh: _refresh,
       child: rec.isLoading && rec.items.isEmpty
-          ? const Center(child: CircularProgressIndicator())
+          ? const ListSkeletonLoader(
+              itemCount: 4,
+              padding: AppThemeColors.listPagePadding,
+            )
           : rec.items.isEmpty
               ? ListView(
                   physics: const AlwaysScrollableScrollPhysics(),
-                  children: [
-                    SizedBox(height: MediaQuery.sizeOf(context).height * 0.2),
-                    Center(
-                      child: Text(
-                        'No reconciliation requests yet',
-                        style: TextStyle(color: textSecondary, fontSize: 16),
-                      ),
+                  padding: AppThemeColors.listPagePadding,
+                  children: const [
+                    app_widgets.EmptyStateWidget(
+                      title: 'No reconciliation requests yet',
+                      subtitle:
+                          'Late check-in reasons you submit will appear here',
+                      icon: Icons.history_edu_outlined,
                     ),
                   ],
                 )
               : ListView.builder(
                   physics: const AlwaysScrollableScrollPhysics(),
-                  padding: AppThemeColors.pagePaddingAll,
+                  padding: AppThemeColors.listPagePadding,
                   itemCount: rec.items.length,
                   itemBuilder: (context, i) {
                     final row = rec.items[i];
@@ -285,7 +290,7 @@ class _AttendanceHistoryTabState extends ConsumerState<_AttendanceHistoryTab> {
       onRefresh: _refresh,
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: AppThemeColors.pagePaddingAll,
+        padding: AppThemeColors.listPagePadding,
         child: RecordsList(state: att, showHeading: false),
       ),
     );

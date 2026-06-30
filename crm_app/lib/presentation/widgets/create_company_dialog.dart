@@ -16,8 +16,10 @@ Future<String?> showCreateCompanyDialog(
   String? initialLocation,
   String? initialCountry,
 }) {
+  ScaffoldMessenger.of(context).hideCurrentSnackBar();
   return showDialog<String>(
     context: context,
+    useRootNavigator: true,
     builder: (_) => _CreateCompanyDialog(
       initialName: initialName,
       initialLocation: initialLocation,
@@ -131,11 +133,69 @@ class _CreateCompanyDialogState extends ConsumerState<_CreateCompanyDialog> {
     );
   }
 
+  void _closeDialog([String? companyId]) {
+    Navigator.of(context, rootNavigator: true).pop(companyId);
+  }
+
+  Future<void> _submit() async {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+
+    final kamUserId = _selectedKamUserId;
+    final currencyId = _selectedCurrencyId;
+    if (kamUserId == null || currencyId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Please wait for currency and KAM to load, or pick them from the lists.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isCreating = true);
+    try {
+      final authState = ref.read(authProvider);
+      final created = await ref.read(companiesProvider.notifier).createCompany(
+            name: _nameController.text.trim(),
+            location: _locationController.text.trim(),
+            country: _countryController.text.trim(),
+            kamUserId: kamUserId,
+            currencyId: currencyId,
+            createdByUserId: authState.user?.id,
+          );
+
+      if (!mounted) return;
+
+      if (created != null && created.id.isNotEmpty) {
+        _closeDialog(created.id);
+        return;
+      }
+
+      final error = ref.read(companiesProvider).error;
+      if (mounted) {
+        setState(() => _isCreating = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              error ?? 'Failed to create company. Please try again.',
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isCreating = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to create company: $e')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final usersState = ref.watch(usersProvider);
     final currenciesState = ref.watch(currenciesProvider);
-    final authState = ref.watch(authProvider);
 
     _applyDefaultsIfNeeded(currenciesState, usersState);
 
@@ -189,8 +249,9 @@ class _CreateCompanyDialogState extends ConsumerState<_CreateCompanyDialog> {
             ),
             const SizedBox(height: 16),
             DropdownButtonFormField<String>(
+              key: ValueKey('currency-${_selectedCurrencyId ?? 'none'}'),
               isExpanded: true,
-              value: _selectedCurrencyId,
+              initialValue: _selectedCurrencyId,
               decoration: _fieldDecoration('Currency *', textSecondary, borderColor),
               items: currenciesState.currencies.map((currency) {
                 return DropdownMenuItem(
@@ -217,8 +278,9 @@ class _CreateCompanyDialogState extends ConsumerState<_CreateCompanyDialog> {
               ),
             const SizedBox(height: 16),
             DropdownButtonFormField<String>(
+              key: ValueKey('kam-${_selectedKamUserId ?? 'none'}'),
               isExpanded: true,
-              value: _selectedKamUserId,
+              initialValue: _selectedKamUserId,
               decoration: _fieldDecoration(
                 'KAM (Key Account Manager) *',
                 textSecondary,
@@ -258,45 +320,11 @@ class _CreateCompanyDialogState extends ConsumerState<_CreateCompanyDialog> {
       ),
       actions: [
         TextButton(
-          onPressed: _isCreating ? null : () => Navigator.pop(context),
+          onPressed: _isCreating ? null : () => _closeDialog(),
           child: Text('Cancel', style: TextStyle(color: primaryColor)),
         ),
         TextButton(
-          onPressed: _isCreating
-              ? null
-              : () async {
-                  if (!(_formKey.currentState?.validate() ?? false)) return;
-
-                  setState(() => _isCreating = true);
-                  final created = await ref
-                      .read(companiesProvider.notifier)
-                      .createCompany(
-                        name: _nameController.text.trim(),
-                        location: _locationController.text.trim(),
-                        country: _countryController.text.trim(),
-                        kamUserId: _selectedKamUserId!,
-                        currencyId: _selectedCurrencyId!,
-                        createdByUserId: authState.user?.id,
-                      );
-
-                  if (!context.mounted) return;
-
-                  if (created != null && created.id.isNotEmpty) {
-                    Navigator.pop(context, created.id);
-                    return;
-                  }
-
-                  setState(() => _isCreating = false);
-                  final error = ref.read(companiesProvider).error;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        error ??
-                            'Failed to create company. Please try again.',
-                      ),
-                    ),
-                  );
-                },
+          onPressed: _isCreating ? null : _submit,
           child: _isCreating
               ? SizedBox(
                   width: 18,

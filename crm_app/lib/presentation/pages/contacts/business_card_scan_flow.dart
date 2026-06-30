@@ -68,7 +68,7 @@ class BusinessCardScanFlow {
         child: AlertDialog(
           content: ValueListenableBuilder<String>(
             valueListenable: progress,
-            builder: (_, message, __) => Row(
+            builder: (_, message, _) => Row(
               children: [
                 const CircularProgressIndicator(),
                 const SizedBox(width: 20),

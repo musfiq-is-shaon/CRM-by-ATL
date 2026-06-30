@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme_colors.dart';
+import '../../../core/theme/design_tokens.dart';
 import '../../providers/expense_provider.dart';
 import '../../../core/constants/rbac_page_keys.dart';
 import '../../providers/rbac_provider.dart';
+import '../../widgets/crm_card.dart';
 import '../../widgets/status_badge.dart';
 import '../../widgets/loading_widget.dart';
 import '../../widgets/error_widget.dart' as app_widgets;
@@ -21,7 +23,6 @@ class ExpenseDetailPage extends ConsumerWidget {
     final expenseAsync = ref.watch(expenseDetailProvider(expenseId));
 
     final bgColor = AppThemeColors.backgroundColor(context);
-    final surfaceColor = AppThemeColors.surfaceColor(context);
     final textPrimary = AppThemeColors.textPrimaryColor(context);
     final textSecondary = AppThemeColors.textSecondaryColor(context);
     final textTertiary = AppThemeColors.textTertiaryColor(context);
@@ -65,28 +66,18 @@ class ExpenseDetailPage extends ConsumerWidget {
               // Header Card
               Container(
                 width: double.infinity,
-                padding: AppThemeColors.pagePaddingAll,
-                decoration: BoxDecoration(
-                  color: surfaceColor,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: borderColor),
-                ),
+                padding: const EdgeInsets.all(AppSpacing.lg),
+                decoration: AppThemeColors.heroSurface(context),
                 child: Column(
                   children: [
-                    Container(
-                      width: 64,
-                      height: 64,
-                      decoration: BoxDecoration(
-                        color: primaryColor.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Icon(
-                        Icons.receipt_long,
-                        color: primaryColor,
-                        size: 32,
-                      ),
+                    AppThemeColors.iconChip(
+                      context,
+                      icon: Icons.receipt_long,
+                      accent: primaryColor,
+                      size: 64,
+                      iconSize: 32,
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: AppSpacing.md),
                     Text(
                       expense.company?.name ?? 'No company',
                       style: TextStyle(
@@ -95,7 +86,7 @@ class ExpenseDetailPage extends ConsumerWidget {
                         color: textPrimary,
                       ),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: AppSpacing.xs),
                     Text(
                       expense.formattedAmount,
                       style: TextStyle(
@@ -104,33 +95,25 @@ class ExpenseDetailPage extends ConsumerWidget {
                         color: primaryColor,
                       ),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: AppSpacing.xs),
                     StatusBadge(status: expense.status, type: 'expense'),
                   ],
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.md),
 
               // Details Card
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: surfaceColor,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: borderColor),
-                ),
+              CRMCard(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       'Details',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      style: AppTypography.sectionTitle(context)?.copyWith(
                             color: textPrimary,
-                            fontWeight: FontWeight.w600,
                           ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: AppSpacing.md),
                     _buildDetailRow(
                       icon: Icons.calendar_today_outlined,
                       label: 'Date',
@@ -200,32 +183,24 @@ class ExpenseDetailPage extends ConsumerWidget {
                   ],
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.md),
 
               // Purpose: API catalog name + optional notes (purpose field)
               if ((expense.purposeName != null &&
                       expense.purposeName!.trim().isNotEmpty) ||
                   (expense.purpose != null &&
                       expense.purpose!.trim().isNotEmpty))
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: surfaceColor,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: borderColor),
-                  ),
+                CRMCard(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         'Purpose',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        style: AppTypography.sectionTitle(context)?.copyWith(
                               color: textPrimary,
-                              fontWeight: FontWeight.w600,
                             ),
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: AppSpacing.sm),
                       if (expense.purposeName != null &&
                           expense.purposeName!.trim().isNotEmpty)
                         Text(
@@ -241,7 +216,7 @@ class ExpenseDetailPage extends ConsumerWidget {
                         if (expense.purposeName != null &&
                             expense.purposeName!.trim().isNotEmpty)
                           Padding(
-                            padding: const EdgeInsets.only(top: 8),
+                            padding: const EdgeInsets.only(top: AppSpacing.xs),
                             child: Text(
                               'Notes',
                               style: TextStyle(
@@ -255,7 +230,7 @@ class ExpenseDetailPage extends ConsumerWidget {
                           padding: EdgeInsets.only(
                             top: expense.purposeName != null &&
                                     expense.purposeName!.trim().isNotEmpty
-                                ? 4
+                                ? AppSpacing.xxs
                                 : 0,
                           ),
                           child: Text(
@@ -267,36 +242,27 @@ class ExpenseDetailPage extends ConsumerWidget {
                     ],
                   ),
                 ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.md),
 
               // Created Info
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: surfaceColor,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: borderColor),
-                ),
+              CRMCard(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       'Created Info',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: textPrimary,
-                      ),
+                      style: AppTypography.sectionTitle(context)?.copyWith(
+                            color: textPrimary,
+                          ),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: AppSpacing.sm),
                     if (expense.createdByUser != null)
                       Text(
                         'By: ${expense.createdByUser!.name}',
                         style: TextStyle(fontSize: 14, color: textSecondary),
                       ),
                     if (expense.createdAt != null) ...[
-                      const SizedBox(height: 4),
+                      const SizedBox(height: AppSpacing.xxs),
                       Text(
                         'On: ${expense.createdAt!.day}/${expense.createdAt!.month}/${expense.createdAt!.year}',
                         style: TextStyle(fontSize: 14, color: textSecondary),
@@ -328,11 +294,11 @@ class ExpenseDetailPage extends ConsumerWidget {
     Color? highlightColor,
   }) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
       child: Row(
         children: [
           Icon(icon, size: 20, color: textTertiary),
-          const SizedBox(width: 12),
+          const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Text(
               label,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../../core/theme/app_theme_colors.dart';
+import '../../../core/theme/design_tokens.dart';
+import '../../widgets/app_section_header.dart';
 
 /// Page title block used inside lunch tab bodies (app bar shows "Lunch").
 class LunchPageTitle extends StatelessWidget {
@@ -17,30 +18,11 @@ class LunchPageTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final textPrimary = AppThemeColors.textPrimaryColor(context);
-    final textSecondary = AppThemeColors.textSecondaryColor(context);
-
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: textPrimary,
-                ),
-              ),
-              if (subtitle != null) ...[
-                const SizedBox(height: 4),
-                Text(subtitle!, style: TextStyle(fontSize: 13, color: textSecondary)),
-              ],
-            ],
-          ),
+          child: AppSectionHeader(title: title, subtitle: subtitle),
         ),
         ...trailing,
       ],
@@ -60,10 +42,10 @@ class LunchActiveFiltersRow extends StatelessWidget {
     if (labels.isEmpty) return const SizedBox.shrink();
     final cs = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
       child: Wrap(
-        spacing: 8,
-        runSpacing: 6,
+        spacing: AppSpacing.xs,
+        runSpacing: AppSpacing.xxs,
         children: labels.map((label) {
           return InputChip(
             label: Text(label, style: const TextStyle(fontSize: 12)),

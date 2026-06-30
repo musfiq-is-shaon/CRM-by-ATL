@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/constants/rbac_page_keys.dart';
 import '../../../core/theme/app_theme_colors.dart';
+import '../../../core/theme/design_tokens.dart';
 import '../../../data/models/expense_model.dart';
 import '../../providers/expense_provider.dart';
 import '../../providers/company_provider.dart';
@@ -12,6 +13,8 @@ import '../../providers/auth_provider.dart';
 import '../../providers/rbac_provider.dart';
 import '../../providers/user_provider.dart';
 import '../../providers/currency_provider.dart';
+import '../../widgets/crm_card.dart';
+import '../../widgets/crm_text_field.dart';
 import '../../widgets/searchable_dropdown.dart';
 import '../../widgets/create_company_dialog.dart';
 import '../../widgets/celebration_shell.dart';
@@ -264,7 +267,8 @@ class _ExpenseFormPageState extends ConsumerState<ExpenseFormPage> {
     final textPrimary = AppThemeColors.textPrimaryColor(context);
     final textSecondary = AppThemeColors.textSecondaryColor(context);
     final borderColor = AppThemeColors.borderColor(context);
-    final primaryColor = Theme.of(context).colorScheme.primary;
+    final cs = Theme.of(context).colorScheme;
+    final primaryColor = cs.primary;
 
     return CelebrationShell(
       celebrating: _celebrating,
@@ -302,379 +306,389 @@ class _ExpenseFormPageState extends ConsumerState<ExpenseFormPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Company Dropdown (Required)
-              Consumer(
-                builder: (context, ref, child) {
-                  final companiesState = ref.watch(companiesProvider);
-                  return SearchableDropdown<String>(
-                    items: companiesState.companies.map((c) => c.id).toList(),
-                    value: _selectedCompanyId,
-                    hintText: 'Select a company',
-                    labelText: 'Company *',
-                    itemLabelBuilder: (id) {
-                      final company = companiesState.companies
-                          .where((c) => c.id == id)
-                          .firstOrNull;
-                      return company?.name ?? '';
-                    },
-                    dropdownColor: surfaceColor,
-                    textColor: textPrimary,
-                    hintColor: textSecondary,
-                    required: true,
-                    onChanged: (value) {
-                      setState(() {
-                        _selectedCompanyId = value;
-                      });
-                    },
-                    onAddNew: () => _showCreateCompanyDialog(context),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Company is required';
-                      }
-                      return null;
-                    },
-                  );
-                },
-              ),
-              const SizedBox(height: 16),
-
-              // Date Field (Required)
-              TextFormField(
-                style: TextStyle(color: textPrimary),
-                decoration: InputDecoration(
-                  labelText: 'Date *',
-                  labelStyle: TextStyle(color: textSecondary),
-                  hintText: 'Select date',
-                  hintStyle: TextStyle(color: textSecondary.withValues(alpha: 0.6)),
-                  suffixIcon: IconButton(
-                    icon: Icon(Icons.calendar_today, color: textSecondary),
-                    onPressed: _selectDate,
-                  ),
-                ),
-                readOnly: true,
-                controller: TextEditingController(
-                  text: _selectedDate != null
-                      ? '${_selectedDate!.day}/${_selectedDate!.month}/${_selectedDate!.year}'
-                      : '',
-                ),
-                onTap: _selectDate,
-                validator: (value) {
-                  if (_selectedDate == null) {
-                    return 'Date is required';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-
-              // Amount Field (Required)
-              TextFormField(
-                controller: _amountController,
-                style: TextStyle(color: textPrimary),
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
-                decoration: InputDecoration(
-                  labelText: 'Amount *',
-                  labelStyle: TextStyle(color: textSecondary),
-                  hintText: 'Enter amount',
-                  hintStyle: TextStyle(color: textSecondary.withValues(alpha: 0.6)),
-                  prefixText: '${AppConstants.currencySymbol} ',
-                  prefixStyle: TextStyle(color: textPrimary),
-                ),
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Amount is required';
-                  }
-                  if (double.tryParse(value) == null) {
-                    return 'Please enter a valid number';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-
-              // Trip Type Dropdown
-              Text(
-                'Trip Type',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: textSecondary,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Container(
-                decoration: BoxDecoration(
-                  border: Border.all(color: borderColor),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
+              CRMCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            _selectedTripType = 'single_trip';
-                          });
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          decoration: BoxDecoration(
-                            color: _selectedTripType == 'single_trip'
-                                ? primaryColor
-                                : Colors.transparent,
-                            borderRadius: const BorderRadius.only(
-                              topLeft: Radius.circular(11),
-                              bottomLeft: Radius.circular(11),
-                            ),
-                          ),
-                          child: Center(
-                            child: Text(
-                              'Single Trip',
-                              style: TextStyle(
-                                color: _selectedTripType == 'single_trip'
-                                    ? Colors.white
-                                    : textPrimary,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
+                    // Company Dropdown (Required)
+                    Consumer(
+                      builder: (context, ref, child) {
+                        final companiesState = ref.watch(companiesProvider);
+                        return SearchableDropdown<String>(
+                          items: companiesState.companies.map((c) => c.id).toList(),
+                          value: _selectedCompanyId,
+                          hintText: 'Select a company',
+                          labelText: 'Company *',
+                          itemLabelBuilder: (id) {
+                            final company = companiesState.companies
+                                .where((c) => c.id == id)
+                                .firstOrNull;
+                            return company?.name ?? '';
+                          },
+                          dropdownColor: surfaceColor,
+                          textColor: textPrimary,
+                          hintColor: textSecondary,
+                          required: true,
+                          onChanged: (value) {
+                            setState(() {
+                              _selectedCompanyId = value;
+                            });
+                          },
+                          onAddNew: () => _showCreateCompanyDialog(context),
+                          validator: (value) {
+                            if (value == null || value.isEmpty) {
+                              return 'Company is required';
+                            }
+                            return null;
+                          },
+                        );
+                      },
                     ),
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            _selectedTripType = 'round_trip';
-                          });
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          decoration: BoxDecoration(
-                            color: _selectedTripType == 'round_trip'
-                                ? primaryColor
-                                : Colors.transparent,
-                            borderRadius: const BorderRadius.only(
-                              topRight: Radius.circular(11),
-                              bottomRight: Radius.circular(11),
-                            ),
-                          ),
-                          child: Center(
-                            child: Text(
-                              'Round Trip',
-                              style: TextStyle(
-                                color: _selectedTripType == 'round_trip'
-                                    ? Colors.white
-                                    : textPrimary,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ),
+                    const SizedBox(height: AppSpacing.md),
+
+                    // Date Field (Required)
+                    TextFormField(
+                      style: TextStyle(color: textPrimary),
+                      decoration: InputDecoration(
+                        labelText: 'Date *',
+                        labelStyle: TextStyle(color: textSecondary),
+                        hintText: 'Select date',
+                        hintStyle: TextStyle(
+                          color: textSecondary.withValues(alpha: 0.6),
+                        ),
+                        suffixIcon: IconButton(
+                          icon: Icon(Icons.calendar_today, color: textSecondary),
+                          onPressed: _selectDate,
                         ),
                       ),
+                      readOnly: true,
+                      controller: TextEditingController(
+                        text: _selectedDate != null
+                            ? '${_selectedDate!.day}/${_selectedDate!.month}/${_selectedDate!.year}'
+                            : '',
+                      ),
+                      onTap: _selectDate,
+                      validator: (value) {
+                        if (_selectedDate == null) {
+                          return 'Date is required';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+
+                    // Amount Field (Required)
+                    TextFormField(
+                      controller: _amountController,
+                      style: TextStyle(color: textPrimary),
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      decoration: InputDecoration(
+                        labelText: 'Amount *',
+                        labelStyle: TextStyle(color: textSecondary),
+                        hintText: 'Enter amount',
+                        hintStyle: TextStyle(
+                          color: textSecondary.withValues(alpha: 0.6),
+                        ),
+                        prefixText: '${AppConstants.currencySymbol} ',
+                        prefixStyle: TextStyle(color: textPrimary),
+                      ),
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Amount is required';
+                        }
+                        if (double.tryParse(value) == null) {
+                          return 'Please enter a valid number';
+                        }
+                        return null;
+                      },
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.md),
 
-              // From Location
-              TextFormField(
-                controller: _fromLocationController,
-                style: TextStyle(color: textPrimary),
-                decoration: InputDecoration(
-                  labelText: 'From Location',
-                  labelStyle: TextStyle(color: textSecondary),
-                  hintText: 'Enter starting location',
-                  hintStyle: TextStyle(color: textSecondary.withValues(alpha: 0.6)),
-                  prefixIcon: Icon(
-                    Icons.location_on_outlined,
-                    color: textSecondary,
-                  ),
+              CRMCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Trip Type Dropdown
+                    Text(
+                      'Trip Type',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Container(
+                      decoration: BoxDecoration(
+                        border: Border.all(color: borderColor),
+                        borderRadius: BorderRadius.circular(AppRadius.md),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: () {
+                                setState(() {
+                                  _selectedTripType = 'single_trip';
+                                });
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: AppSpacing.sm + 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: _selectedTripType == 'single_trip'
+                                      ? primaryColor
+                                      : Colors.transparent,
+                                  borderRadius: BorderRadius.only(
+                                    topLeft: Radius.circular(AppRadius.md - 1),
+                                    bottomLeft: Radius.circular(AppRadius.md - 1),
+                                  ),
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    'Single Trip',
+                                    style: TextStyle(
+                                      color: _selectedTripType == 'single_trip'
+                                          ? cs.onPrimary
+                                          : textPrimary,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: () {
+                                setState(() {
+                                  _selectedTripType = 'round_trip';
+                                });
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: AppSpacing.sm + 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: _selectedTripType == 'round_trip'
+                                      ? primaryColor
+                                      : Colors.transparent,
+                                  borderRadius: BorderRadius.only(
+                                    topRight: Radius.circular(AppRadius.md - 1),
+                                    bottomRight: Radius.circular(AppRadius.md - 1),
+                                  ),
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    'Round Trip',
+                                    style: TextStyle(
+                                      color: _selectedTripType == 'round_trip'
+                                          ? cs.onPrimary
+                                          : textPrimary,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+
+                    CRMTextField(
+                      label: 'From Location',
+                      hint: 'Enter starting location',
+                      controller: _fromLocationController,
+                      prefixIcon: Icon(
+                        Icons.location_on_outlined,
+                        color: textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+
+                    CRMTextField(
+                      label: 'To Location',
+                      hint: 'Enter destination',
+                      controller: _toLocationController,
+                      prefixIcon: Icon(Icons.location_on, color: textSecondary),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.md),
 
-              // To Location
-              TextFormField(
-                controller: _toLocationController,
-                style: TextStyle(color: textPrimary),
-                decoration: InputDecoration(
-                  labelText: 'To Location',
-                  labelStyle: TextStyle(color: textSecondary),
-                  hintText: 'Enter destination',
-                  hintStyle: TextStyle(color: textSecondary.withValues(alpha: 0.6)),
-                  prefixIcon: Icon(Icons.location_on, color: textSecondary),
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              // Purpose (catalog) + optional notes — API: purposeId + purpose
-              Consumer(
-                builder: (context, ref, _) {
-                  final asyncPurposes = ref.watch(expensePurposesProvider);
-                  return asyncPurposes.when(
-                    data: (purposes) {
-                      final items = _purposesForDropdown(purposes);
-                      if (items.isEmpty) {
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 16),
-                          child: Text(
-                            'No expense purposes are available. Add them via the API or ask an admin.',
+              CRMCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Purpose (catalog) + optional notes — API: purposeId + purpose
+                    Consumer(
+                      builder: (context, ref, _) {
+                        final asyncPurposes = ref.watch(expensePurposesProvider);
+                        return asyncPurposes.when(
+                          data: (purposes) {
+                            final items = _purposesForDropdown(purposes);
+                            if (items.isEmpty) {
+                              return Text(
+                                'No expense purposes are available. Add them via the API or ask an admin.',
+                                style: TextStyle(color: textSecondary, fontSize: 14),
+                              );
+                            }
+                            return SearchableDropdown<String>(
+                              items: items.map((p) => p.id).toList(),
+                              value: _selectedPurposeId,
+                              hintText: 'Select expense purpose',
+                              labelText: 'Purpose *',
+                              itemLabelBuilder: (id) {
+                                final p = items.firstWhere((e) => e.id == id);
+                                return p.name;
+                              },
+                              dropdownColor: surfaceColor,
+                              textColor: textPrimary,
+                              hintColor: textSecondary,
+                              required: true,
+                              onChanged: (value) {
+                                setState(() {
+                                  _selectedPurposeId = value;
+                                });
+                              },
+                              validator: (value) {
+                                if (value == null || value.isEmpty) {
+                                  return 'Select a purpose';
+                                }
+                                return null;
+                              },
+                            );
+                          },
+                          loading: () => const LinearProgressIndicator(),
+                          error: (e, _) => Text(
+                            'Could not load expense purposes. Pull to retry or reopen.',
                             style: TextStyle(color: textSecondary, fontSize: 14),
                           ),
                         );
-                      }
-                      return SearchableDropdown<String>(
-                        items: items.map((p) => p.id).toList(),
-                        value: _selectedPurposeId,
-                        hintText: 'Select expense purpose',
-                        labelText: 'Purpose *',
-                        itemLabelBuilder: (id) {
-                          final p = items.firstWhere((e) => e.id == id);
-                          return p.name;
-                        },
-                        dropdownColor: surfaceColor,
-                        textColor: textPrimary,
-                        hintColor: textSecondary,
-                        required: true,
-                        onChanged: (value) {
-                          setState(() {
-                            _selectedPurposeId = value;
-                          });
-                        },
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'Select a purpose';
-                          }
-                          return null;
-                        },
-                      );
-                    },
-                    loading: () => const Padding(
-                      padding: EdgeInsets.only(bottom: 16),
-                      child: LinearProgressIndicator(),
+                      },
                     ),
-                    error: (e, _) => Padding(
-                      padding: const EdgeInsets.only(bottom: 16),
-                      child: Text(
-                        'Could not load expense purposes. Pull to retry or reopen.',
-                        style: TextStyle(color: textSecondary, fontSize: 14),
-                      ),
-                    ),
-                  );
-                },
-              ),
-              const SizedBox(height: 16),
+                    const SizedBox(height: AppSpacing.md),
 
-              TextFormField(
-                controller: _notesController,
-                style: TextStyle(color: textPrimary),
-                decoration: InputDecoration(
-                  labelText: 'Notes (optional)',
-                  labelStyle: TextStyle(color: textSecondary),
-                  hintText: 'e.g. transport, client name',
-                  hintStyle: TextStyle(color: textSecondary.withValues(alpha: 0.6)),
-                  prefixIcon: Icon(
-                    Icons.notes_outlined,
-                    color: textSecondary,
-                  ),
+                    CRMTextField(
+                      label: 'Notes (optional)',
+                      hint: 'e.g. transport, client name',
+                      controller: _notesController,
+                      maxLines: 3,
+                      prefixIcon: Icon(Icons.notes_outlined, color: textSecondary),
+                    ),
+                  ],
                 ),
-                maxLines: 3,
               ),
-              const SizedBox(height: 16),
 
               // Status Dropdown (only for editing and admin users)
               if (widget.expenseId != null && isAdmin) ...[
-                Text(
-                  'Status',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: textSecondary,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Container(
-                  decoration: BoxDecoration(
-                    border: Border.all(color: borderColor),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
+                const SizedBox(height: AppSpacing.md),
+                CRMCard(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: GestureDetector(
-                          onTap: () {
-                            setState(() {
-                              _selectedStatus = 'unpaid';
-                            });
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            decoration: BoxDecoration(
-                              color: _selectedStatus == 'unpaid'
-                                  ? AppThemeColors.expenseUnpaidColor(context)
-                                  : Colors.transparent,
-                              borderRadius: const BorderRadius.only(
-                                topLeft: Radius.circular(11),
-                                bottomLeft: Radius.circular(11),
-                              ),
-                            ),
-                            child: Center(
-                              child: Text(
-                                'Unpaid',
-                                style: TextStyle(
-                                  color: _selectedStatus == 'unpaid'
-                                      ? Colors.white
-                                      : textPrimary,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ),
-                          ),
+                      Text(
+                        'Status',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: textSecondary,
                         ),
                       ),
-                      Expanded(
-                        child: GestureDetector(
-                          onTap: () {
-                            setState(() {
-                              _selectedStatus = 'paid';
-                            });
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            decoration: BoxDecoration(
-                              color: _selectedStatus == 'paid'
-                                  ? AppThemeColors.expensePaidColor(context)
-                                  : Colors.transparent,
-                              borderRadius: const BorderRadius.only(
-                                topRight: Radius.circular(11),
-                                bottomRight: Radius.circular(11),
-                              ),
-                            ),
-                            child: Center(
-                              child: Text(
-                                'Paid',
-                                style: TextStyle(
-                                  color: _selectedStatus == 'paid'
-                                      ? Colors.white
-                                      : textPrimary,
-                                  fontWeight: FontWeight.w500,
+                      const SizedBox(height: AppSpacing.xs),
+                      Container(
+                        decoration: BoxDecoration(
+                          border: Border.all(color: borderColor),
+                          borderRadius: BorderRadius.circular(AppRadius.md),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: GestureDetector(
+                                onTap: () {
+                                  setState(() {
+                                    _selectedStatus = 'unpaid';
+                                  });
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: AppSpacing.sm + 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: _selectedStatus == 'unpaid'
+                                        ? AppThemeColors.expenseUnpaidColor(context)
+                                        : Colors.transparent,
+                                    borderRadius: BorderRadius.only(
+                                      topLeft: Radius.circular(AppRadius.md - 1),
+                                      bottomLeft: Radius.circular(AppRadius.md - 1),
+                                    ),
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      'Unpaid',
+                                      style: TextStyle(
+                                        color: _selectedStatus == 'unpaid'
+                                            ? cs.onPrimary
+                                            : textPrimary,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
+                            Expanded(
+                              child: GestureDetector(
+                                onTap: () {
+                                  setState(() {
+                                    _selectedStatus = 'paid';
+                                  });
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: AppSpacing.sm + 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: _selectedStatus == 'paid'
+                                        ? AppThemeColors.expensePaidColor(context)
+                                        : Colors.transparent,
+                                    borderRadius: BorderRadius.only(
+                                      topRight: Radius.circular(AppRadius.md - 1),
+                                      bottomRight: Radius.circular(AppRadius.md - 1),
+                                    ),
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      'Paid',
+                                      style: TextStyle(
+                                        color: _selectedStatus == 'paid'
+                                            ? cs.onPrimary
+                                            : textPrimary,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 16),
               ],
 
-              const SizedBox(height: 32),
+              const SizedBox(height: AppSpacing.xl),
             ],
           ),
         ),

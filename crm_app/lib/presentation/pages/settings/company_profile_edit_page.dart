@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme_colors.dart';
+import '../../../core/theme/design_tokens.dart';
 import '../../../data/models/company_profile_model.dart';
 import '../../providers/company_profile_provider.dart';
 
@@ -148,62 +149,62 @@ class _CompanyProfileEditPageState extends ConsumerState<CompanyProfileEditPage>
               color: AppThemeColors.textSecondaryColor(context),
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppSpacing.md),
           TextField(
             controller: _name,
             decoration: deco('Company name'),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpacing.sm),
           TextField(
             controller: _email,
             decoration: deco('Email'),
             keyboardType: TextInputType.emailAddress,
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpacing.sm),
           TextField(
             controller: _phone,
             decoration: deco('Phone'),
             keyboardType: TextInputType.phone,
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpacing.sm),
           TextField(
             controller: _website,
             decoration: deco('Website'),
             keyboardType: TextInputType.url,
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpacing.sm),
           TextField(
             controller: _address,
             decoration: deco('Address'),
             maxLines: 2,
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpacing.sm),
           TextField(
             controller: _city,
             decoration: deco('City'),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpacing.sm),
           TextField(
             controller: _country,
             decoration: deco('Country'),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpacing.sm),
           TextField(
             controller: _industry,
             decoration: deco('Industry'),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpacing.sm),
           TextField(
             controller: _taxId,
             decoration: deco('Tax ID'),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpacing.sm),
           TextField(
             controller: _description,
             decoration: deco('Description'),
             maxLines: 3,
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpacing.sm),
           TextField(
             controller: _logo,
             decoration: deco('Logo (data URL or empty)'),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme_colors.dart';
+import '../../../core/theme/design_tokens.dart';
 import '../../../data/models/shift_model.dart';
 import '../../../core/constants/rbac_page_keys.dart';
 import '../../providers/auth_provider.dart';
@@ -167,6 +168,7 @@ class _ShiftsAdminPageState extends ConsumerState<ShiftsAdminPage>
 
     if (!canManageShifts) {
       return Scaffold(
+        backgroundColor: AppThemeColors.backgroundColor(context),
         appBar: AppThemeColors.appBarTitle(context, 'Shifts'),
         body: Center(
           child: Padding(
@@ -239,7 +241,7 @@ class _ShiftsAdminPageState extends ConsumerState<ShiftsAdminPage>
                         state.error!,
                         style: TextStyle(color: textSecondary),
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: AppSpacing.md),
                       FilledButton(
                         onPressed: () =>
                             ref.read(shiftProvider.notifier).loadShifts(),
@@ -268,7 +270,7 @@ class _ShiftsAdminPageState extends ConsumerState<ShiftsAdminPage>
                     itemBuilder: (context, i) {
                       final s = state.shifts[i];
                       return Card(
-                        margin: const EdgeInsets.only(bottom: 12),
+                        margin: AppThemeColors.cardListItemMargin,
                         child: ListTile(
                           title: Text(
                             s.name,
@@ -386,7 +388,7 @@ class _TeamShiftRosterTab extends ConsumerWidget {
           padding: AppThemeColors.pagePaddingAll,
           children: [
             Text(e.toString(), style: TextStyle(color: textSecondary)),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.md),
             FilledButton(
               onPressed: () => ref.invalidate(userShiftTimingsProvider),
               child: const Text('Retry'),
@@ -411,13 +413,13 @@ class _TeamShiftRosterTab extends ConsumerWidget {
           }
           return ListView.separated(
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: AppThemeColors.pagePaddingAll.copyWith(bottom: 88),
+            padding: AppThemeColors.listPagePadding.copyWith(bottom: 88),
             itemCount: rows.length + 1,
             separatorBuilder: (context, index) => const SizedBox(height: 2),
             itemBuilder: (context, i) {
               if (i == 0) {
                 return Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
+                  padding: AppThemeColors.cardListItemMargin,
                   child: Text(
                     'Each row shows times from the user shift id on their profile, or from a shift template that lists them.',
                     style: TextStyle(

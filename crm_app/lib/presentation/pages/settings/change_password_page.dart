@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_theme_colors.dart';
+import '../../../core/theme/design_tokens.dart';
 import '../../providers/auth_provider.dart';
 
 /// `POST /api/auth/change-password` — Postman: Change password.
@@ -116,7 +117,7 @@ class _ChangePasswordPageState extends ConsumerState<ChangePasswordPage> {
                   height: 1.35,
                 ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: AppSpacing.md),
           Form(
             key: _formKey,
             child: Column(
@@ -146,7 +147,7 @@ class _ChangePasswordPageState extends ConsumerState<ChangePasswordPage> {
                     return null;
                   },
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: AppSpacing.md),
                 TextFormField(
                   controller: _new,
                   obscureText: _obscureNew,
@@ -166,7 +167,7 @@ class _ChangePasswordPageState extends ConsumerState<ChangePasswordPage> {
                   ),
                   validator: _validateNew,
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: AppSpacing.md),
                 TextFormField(
                   controller: _confirm,
                   obscureText: _obscureConfirm,

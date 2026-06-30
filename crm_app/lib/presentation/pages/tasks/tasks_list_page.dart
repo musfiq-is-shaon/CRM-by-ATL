@@ -166,7 +166,10 @@ class _TasksListPageState extends ConsumerState<TasksListPage>
     final textTertiary = AppThemeColors.textTertiaryColor(context);
 
     if (state.isLoading) {
-      return const LoadingWidget();
+      return const ListSkeletonLoader(
+        itemCount: 8,
+        padding: AppThemeColors.pagePaddingHorizontal,
+      );
     }
 
     // Use all tasks as base - filtering will be applied locally
@@ -250,12 +253,12 @@ class _TasksListPageState extends ConsumerState<TasksListPage>
     return RefreshIndicator(
       onRefresh: () => ref.read(tasksProvider.notifier).loadTasks(),
       child: ListView.builder(
-        padding: AppThemeColors.pagePaddingAll,
+        padding: AppThemeColors.listPagePadding,
         itemCount: tasks.length,
         itemBuilder: (context, index) {
           final task = tasks[index];
           return Padding(
-            padding: const EdgeInsets.only(bottom: 12),
+            padding: AppThemeColors.cardListItemMargin,
             child: CRMCard(
               onTap: () {
                 Navigator.push(
@@ -313,14 +316,14 @@ class _TasksListPageState extends ConsumerState<TasksListPage>
                                     children: [
                                       Icon(
                                         Icons.delete_outline,
-                                        color: Colors.red[700],
+                                        color: Theme.of(context).colorScheme.error,
                                         size: 20,
                                       ),
                                       const SizedBox(width: 8),
                                       Text(
                                         'Delete',
                                         style: TextStyle(
-                                          color: Colors.red[700],
+                                          color: Theme.of(context).colorScheme.error,
                                         ),
                                       ),
                                     ],

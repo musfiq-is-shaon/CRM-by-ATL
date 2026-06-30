@@ -431,7 +431,10 @@ class _ProfileOverviewBodyState extends ConsumerState<ProfileOverviewBody> {
     if (companyState.error != null && company == null) {
       return Text(
         companyState.error!,
-        style: TextStyle(color: Colors.red.shade700, fontSize: 14),
+        style: TextStyle(
+          color: Theme.of(context).colorScheme.error,
+          fontSize: 14,
+        ),
       );
     }
 

@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme_colors.dart';
+import '../../../core/theme/design_tokens.dart';
 import '../../../data/models/sale_model.dart';
 import '../../../data/models/status_config_model.dart';
 import '../../providers/sale_provider.dart';
@@ -157,7 +158,7 @@ class _SaleDetailPageState extends ConsumerState<SaleDetailPage> {
                       StatusBadge(status: sale.status, type: 'sale'),
                     ],
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: AppSpacing.md),
                   _buildInfoRow(
                     'Company',
                     sale.company?.name ?? 'N/A',
@@ -216,17 +217,16 @@ class _SaleDetailPageState extends ConsumerState<SaleDetailPage> {
                 ],
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: AppSpacing.lg),
 
             // Status Actions
             Text(
               'Change Status',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                color: textPrimary,
-                fontWeight: FontWeight.w600,
-              ),
+              style: AppTypography.sectionTitle(context)?.copyWith(
+                    color: textPrimary,
+                  ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpacing.sm),
             Builder(
               builder: (context) {
                 final cfg = ref.watch(statusConfigProvider).valueOrNull;
@@ -260,7 +260,7 @@ class _SaleDetailPageState extends ConsumerState<SaleDetailPage> {
                 );
               },
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: AppSpacing.lg),
 
             _buildLogsSection(
               context,
@@ -270,7 +270,7 @@ class _SaleDetailPageState extends ConsumerState<SaleDetailPage> {
               textSecondary,
               primaryColor,
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: AppSpacing.lg),
 
             // Activity Section
             _buildActivitySection(
@@ -307,16 +307,14 @@ class _SaleDetailPageState extends ConsumerState<SaleDetailPage> {
           children: [
             Text(
               'Status history',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                color: textPrimary,
-              ),
+              style: AppTypography.sectionTitle(context)?.copyWith(
+                    color: textPrimary,
+                  ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpacing.sm),
             ...logs.map(
               (log) => Padding(
-                padding: const EdgeInsets.only(bottom: 8),
+                padding: AppThemeColors.cardListItemMargin,
                 child: CRMCard(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -337,7 +335,7 @@ class _SaleDetailPageState extends ConsumerState<SaleDetailPage> {
                         ],
                       ),
                       if (log.note != null && log.note!.isNotEmpty) ...[
-                        const SizedBox(height: 8),
+                        const SizedBox(height: AppSpacing.xs),
                         Text(
                           log.note!,
                           style: TextStyle(color: textSecondary, fontSize: 14),
@@ -386,11 +384,9 @@ class _SaleDetailPageState extends ConsumerState<SaleDetailPage> {
               children: [
                 Text(
                   'Activities',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                    color: textPrimary,
-                  ),
+                  style: AppTypography.sectionTitle(context)?.copyWith(
+                        color: textPrimary,
+                      ),
                 ),
                 TextButton.icon(
                   onPressed: () => _showAddActivityDialog(context, saleId),
@@ -402,7 +398,7 @@ class _SaleDetailPageState extends ConsumerState<SaleDetailPage> {
                 ),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpacing.sm),
             if (activities.isEmpty)
               Container(
                 padding: AppThemeColors.pagePaddingAll,
@@ -554,8 +550,8 @@ class _SaleDetailPageState extends ConsumerState<SaleDetailPage> {
     Color primaryColor,
   ) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
+      margin: AppThemeColors.cardListItemMargin,
+      padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
         color: surfaceColor,
         borderRadius: BorderRadius.circular(12),
@@ -573,7 +569,7 @@ class _SaleDetailPageState extends ConsumerState<SaleDetailPage> {
                   shape: BoxShape.circle,
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: AppSpacing.xs),
               Expanded(
                 child: Text(
                   activity.title,
@@ -586,13 +582,13 @@ class _SaleDetailPageState extends ConsumerState<SaleDetailPage> {
             ],
           ),
           if (activity.note != null && activity.note!.isNotEmpty) ...[
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpacing.xs),
             Text(
               activity.note!,
               style: TextStyle(color: textSecondary, fontSize: 14),
             ),
           ],
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.xs),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -624,7 +620,7 @@ class _SaleDetailPageState extends ConsumerState<SaleDetailPage> {
     Color textSecondary,
   ) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
@@ -799,7 +795,10 @@ class _SaleDetailPageState extends ConsumerState<SaleDetailPage> {
                 }
               }
             },
-            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+            child: Text(
+              'Delete',
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
           ),
         ],
       ),
@@ -1005,16 +1004,13 @@ class _SaleFormPageState extends ConsumerState<SaleFormPage> {
       message: 'Your new deal is in the pipeline.',
       child: Scaffold(
         backgroundColor: bgColor,
-        appBar: AppBar(
-          backgroundColor: surfaceColor,
-          elevation: 0,
+        appBar: AppThemeColors.appBarTitle(
+          context,
+          widget.sale == null ? 'New Deal' : 'Edit Deal',
           leading: IconButton(
-            icon: Icon(Icons.close, color: textPrimary),
+            tooltip: 'Close',
+            icon: const Icon(Icons.close),
             onPressed: _celebrating ? null : () => Navigator.pop(context),
-          ),
-          title: Text(
-            widget.sale == null ? 'New Deal' : 'Edit Deal',
-            style: TextStyle(color: textPrimary),
           ),
           actions: [
             TextButton(

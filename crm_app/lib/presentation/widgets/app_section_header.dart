@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_theme_colors.dart';
+import '../../core/theme/design_tokens.dart';
 
 /// Consistent section title + optional subtitle for list/detail screens.
 class AppSectionHeader extends StatelessWidget {
@@ -28,26 +29,15 @@ class AppSectionHeader extends StatelessWidget {
             children: [
               Text(
                 title,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: primary,
-                      fontWeight: FontWeight.w600,
-                    ) ??
-                    TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
+                style: AppTypography.sectionTitle(context)?.copyWith(
                       color: primary,
                     ),
               ),
               if (subtitle != null && subtitle!.isNotEmpty) ...[
-                const SizedBox(height: 4),
+                const SizedBox(height: AppSpacing.xxs),
                 Text(
                   subtitle!,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: secondary,
-                        height: 1.35,
-                      ) ??
-                      TextStyle(
-                        fontSize: 13,
                         color: secondary,
                         height: 1.35,
                       ),

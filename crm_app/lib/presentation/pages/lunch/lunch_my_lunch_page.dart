@@ -36,7 +36,7 @@ class _LunchMyLunchPageState extends ConsumerState<LunchMyLunchPage> {
     final n = ref.read(lunchProvider.notifier);
     await n.bootstrapUser();
     await n.loadSettings();
-    await n.loadMyBalance(month: _monthKey(_balanceMonth));
+    await n.loadMyBalance(month: _monthKey(_balanceMonth), silent: true);
   }
 
   Future<void> _refresh() async {
@@ -51,7 +51,10 @@ class _LunchMyLunchPageState extends ConsumerState<LunchMyLunchPage> {
     setState(() {
       _balanceMonth = DateTime(_balanceMonth.year, _balanceMonth.month + delta);
     });
-    ref.read(lunchProvider.notifier).loadMyBalance(month: _monthKey(_balanceMonth));
+    ref.read(lunchProvider.notifier).loadMyBalance(
+      month: _monthKey(_balanceMonth),
+      silent: true,
+    );
   }
 
   @override
@@ -62,7 +65,16 @@ class _LunchMyLunchPageState extends ConsumerState<LunchMyLunchPage> {
     final textSecondary = AppThemeColors.textSecondaryColor(context);
 
     if (state.status == LunchLoadStatus.loading && state.todayPolls.isEmpty) {
-      return const LoadingWidget(message: 'Loading today\'s lunch…');
+      return ListView(
+        padding: AppThemeColors.pagePaddingAll,
+        children: const [
+          ShimmerCard(height: 76),
+          SizedBox(height: AppSpacing.md),
+          ShimmerCard(height: 200),
+          SizedBox(height: AppSpacing.md),
+          ShimmerCard(height: 160),
+        ],
+      );
     }
 
     if (state.status == LunchLoadStatus.error && state.todayPolls.isEmpty) {
@@ -84,16 +96,25 @@ class _LunchMyLunchPageState extends ConsumerState<LunchMyLunchPage> {
               : CRMCard(
                   child: Column(
                     children: [
-                      Icon(Icons.lunch_dining_outlined, size: 40, color: textSecondary),
-                      const SizedBox(height: 8),
+                      AppThemeColors.iconChip(
+                        context,
+                        icon: Icons.lunch_dining_outlined,
+                        accent: textSecondary,
+                        size: 52,
+                        iconSize: 26,
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
                       Text(
                         'No lunch poll today',
-                        style: TextStyle(fontWeight: FontWeight.w600, color: textPrimary),
+                        style: AppTypography.sectionTitle(context)?.copyWith(
+                              color: textPrimary,
+                            ),
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Check back later.',
+                        'Check back later — your team admin may publish a poll soon.',
                         style: TextStyle(color: textSecondary, fontSize: 13),
+                        textAlign: TextAlign.center,
                       ),
                     ],
                   ),
@@ -109,26 +130,26 @@ class _LunchMyLunchPageState extends ConsumerState<LunchMyLunchPage> {
             padding: AppThemeColors.pagePaddingAll,
             children: [
               const LunchModuleHeader(),
-              const SizedBox(height: 14),
+              const SizedBox(height: AppSpacing.sm),
               if (wide)
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded(flex: 3, child: pollCard),
-                    const SizedBox(width: 16),
+                    const SizedBox(width: AppSpacing.md),
                     Expanded(flex: 2, child: balanceCard),
                   ],
                 )
               else ...[
                 pollCard,
-                const SizedBox(height: 16),
+                const SizedBox(height: AppSpacing.md),
                 balanceCard,
               ],
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpacing.sm),
               _VoteHistoryTeaser(
                 onTap: () => showLunchVoteHistorySheet(context),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: AppSpacing.lg),
             ],
           );
         },
@@ -172,6 +193,9 @@ class _TodayPollCard extends ConsumerWidget {
     final cs = Theme.of(context).colorScheme;
     final canVote = poll.isVotingOpen;
     final myOptionId = poll.myVote?.optionId;
+    final hasVoted = myOptionId != null;
+    final optionsLocked =
+        voting || (hasVoted && !poll.allowVoteChange) || !canVote;
     final options = poll.mergedOptions;
     final total = poll.totalVoteCount;
 
@@ -257,20 +281,13 @@ class _TodayPollCard extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 10),
-          if (voting)
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.symmetric(vertical: 8),
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            )
-          else if (options.isEmpty)
+          if (options.isEmpty)
             Text('No menu options yet', style: TextStyle(color: textSecondary))
           else
             AbsorbPointer(
-              absorbing: !canVote,
+              absorbing: optionsLocked,
               child: Opacity(
-                opacity: canVote ? 1 : 0.42,
+                opacity: optionsLocked ? 0.42 : 1,
                 child: Column(
                   children: options
                       .map(
@@ -278,11 +295,13 @@ class _TodayPollCard extends ConsumerWidget {
                           option: opt,
                           selected: myOptionId == opt.id,
                           totalVotes: total,
-                          enabled: canVote,
+                          enabled: !optionsLocked,
                           compact: true,
                           onTap: () async {
-                            if (!canVote) {
-                              showLunchVoteDisabledMessage(context, poll);
+                            if (optionsLocked) {
+                              if (!canVote) {
+                                showLunchVoteDisabledMessage(context, poll);
+                              }
                               return;
                             }
                             if (!poll.allowVoteChange &&
@@ -324,7 +343,7 @@ class _TodayPollCard extends ConsumerWidget {
                   minimumSize: Size.zero,
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
-                onPressed: () => _showVotesSheet(context, poll),
+                onPressed: () => showLunchPollVotesSheet(context, poll),
                 child: const Text(
                   'View all votes',
                   style: TextStyle(
@@ -338,101 +357,6 @@ class _TodayPollCard extends ConsumerWidget {
           ],
         ],
       ),
-    );
-  }
-
-  void _showVotesSheet(BuildContext context, LunchPoll poll) {
-    showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      isScrollControlled: true,
-      builder: (ctx) {
-        final options = poll.mergedOptions;
-        final textPrimary = AppThemeColors.textPrimaryColor(ctx);
-        final textSecondary = AppThemeColors.textSecondaryColor(ctx);
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  'All votes — ${poll.title}',
-                  style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Flexible(
-                  child: ListView(
-                    shrinkWrap: true,
-                    children: options.map((opt) {
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    opt.label,
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 15,
-                                      color: textPrimary,
-                                    ),
-                                  ),
-                                ),
-                                Text(
-                                  '${opt.voteCount > 0 ? opt.voteCount : opt.voters.length} vote${(opt.voteCount > 0 ? opt.voteCount : opt.voters.length) == 1 ? '' : 's'}',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 13,
-                                    color: textSecondary,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 6),
-                            if (opt.voters.isEmpty)
-                              Text(
-                                'No votes yet',
-                                style: TextStyle(fontSize: 13, color: textSecondary),
-                              )
-                            else
-                              ...opt.voters.map(
-                                (v) => ListTile(
-                                  contentPadding: EdgeInsets.zero,
-                                  dense: true,
-                                  leading: CircleAvatar(
-                                    radius: 16,
-                                    child: Text(
-                                      v.name.isNotEmpty ? v.name[0].toUpperCase() : '?',
-                                      style: const TextStyle(fontSize: 12),
-                                    ),
-                                  ),
-                                  title: Text(
-                                    v.name,
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.w500,
-                                      color: textPrimary,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
     );
   }
 }
@@ -494,7 +418,7 @@ class _BalanceCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.xs),
           Text(
             '$bal ${AppConstants.currencySymbol}',
             style: TextStyle(
@@ -504,7 +428,7 @@ class _BalanceCard extends StatelessWidget {
               height: 1,
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.xs),
           if (isOwed)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -553,7 +477,7 @@ class _VoteHistoryTeaser extends StatelessWidget {
             ),
             child: const Icon(Icons.history, color: lunchBrandPurple, size: 22),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

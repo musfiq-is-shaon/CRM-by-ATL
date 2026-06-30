@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/services/attendance_reminder_controller.dart';
 import '../../../core/theme/app_theme_colors.dart';
+import '../../../core/theme/design_tokens.dart';
 import '../../providers/theme_provider.dart';
 import '../../providers/accent_color_provider.dart';
 import '../../providers/amoled_provider.dart';
 import '../../providers/notification_provider.dart';
 import '../../providers/task_provider.dart';
 import '../../widgets/crm_card.dart';
+import '../../widgets/app_section_header.dart';
 import '../../widgets/premium_color_picker.dart';
 
 class SettingsPage extends ConsumerWidget {
@@ -33,17 +35,25 @@ class SettingsPage extends ConsumerWidget {
       body: ListView(
         padding: AppThemeColors.pagePaddingAll,
         children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(AppSpacing.md),
+            decoration: AppThemeColors.heroSurface(context),
+            child: AppSectionHeader(
+              title: 'Settings',
+              subtitle: 'Personalize appearance, alerts, and app preferences',
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
           CRMCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'App Settings',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                    color: textPrimary,
-                  ),
+                  'Preferences',
+                  style: AppTypography.sectionTitle(context)?.copyWith(
+                        color: textPrimary,
+                      ),
                 ),
                 const SizedBox(height: 12),
                 _buildSettingItem(
@@ -173,11 +183,9 @@ class SettingsPage extends ConsumerWidget {
               children: [
                 Text(
                   'About',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                    color: textPrimary,
-                  ),
+                  style: AppTypography.sectionTitle(context)?.copyWith(
+                        color: textPrimary,
+                      ),
                 ),
                 const SizedBox(height: 12),
                 _buildSettingItem(
@@ -233,17 +241,25 @@ class SettingsPage extends ConsumerWidget {
   }) {
     return InkWell(
       onTap: onTap,
+      borderRadius: BorderRadius.circular(AppRadius.sm),
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12),
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
         child: Row(
           children: [
-            Icon(icon, color: primaryColor, size: 22),
-            const SizedBox(width: 12),
+            AppThemeColors.iconChip(
+              context,
+              icon: icon,
+              accent: primaryColor ?? Theme.of(context).colorScheme.primary,
+              size: 36,
+              iconSize: 18,
+            ),
+            const SizedBox(width: AppSpacing.sm),
             Expanded(
               child: Text(
                 title,
                 style: TextStyle(
                   fontSize: 15,
+                  fontWeight: FontWeight.w500,
                   color:
                       textPrimary ?? Theme.of(context).colorScheme.onSurface,
                 ),
@@ -370,7 +386,7 @@ class SettingsPage extends ConsumerWidget {
     return InkWell(
       onTap: () => onChanged(value),
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12),
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
         child: Row(
           children: [
             Icon(

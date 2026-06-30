@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme_colors.dart';
+import '../../../core/theme/design_tokens.dart';
 import '../../../data/models/company_model.dart';
 import '../../providers/company_provider.dart';
 import '../../providers/user_provider.dart';
 import '../../widgets/crm_card.dart';
+import '../../widgets/app_section_header.dart';
 import '../../widgets/loading_widget.dart';
 
 class CompanyDetailPage extends ConsumerWidget {
@@ -21,7 +23,7 @@ class CompanyDetailPage extends ConsumerWidget {
 
     final bgColor = AppThemeColors.backgroundColor(context);
     final textPrimary = AppThemeColors.textPrimaryColor(context);
-            final textSecondary = AppThemeColors.textSecondaryColor(context);
+    final textSecondary = AppThemeColors.textSecondaryColor(context);
     final cs = Theme.of(context).colorScheme;
     final primaryColor = cs.primary;
     final errorColor = cs.error;
@@ -56,37 +58,34 @@ class CompanyDetailPage extends ConsumerWidget {
         ],
       ),
       body: company == null
-          ? const Center(child: LoadingWidget())
+          ? ListView(
+              padding: AppThemeColors.pagePaddingAll,
+              children: const [
+                ShimmerCard(height: 160),
+                SizedBox(height: AppSpacing.lg),
+                ShimmerCard(height: 200),
+              ],
+            )
           : SingleChildScrollView(
               padding: AppThemeColors.pagePaddingAll,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Company Header
-                  CRMCard(
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(AppSpacing.lg),
+                    decoration: AppThemeColors.heroSurface(context),
                     child: Column(
                       children: [
-                        Container(
-                          width: 80,
-                          height: 80,
-                          decoration: BoxDecoration(
-                            color: cs.primaryContainer,
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Center(
-                            child: Text(
-                              company.name.isNotEmpty
-                                  ? company.name[0].toUpperCase()
-                                  : '?',
-                              style: TextStyle(
-                                fontSize: 36,
-                                fontWeight: FontWeight.bold,
-                                color: cs.onPrimaryContainer,
-                              ),
-                            ),
-                          ),
+                        AppThemeColors.iconChip(
+                          context,
+                          icon: Icons.business_outlined,
+                          accent: primaryColor,
+                          size: 64,
+                          iconSize: 32,
                         ),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: AppSpacing.md),
                         Text(
                           company.name,
                           style: TextStyle(
@@ -98,7 +97,7 @@ class CompanyDetailPage extends ConsumerWidget {
                         ),
                         if (company.location != null ||
                             company.country != null) ...[
-                          const SizedBox(height: 8),
+                          const SizedBox(height: AppSpacing.xs),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
@@ -107,7 +106,7 @@ class CompanyDetailPage extends ConsumerWidget {
                                 size: 16,
                                 color: textSecondary,
                               ),
-                              const SizedBox(width: 4),
+                              const SizedBox(width: AppSpacing.xxs),
                               Text(
                                 [company.location, company.country]
                                     .where((e) => e != null && e.isNotEmpty)
@@ -121,15 +120,15 @@ class CompanyDetailPage extends ConsumerWidget {
                           ),
                         ],
                         if (company.kamUser != null) ...[
-                          const SizedBox(height: 12),
+                          const SizedBox(height: AppSpacing.sm),
                           Container(
                             padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 6,
+                              horizontal: AppSpacing.sm,
+                              vertical: AppSpacing.xxs + 2,
                             ),
                             decoration: BoxDecoration(
                               color: cs.tertiaryContainer,
-                              borderRadius: BorderRadius.circular(20),
+                              borderRadius: BorderRadius.circular(AppRadius.full),
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
@@ -139,7 +138,7 @@ class CompanyDetailPage extends ConsumerWidget {
                                   size: 16,
                                   color: cs.onTertiaryContainer,
                                 ),
-                                const SizedBox(width: 6),
+                                const SizedBox(width: AppSpacing.xxs + 2),
                                 Text(
                                   'KAM: ${company.kamUser!.name}',
                                   style: TextStyle(
@@ -155,18 +154,11 @@ class CompanyDetailPage extends ConsumerWidget {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: AppSpacing.lg),
 
                   // Company Information
-                  Text(
-                    'Company Information',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      color: textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
+                  AppSectionHeader(title: 'Company Information'),
+                  const SizedBox(height: AppSpacing.sm),
                   CRMCard(
                     child: Column(
                       children: [
@@ -225,18 +217,18 @@ class CompanyDetailPage extends ConsumerWidget {
     Color textSecondary,
   ) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(8),
+            padding: const EdgeInsets.all(AppSpacing.xs),
             decoration: BoxDecoration(
               color: primaryColor.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(AppRadius.sm),
             ),
             child: Icon(icon, color: primaryColor, size: 20),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: AppSpacing.md),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

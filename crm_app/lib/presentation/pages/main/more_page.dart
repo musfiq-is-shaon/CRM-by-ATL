@@ -7,10 +7,16 @@ import '../../providers/auth_provider.dart';
 import '../../providers/shift_provider.dart';
 import '../../providers/rbac_provider.dart';
 import '../../providers/notifications_provider.dart';
+import '../../widgets/app_menu_tile.dart';
+import '../../widgets/avatar_widget.dart';
 import '../../widgets/crm_card.dart';
+import '../admin/users_page.dart';
+import '../companies/companies_list_page.dart';
 import '../contacts/contacts_list_page.dart';
+import '../sales/deals_page.dart';
 import '../settings/change_password_page.dart';
 import '../settings/settings_page.dart';
+import '../shifts/shifts_admin_page.dart';
 import 'notification_settings_page.dart';
 import 'help_support_page.dart';
 import '../leave/leave_list_page.dart';
@@ -25,8 +31,12 @@ class MorePage extends ConsumerWidget {
     final user = authState.user;
     final shiftAsync = ref.watch(userProfileShiftProvider);
     final me = ref.watch(rbacMeProvider);
+    final jwtAdmin = ref.watch(isAdminProvider);
     final showContacts = me?.canNavContacts ?? false;
+    final showCompanies = me?.canNavCompanies ?? false;
     final showLeave = me?.hasNav(RbacPageKey.leaves) ?? false;
+    final showSales = me?.hasNav(RbacPageKey.sales) ?? false;
+    final showHr = jwtAdmin || (me?.hasNav(RbacPageKey.hr) ?? false);
 
     final bgColor = AppThemeColors.backgroundColor(context);
     final textPrimary = AppThemeColors.textPrimaryColor(context);
@@ -49,45 +59,27 @@ class MorePage extends ConsumerWidget {
                 MaterialPageRoute(builder: (context) => const ProfilePage()),
               );
             },
+            padding: const EdgeInsets.all(AppSpacing.md),
             child: Row(
               children: [
-                Container(
-                  width: 60,
-                  height: 60,
-                  decoration: BoxDecoration(
-                    color: cs.primaryContainer,
-                    borderRadius: BorderRadius.circular(AppRadius.lg),
-                  ),
-                  child: Center(
-                    child: Text(
-                      user?.name != null && user!.name.isNotEmpty
-                          ? user.name[0].toUpperCase()
-                          : '?',
-                      style: TextStyle(
-                        color: cs.onPrimaryContainer,
-                        fontSize: 24,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 16),
+                AvatarWidget(name: user?.name ?? 'User', size: 56),
+                const SizedBox(width: AppSpacing.md),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         user?.name ?? 'User',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w600,
-                          color: textPrimary,
-                        ),
+                        style: AppTypography.sectionTitle(context)?.copyWith(
+                              color: textPrimary,
+                            ),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         user?.email ?? '',
-                        style: TextStyle(fontSize: 14, color: textSecondary),
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: textSecondary,
+                            ),
                       ),
                       shiftAsync.when(
                         skipLoadingOnReload: true,
@@ -117,21 +109,22 @@ class MorePage extends ConsumerWidget {
                         ),
                         error: (e, _) => const SizedBox.shrink(),
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: AppSpacing.xs),
                       Container(
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 2,
+                          horizontal: AppSpacing.sm,
+                          vertical: 3,
                         ),
                         decoration: BoxDecoration(
                           color: cs.primaryContainer,
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(AppRadius.full),
                         ),
                         child: Text(
-                          user?.role ?? 'user',
+                          (user?.role ?? 'user').toUpperCase(),
                           style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w500,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.4,
                             color: cs.onPrimaryContainer,
                           ),
                         ),
@@ -139,258 +132,266 @@ class MorePage extends ConsumerWidget {
                     ],
                   ),
                 ),
-                Icon(Icons.chevron_right, color: textTertiary),
+                Icon(Icons.chevron_right_rounded, color: textTertiary),
               ],
             ),
           ),
           SizedBox(height: AppThemeColors.sectionGap),
 
-          _buildSection(
+          AppMenuSection(
             title: 'Management',
-            textPrimary: textPrimary,
-            textSecondary: textSecondary,
-            textTertiary: textTertiary,
-            primaryColor: primaryColor,
             children: [
-              if (showContacts)
-                _buildMenuItem(
-                  context,
-                  icon: Icons.people_outline,
-                  title: 'Contacts',
-                  subtitle: 'People and companies',
-                  textPrimary: textPrimary,
-                  textSecondary: textSecondary,
-                  textTertiary: textTertiary,
-                  primaryColor: primaryColor,
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const ContactsListPage(),
+              CRMCard(
+                padding: EdgeInsets.zero,
+                child: Column(
+                  children: [
+                    if (showSales)
+                      AppMenuTile(
+                        icon: Icons.handshake_outlined,
+                        title: 'Sales & Deals',
+                        subtitle: 'Pipeline, orders, and renewals',
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const DealsPage(),
+                          ),
+                        ),
                       ),
-                    );
-                  },
-                ),
-              if (showLeave)
-                _buildMenuItem(
-                  context,
-                  icon: Icons.event_note_outlined,
-                  title: 'Leave',
-                  subtitle: 'Apply and track leave requests',
-                  textPrimary: textPrimary,
-                  textSecondary: textSecondary,
-                  textTertiary: textTertiary,
-                  primaryColor: primaryColor,
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const LeaveListPage(),
+                    if (showContacts)
+                      AppMenuTile(
+                        icon: Icons.people_outline,
+                        title: 'Contacts',
+                        subtitle: 'People and relationships',
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const ContactsListPage(),
+                          ),
+                        ),
                       ),
-                    );
-                  },
-                ),
-              _buildMenuItem(
-                context,
-                icon: Icons.settings_outlined,
-                title: 'Settings',
-                subtitle: 'App settings',
-                textPrimary: textPrimary,
-                textSecondary: textSecondary,
-                textTertiary: textTertiary,
-                primaryColor: primaryColor,
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const SettingsPage(),
+                    if (showCompanies)
+                      AppMenuTile(
+                        icon: Icons.business_outlined,
+                        title: 'Companies',
+                        subtitle: 'Accounts and organizations',
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const CompaniesListPage(),
+                          ),
+                        ),
+                      ),
+                    if (showLeave)
+                      AppMenuTile(
+                        icon: Icons.event_note_outlined,
+                        title: 'Leave',
+                        subtitle: 'Apply and track leave requests',
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const LeaveListPage(),
+                          ),
+                        ),
+                      ),
+                    if (showHr) ...[
+                      AppMenuTile(
+                        icon: Icons.group_outlined,
+                        title: 'Users',
+                        subtitle: 'Team directory and roles',
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const UsersPage(),
+                          ),
+                        ),
+                      ),
+                      AppMenuTile(
+                        icon: Icons.schedule_outlined,
+                        title: 'Shifts',
+                        subtitle: 'Work schedules and timings',
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const ShiftsAdminPage(),
+                          ),
+                        ),
+                      ),
+                    ],
+                    AppMenuTile(
+                      icon: Icons.settings_outlined,
+                      title: 'Settings',
+                      subtitle: 'Theme, profile, and preferences',
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const SettingsPage(),
+                        ),
+                      ),
+                      showDivider: false,
                     ),
-                  );
-                },
+                  ],
+                ),
               ),
             ],
           ),
           SizedBox(height: AppThemeColors.sectionGap),
 
-          _buildSection(
+          AppMenuSection(
             title: 'Account',
-            textPrimary: textPrimary,
-            textSecondary: textSecondary,
-            textTertiary: textTertiary,
-            primaryColor: primaryColor,
             children: [
-              _buildMenuItem(
-                context,
-                icon: Icons.lock_outline,
-                title: 'Change Password',
-                subtitle: 'Update your password',
-                textPrimary: textPrimary,
-                textSecondary: textSecondary,
-                textTertiary: textTertiary,
-                primaryColor: primaryColor,
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const ChangePasswordPage(),
+              CRMCard(
+                padding: EdgeInsets.zero,
+                child: Column(
+                  children: [
+                    AppMenuTile(
+                      icon: Icons.lock_outline,
+                      title: 'Change Password',
+                      subtitle: 'Update your password',
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const ChangePasswordPage(),
+                        ),
+                      ),
                     ),
-                  );
-                },
-              ),
-              _buildMenuItem(
-                context,
-                icon: Icons.notifications_outlined,
-                title: 'Notifications',
-                subtitle: 'Manage notifications',
-                textPrimary: textPrimary,
-                textSecondary: textSecondary,
-                textTertiary: textTertiary,
-                primaryColor: primaryColor,
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const NotificationSettingsPage(),
+                    AppMenuTile(
+                      icon: Icons.notifications_outlined,
+                      title: 'Notifications',
+                      subtitle: 'Manage notification preferences',
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const NotificationSettingsPage(),
+                        ),
+                      ),
                     ),
-                  );
-                },
-              ),
-              _buildMenuItem(
-                context,
-                icon: Icons.help_outline,
-                title: 'Help & Support',
-                subtitle: 'Get help',
-                textPrimary: textPrimary,
-                textSecondary: textSecondary,
-                textTertiary: textTertiary,
-                primaryColor: primaryColor,
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const HelpSupportPage(),
+                    AppMenuTile(
+                      icon: Icons.help_outline,
+                      title: 'Help & Support',
+                      subtitle: 'Get help using the app',
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const HelpSupportPage(),
+                        ),
+                      ),
+                      showDivider: false,
                     ),
-                  );
-                },
+                  ],
+                ),
               ),
             ],
           ),
           SizedBox(height: AppThemeColors.sectionGap),
 
-          _buildSection(
-            textPrimary: textPrimary,
-            textSecondary: textSecondary,
-            textTertiary: textTertiary,
-            primaryColor: primaryColor,
+          AppMenuSection(
             children: [
-              _buildMenuItem(
-                context,
-                icon: Icons.logout,
-                title: 'Logout',
-                subtitle: 'Sign out of your account',
-                textPrimary: textPrimary,
-                textSecondary: textSecondary,
-                textTertiary: textTertiary,
-                primaryColor: primaryColor,
-                iconColor: errorColor,
-                textColor: errorColor,
-                onTap: () async {
-                  final confirmed = await showDialog<bool>(
-                    context: context,
-                    builder: (context) => AlertDialog(
-                      title: Text(
-                        'Logout',
-                        style: TextStyle(color: textPrimary),
-                      ),
-                      content: Text(
-                        'Are you sure you want to logout?',
-                        style: TextStyle(color: textSecondary),
-                      ),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(context, false),
-                          child: Text(
-                            'Cancel',
-                            style: TextStyle(color: primaryColor),
-                          ),
-                        ),
-                        TextButton(
-                          onPressed: () => Navigator.pop(context, true),
-                          child: Text(
-                            'Logout',
-                            style: TextStyle(color: errorColor),
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                  if (confirmed == true) {
-                    await ref.read(authProvider.notifier).logout();
-                    ref.invalidate(notificationsProvider);
-                  }
-                },
-              ),
-              _buildMenuItem(
-                context,
-                icon: Icons.delete_forever,
-                title: 'Delete Account',
-                subtitle: 'Permanently delete your account',
-                textPrimary: textPrimary,
-                textSecondary: textSecondary,
-                textTertiary: textTertiary,
-                primaryColor: primaryColor,
-                iconColor: errorColor,
-                textColor: errorColor,
-                onTap: () async {
-                  final confirmed = await showDialog<bool>(
-                    context: context,
-                    builder: (context) => AlertDialog(
-                      title: Text(
-                        'Delete Account',
-                        style: TextStyle(color: textPrimary),
-                      ),
-                      content: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'This action cannot be undone!',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: errorColor,
+              CRMCard(
+                padding: EdgeInsets.zero,
+                child: Column(
+                  children: [
+                    AppMenuTile(
+                      icon: Icons.logout_rounded,
+                      title: 'Logout',
+                      subtitle: 'Sign out of your account',
+                      accent: errorColor,
+                      titleColor: errorColor,
+                      onTap: () async {
+                        final confirmed = await showDialog<bool>(
+                          context: context,
+                          builder: (context) => AlertDialog(
+                            title: Text(
+                              'Logout',
+                              style: TextStyle(color: textPrimary),
                             ),
+                            content: Text(
+                              'Are you sure you want to logout?',
+                              style: TextStyle(color: textSecondary),
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(context, false),
+                                child: Text(
+                                  'Cancel',
+                                  style: TextStyle(color: primaryColor),
+                                ),
+                              ),
+                              TextButton(
+                                onPressed: () => Navigator.pop(context, true),
+                                child: Text(
+                                  'Logout',
+                                  style: TextStyle(color: errorColor),
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Deleting your account will:\n• Remove all your data permanently\n• Deactivate your account\n• You will be logged out',
-                            style: TextStyle(color: textSecondary),
-                          ),
-                        ],
-                      ),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(context, false),
-                          child: Text(
-                            'Cancel',
-                            style: TextStyle(color: primaryColor),
-                          ),
-                        ),
-                        TextButton(
-                          onPressed: () => Navigator.pop(context, true),
-                          child: Text(
-                            'Delete Account',
-                            style: TextStyle(color: errorColor),
-                          ),
-                        ),
-                      ],
+                        );
+                        if (confirmed == true) {
+                          await ref.read(authProvider.notifier).logout();
+                          ref.invalidate(notificationsProvider);
+                        }
+                      },
                     ),
-                  );
-                  if (confirmed == true) {
-                    await ref.read(authProvider.notifier).deleteAccount();
-                    ref.invalidate(notificationsProvider);
-                  }
-                },
+                    AppMenuTile(
+                      icon: Icons.delete_forever_outlined,
+                      title: 'Delete Account',
+                      subtitle: 'Permanently delete your account',
+                      accent: errorColor,
+                      titleColor: errorColor,
+                      showDivider: false,
+                      onTap: () async {
+                        final confirmed = await showDialog<bool>(
+                          context: context,
+                          builder: (context) => AlertDialog(
+                            title: Text(
+                              'Delete Account',
+                              style: TextStyle(color: textPrimary),
+                            ),
+                            content: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'This action cannot be undone!',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: errorColor,
+                                  ),
+                                ),
+                                const SizedBox(height: AppSpacing.xs),
+                                Text(
+                                  'Deleting your account will:\n• Remove all your data permanently\n• Deactivate your account\n• You will be logged out',
+                                  style: TextStyle(color: textSecondary),
+                                ),
+                              ],
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(context, false),
+                                child: Text(
+                                  'Cancel',
+                                  style: TextStyle(color: primaryColor),
+                                ),
+                              ),
+                              TextButton(
+                                onPressed: () => Navigator.pop(context, true),
+                                child: Text(
+                                  'Delete Account',
+                                  style: TextStyle(color: errorColor),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                        if (confirmed == true) {
+                          await ref.read(authProvider.notifier).deleteAccount();
+                          ref.invalidate(notificationsProvider);
+                        }
+                      },
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -404,107 +405,6 @@ class MorePage extends ConsumerWidget {
           ),
           const SizedBox(height: 100),
         ],
-      ),
-    );
-  }
-
-  Widget _buildSection({
-    String? title,
-    required List<Widget> children,
-    Color? textPrimary,
-    Color? textSecondary,
-    Color? textTertiary,
-    Color? primaryColor,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (title != null) ...[
-          Padding(
-            padding: AppThemeColors.sectionHeaderLabelPadding,
-            child: Text(
-              title,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: textSecondary,
-              ),
-            ),
-          ),
-        ],
-        CRMCard(
-          padding: EdgeInsets.zero,
-          child: Column(children: children),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildMenuItem(
-    BuildContext context, {
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required VoidCallback onTap,
-    Color? textPrimary,
-    Color? textSecondary,
-    Color? textTertiary,
-    Color? primaryColor,
-    Color? iconColor,
-    Color? textColor,
-  }) {
-    final accent =
-        iconColor ?? primaryColor ?? Theme.of(context).colorScheme.primary;
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: AppThemeColors.cardRowPadding,
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: accent.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(icon, color: accent, size: 20),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w500,
-                      color:
-                          textColor ??
-                          textPrimary ??
-                          Theme.of(context).colorScheme.onSurface,
-                    ),
-                  ),
-                  Text(
-                    subtitle,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color:
-                          textTertiary ??
-                          Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Icon(
-              Icons.chevron_right,
-              color:
-                  textTertiary ??
-                  Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-          ],
-        ),
       ),
     );
   }

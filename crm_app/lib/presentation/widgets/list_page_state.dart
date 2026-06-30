@@ -15,6 +15,9 @@ class ListPageState extends StatelessWidget {
     required this.emptySubtitle,
     required this.emptyIcon,
     required this.content,
+    this.useSkeleton = true,
+    this.skeletonCount = 6,
+    this.loadingMessage,
   });
 
   final bool isLoading;
@@ -25,10 +28,18 @@ class ListPageState extends StatelessWidget {
   final String emptySubtitle;
   final IconData emptyIcon;
   final Widget content;
+  final bool useSkeleton;
+  final int skeletonCount;
+  final String? loadingMessage;
 
   @override
   Widget build(BuildContext context) {
-    if (isLoading) return const LoadingWidget();
+    if (isLoading) {
+      if (useSkeleton) {
+        return ListSkeletonLoader(itemCount: skeletonCount);
+      }
+      return LoadingWidget(message: loadingMessage);
+    }
     if (error != null) {
       return app_widgets.ErrorWidget(
         message: error!,

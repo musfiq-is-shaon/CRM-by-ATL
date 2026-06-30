@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme_colors.dart';
+import '../../../core/theme/design_tokens.dart';
 import '../../providers/notifications_provider.dart';
+import '../../widgets/crm_card.dart';
 import '../../widgets/list_page_state.dart';
 
 class NotificationsPage extends ConsumerStatefulWidget {
@@ -28,8 +30,8 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
     final notifier = ref.read(notificationsProvider.notifier);
     final textPrimary = AppThemeColors.textPrimaryColor(context);
     final textSecondary = AppThemeColors.textSecondaryColor(context);
+    final textTertiary = AppThemeColors.textTertiaryColor(context);
     final cs = Theme.of(context).colorScheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
       backgroundColor: AppThemeColors.backgroundColor(context),
@@ -62,78 +64,78 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
             physics: const AlwaysScrollableScrollPhysics(),
             padding: AppThemeColors.listPagePadding,
             itemCount: state.items.length,
-            separatorBuilder: (_, _) => const SizedBox(height: 10),
+            separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),
             itemBuilder: (context, index) {
               final item = state.items[index];
               final when = _formatWhen(item.createdAt);
-              return Card(
-                margin: EdgeInsets.zero,
-                child: ListTile(
-                  leading: CircleAvatar(
-                    radius: 22,
-                    backgroundColor: item.isRead
-                        ? cs.surfaceContainerHighest
-                        : (isDark
-                            ? cs.primary
-                            : cs.primary.withValues(alpha: 0.22)),
-                    child: Icon(
-                      item.isRead
+              return CRMCard(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    AppThemeColors.iconChip(
+                      context,
+                      icon: item.isRead
                           ? Icons.notifications_none_outlined
                           : Icons.notifications_outlined,
-                      color: item.isRead
-                          ? cs.onSurfaceVariant
-                          : (isDark ? cs.onPrimary : cs.primary),
-                      size: 22,
+                      accent: item.isRead ? textSecondary : cs.primary,
+                      size: 44,
+                      iconSize: 22,
                     ),
-                  ),
-                  title: Text(
-                    item.displayTitle,
-                    style: TextStyle(
-                      color: textPrimary,
-                      fontWeight: item.isRead ? FontWeight.w500 : FontWeight.w700,
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            item.displayTitle,
+                            style: TextStyle(
+                              color: textPrimary,
+                              fontWeight: item.isRead
+                                  ? FontWeight.w500
+                                  : FontWeight.w700,
+                            ),
+                          ),
+                          if (item.displayMessage.trim().isNotEmpty) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              item.displayMessage,
+                              style: TextStyle(color: textSecondary),
+                            ),
+                          ],
+                          const SizedBox(height: 4),
+                          Text(
+                            when,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (item.displayMessage.trim().isNotEmpty) ...[
-                        const SizedBox(height: 2),
-                        Text(
-                          item.displayMessage,
-                          style: TextStyle(color: textSecondary),
+                    PopupMenuButton<String>(
+                      icon: Icon(Icons.more_vert, color: textTertiary),
+                      onSelected: (v) async {
+                        if (v == 'read' && !item.isRead) {
+                          await notifier.markAsRead(item.id);
+                        }
+                        if (v == 'delete') {
+                          await notifier.deleteOne(item.id);
+                        }
+                      },
+                      itemBuilder: (_) => [
+                        if (!item.isRead)
+                          const PopupMenuItem(
+                            value: 'read',
+                            child: Text('Mark as read'),
+                          ),
+                        const PopupMenuItem(
+                          value: 'delete',
+                          child: Text('Delete'),
                         ),
                       ],
-                      const SizedBox(height: 4),
-                      Text(
-                        when,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                  trailing: PopupMenuButton<String>(
-                    onSelected: (v) async {
-                      if (v == 'read' && !item.isRead) {
-                        await notifier.markAsRead(item.id);
-                      }
-                      if (v == 'delete') {
-                        await notifier.deleteOne(item.id);
-                      }
-                    },
-                    itemBuilder: (_) => [
-                      if (!item.isRead)
-                        const PopupMenuItem(
-                          value: 'read',
-                          child: Text('Mark as read'),
-                        ),
-                      const PopupMenuItem(
-                        value: 'delete',
-                        child: Text('Delete'),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               );
             },

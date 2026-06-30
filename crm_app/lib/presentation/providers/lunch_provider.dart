@@ -23,6 +23,7 @@ class LunchState {
     this.employeeBalances = const [],
     this.error,
     this.votingPollId,
+    this.orderSummaryLoading = false,
   });
 
   final LunchLoadStatus status;
@@ -38,6 +39,7 @@ class LunchState {
   final List<LunchEmployeeBalance> employeeBalances;
   final String? error;
   final String? votingPollId;
+  final bool orderSummaryLoading;
 
   LunchPoll? get selectedPoll {
     if (selectedPollId == null) return todayPolls.isNotEmpty ? todayPolls.first : null;
@@ -67,6 +69,7 @@ class LunchState {
     bool clearError = false,
     String? votingPollId,
     bool clearVoting = false,
+    bool? orderSummaryLoading,
   }) {
     return LunchState(
       status: status ?? this.status,
@@ -82,6 +85,7 @@ class LunchState {
       employeeBalances: employeeBalances ?? this.employeeBalances,
       error: clearError ? null : (error ?? this.error),
       votingPollId: clearVoting ? null : (votingPollId ?? this.votingPollId),
+      orderSummaryLoading: orderSummaryLoading ?? this.orderSummaryLoading,
     );
   }
 }
@@ -134,25 +138,78 @@ class LunchNotifier extends StateNotifier<LunchState> {
 
   Future<void> vote(String pollId, String optionId) async {
     state = state.copyWith(votingPollId: pollId, clearError: true);
+    final previousToday = state.todayPolls;
+    state = state.copyWith(
+      todayPolls: [
+        for (final p in state.todayPolls)
+          if (p.id == pollId) p.withMyVote(optionId) else p,
+      ],
+    );
     try {
       await _repo.castVote(pollId, optionId);
-      await loadTodayPolls(silent: true);
-      if (state.selectedPollId == pollId) {
-        await loadOrderSummary(pollId);
+      try {
+        final refreshed = await _repo.refreshPollHydrated(pollId);
+        LunchPoll? existing;
+        for (final p in state.todayPolls) {
+          if (p.id == pollId) {
+            existing = p;
+            break;
+          }
+        }
+        if (existing != null) {
+          _upsertPoll(LunchPoll.merge(refreshed, existing));
+        }
+      } catch (_) {
+        // Keep optimistic state if refresh fails.
       }
     } catch (e) {
-      state = state.copyWith(error: e.toString());
+      state = state.copyWith(todayPolls: previousToday, error: e.toString());
     } finally {
       state = state.copyWith(clearVoting: true);
     }
   }
 
-  Future<void> loadOrderSummary(String pollId) async {
+  /// Loads today's (or recent) poll summary without flashing partial UI.
+  Future<void> bootstrapOrderSummary() async {
+    state = state.copyWith(
+      orderSummaryLoading: true,
+      clearError: true,
+      clearSummary: state.orderSummary == null,
+    );
+    try {
+      await loadTodayPolls(silent: true);
+      final pollId = state.selectedPollId ??
+          (state.todayPolls.isNotEmpty ? state.todayPolls.first.id : null);
+      if (pollId != null && pollId.isNotEmpty) {
+        await loadOrderSummary(pollId, silent: state.orderSummary != null);
+        return;
+      }
+      final now = DateTime.now();
+      final polls = await _repo.fetchPollPickerList(
+        from: now.subtract(const Duration(days: 7)),
+        to: now,
+      );
+      if (polls.isNotEmpty) {
+        await loadOrderSummary(polls.first.id, silent: state.orderSummary != null);
+      } else {
+        state = state.copyWith(orderSummaryLoading: false);
+      }
+    } catch (e) {
+      state = state.copyWith(
+        error: e.toString(),
+        orderSummaryLoading: false,
+      );
+    }
+  }
+
+  Future<void> loadOrderSummary(String pollId, {bool silent = false}) async {
+    final keepSummary =
+        silent && state.selectedPollId == pollId && state.orderSummary != null;
     state = state.copyWith(
       selectedPollId: pollId,
-      status: LunchLoadStatus.loading,
       clearError: true,
-      clearSummary: true,
+      clearSummary: !keepSummary,
+      orderSummaryLoading: !keepSummary,
     );
     try {
       LunchPoll? poll;
@@ -166,12 +223,15 @@ class LunchNotifier extends StateNotifier<LunchState> {
       final summary = await _repo.getPollSummary(pollId, poll: poll);
       _upsertPoll(summary.poll);
       state = state.copyWith(
-        status: LunchLoadStatus.loaded,
         orderSummary: summary,
         selectedPollId: pollId,
+        orderSummaryLoading: false,
       );
     } catch (e) {
-      state = state.copyWith(status: LunchLoadStatus.error, error: e.toString());
+      state = state.copyWith(
+        error: e.toString(),
+        orderSummaryLoading: false,
+      );
     }
   }
 
@@ -179,8 +239,11 @@ class LunchNotifier extends StateNotifier<LunchState> {
     required DateTime from,
     required DateTime to,
     String? status,
+    bool silent = false,
   }) async {
-    state = state.copyWith(status: LunchLoadStatus.loading, clearError: true);
+    if (!silent) {
+      state = state.copyWith(status: LunchLoadStatus.loading, clearError: true);
+    }
     try {
       final polls = await _repo.listPollsHydrated(from: from, to: to, status: status);
       state = state.copyWith(
@@ -191,6 +254,14 @@ class LunchNotifier extends StateNotifier<LunchState> {
     } catch (e) {
       state = state.copyWith(status: LunchLoadStatus.error, error: e.toString());
     }
+  }
+
+  /// Fast poll list for order-summary picker (no per-poll vote hydration).
+  Future<List<LunchPoll>> loadPollPickerOptions({
+    required DateTime from,
+    required DateTime to,
+  }) {
+    return _repo.fetchPollPickerList(from: from, to: to);
   }
 
   Future<void> loadSettings() async {
@@ -222,8 +293,10 @@ class LunchNotifier extends StateNotifier<LunchState> {
     }
   }
 
-  Future<void> loadMyBalance({String? month}) async {
-    state = state.copyWith(status: LunchLoadStatus.loading, clearError: true);
+  Future<void> loadMyBalance({String? month, bool silent = false}) async {
+    if (!silent) {
+      state = state.copyWith(status: LunchLoadStatus.loading, clearError: true);
+    }
     try {
       final bal = await _repo.getMyBalance(month: month);
       final now = DateTime.now();
@@ -298,7 +371,7 @@ class LunchNotifier extends StateNotifier<LunchState> {
     await _repo.setPollStatus(pollId, 'closed');
     await loadTodayPolls(silent: true);
     if (state.selectedPollId == pollId) {
-      await loadOrderSummary(pollId);
+      await loadOrderSummary(pollId, silent: state.orderSummary != null);
     }
   }
 

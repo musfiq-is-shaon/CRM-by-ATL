@@ -85,7 +85,10 @@ class _CompaniesListPageState extends ConsumerState<CompaniesListPage> {
           ),
           Expanded(
             child: companiesState.isLoading
-                ? const LoadingWidget()
+                ? const ListSkeletonLoader(
+                    itemCount: 8,
+                    padding: AppThemeColors.pagePaddingHorizontal,
+                  )
                 : companiesState.error != null
                 ? app_widgets.ErrorWidget(
                     message: companiesState.error!,
@@ -105,12 +108,12 @@ class _CompaniesListPageState extends ConsumerState<CompaniesListPage> {
                           .loadCompanies();
                     },
                     child: ListView.builder(
-                      padding: AppThemeColors.pagePaddingHorizontal,
+                      padding: AppThemeColors.listPagePadding,
                       itemCount: companiesState.filteredCompanies.length,
                       itemBuilder: (context, index) {
                         final company = companiesState.filteredCompanies[index];
                         return Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
+                          padding: AppThemeColors.cardListItemMargin,
                           child: CRMCard(
                             onTap: () {
                               Navigator.push(

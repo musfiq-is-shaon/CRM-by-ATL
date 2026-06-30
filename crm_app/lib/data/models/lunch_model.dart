@@ -158,6 +158,11 @@ class LunchPollOption {
 
   LunchOptionKind get kind => lunchOptionKindFrom(optionType);
 
+  int get effectiveVoteCount {
+    if (voteCount > 0) return voteCount;
+    return voters.length;
+  }
+
   factory LunchPollOption.fromJson(Map<String, dynamic> json) {
     return LunchPollOption(
       id: _id(json['id'] ?? json['_id'] ?? json['optionId']),
@@ -176,7 +181,16 @@ class LunchPollOption {
             json['option_type_id'],
       ),
       voteCount: parseOptionalInt(
-        json['votes'] ?? json['voteCount'] ?? json['count'] ?? json['vote_count'],
+        json['votes'] ??
+            json['voteCount'] ??
+            json['count'] ??
+            json['vote_count'] ??
+            json['totalVotes'] ??
+            json['total_votes'] ??
+            json['responseCount'] ??
+            json['response_count'] ??
+            json['numVotes'] ??
+            json['num_votes'],
       ) ?? 0,
       voters: LunchOptionVoter.parseList(
         json['voters'] ?? json['voterNames'] ?? json['users'] ?? json['responses'],
@@ -292,8 +306,43 @@ class LunchPoll {
           (o.label.isNotEmpty ? byLabel[o.label] : null);
       if (r == null) return o;
       return o.copyWith(
-        voteCount: r.voteCount > 0 ? r.voteCount : o.voteCount,
+        voteCount: _resolvedVoteCount(o, r),
         voters: r.voters.isNotEmpty ? r.voters : o.voters,
+      );
+    }).toList();
+  }
+
+  static int _resolvedVoteCount(LunchPollOption primary, LunchPollOption? result) {
+    if (result != null && result.voteCount > 0) return result.voteCount;
+    if (primary.voteCount > 0) return primary.voteCount;
+    if (result != null && result.voters.isNotEmpty) return result.voters.length;
+    return primary.voters.length;
+  }
+
+  /// Options with best-effort vote totals for admin edit / summary views.
+  List<LunchPollOption> optionsWithVoteTotals([
+    List<LunchMenuBreakdownRow>? breakdown,
+  ]) {
+    final merged = mergedOptions
+        .map((o) => o.copyWith(voteCount: _resolvedVoteCount(o, null)))
+        .toList();
+    if (breakdown == null || breakdown.isEmpty) return merged;
+
+    final byLabel = <String, LunchMenuBreakdownRow>{};
+    for (final row in breakdown) {
+      final key = row.label.trim().toLowerCase();
+      if (key.isNotEmpty) byLabel[key] = row;
+    }
+
+    return merged.map((o) {
+      final row = o.label.isNotEmpty ? byLabel[o.label.trim().toLowerCase()] : null;
+      if (row == null) return o;
+      var count = o.voteCount;
+      if (count <= 0 && row.votes > 0) count = row.votes;
+      if (count <= 0 && row.voters.isNotEmpty) count = row.voters.length;
+      return o.copyWith(
+        voteCount: count,
+        voters: row.voters.isNotEmpty ? row.voters : o.voters,
       );
     }).toList();
   }
@@ -362,6 +411,46 @@ class LunchPoll {
       myVote: myVote,
       results: results,
       reportedTotalVotes: total,
+    );
+  }
+
+  bool get hasPerOptionVotes =>
+      mergedOptions.any((o) => o.effectiveVoteCount > 0);
+
+  LunchPoll withVoteSummary({
+    List<LunchMenuBreakdownRow> breakdown = const [],
+    int totalVotes = 0,
+  }) {
+    final opts = optionsWithVoteTotals(breakdown);
+    final hasRich = opts.any((o) => o.effectiveVoteCount > 0);
+    return LunchPoll(
+      id: id,
+      title: title,
+      date: date,
+      costAmount: costAmount,
+      allowVoteChange: allowVoteChange,
+      endTime: endTime,
+      status: status,
+      options: options,
+      myVote: myVote,
+      results: hasRich ? opts : results,
+      reportedTotalVotes: totalVotes > 0 ? totalVotes : reportedTotalVotes,
+    );
+  }
+
+  LunchPoll withMyVote(String optionId) {
+    return LunchPoll(
+      id: id,
+      title: title,
+      date: date,
+      costAmount: costAmount,
+      allowVoteChange: allowVoteChange,
+      endTime: endTime,
+      status: status,
+      options: options,
+      myVote: LunchMyVote(optionId: optionId, votedAt: DateTime.now()),
+      results: results,
+      reportedTotalVotes: reportedTotalVotes,
     );
   }
 

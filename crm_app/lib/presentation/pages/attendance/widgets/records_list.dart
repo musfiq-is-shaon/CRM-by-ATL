@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_theme_colors.dart';
+import '../../../../core/theme/design_tokens.dart';
 import '../../../providers/attendance_provider.dart';
 import '../../../../data/models/attendance_model.dart';
 import 'attendance_location_row.dart';
@@ -28,11 +29,10 @@ class RecordsList extends ConsumerWidget {
             if (showHeading) ...[
               Text(
                 'Attendance Records',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: textPrimary,
-                ),
+                style: AppTypography.sectionTitle(context)?.copyWith(
+                      color: textPrimary,
+                      fontWeight: FontWeight.bold,
+                    ),
               ),
               const Spacer(),
             ] else ...[
@@ -46,7 +46,7 @@ class RecordsList extends ConsumerWidget {
                   ),
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: AppSpacing.sm),
             ],
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -79,13 +79,13 @@ class RecordsList extends ConsumerWidget {
             ),
           ],
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: AppSpacing.md),
         if (state.records.isEmpty)
           Center(
             child: Column(
               children: [
                 Icon(Icons.history, size: 64, color: Colors.grey),
-                const SizedBox(height: 8),
+                const SizedBox(height: AppSpacing.xs),
                 Text(
                   'No records found',
                   style: TextStyle(
@@ -134,15 +134,16 @@ class RecordTile extends StatelessWidget {
 
   const RecordTile({super.key, required this.record, this.userHeader});
 
-  Color getStatusColor() {
+  Color statusColor(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return switch (record.status) {
-      'present' => Colors.green,
-      'late' => Colors.orange,
-      'early_leave' => Colors.orange,
-      'half_day' => Colors.blue,
-      'absent' => Colors.red,
-      'exempt' => Colors.blueGrey,
-      _ => Colors.grey,
+      'present' => cs.tertiary,
+      'late' => cs.secondary,
+      'early_leave' => cs.secondary,
+      'half_day' => cs.primary,
+      'absent' => cs.error,
+      'exempt' => cs.outline,
+      _ => cs.onSurfaceVariant,
     };
   }
 
@@ -161,7 +162,7 @@ class RecordTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final surfaceColor = AppThemeColors.surfaceColor(context);
-    final statusColor = getStatusColor();
+    final statusColor = this.statusColor(context);
     final textPrimary = AppThemeColors.textPrimaryColor(context);
     final textSecondary = AppThemeColors.textSecondaryColor(context);
     final locIn = record.locationIn?.trim() ?? '';
@@ -171,8 +172,8 @@ class RecordTile extends StatelessWidget {
     final hasLocations = showLocIn || showLocOut;
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
+      margin: AppThemeColors.cardListItemMargin,
+      padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
         color: surfaceColor,
         borderRadius: BorderRadius.circular(12),
@@ -189,7 +190,7 @@ class RecordTile extends StatelessWidget {
             ),
             child: Icon(getStatusIcon(), color: statusColor, size: 24),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: AppSpacing.md),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -222,7 +223,7 @@ class RecordTile extends StatelessWidget {
                   ],
                 ),
                 if (record.workingHoursDisplayLabel != null) ...[
-                  const SizedBox(height: 8),
+                  const SizedBox(height: AppSpacing.xs),
                   Text(
                     'Working hours: ${record.workingHoursDisplayLabel}',
                     style: TextStyle(
@@ -233,7 +234,7 @@ class RecordTile extends StatelessWidget {
                   ),
                 ],
                 if (hasLocations) ...[
-                  const SizedBox(height: 12),
+                  const SizedBox(height: AppSpacing.sm),
                   if (showLocIn)
                     AttendanceLocationRow(
                       icon: Icons.login_rounded,
@@ -242,7 +243,7 @@ class RecordTile extends StatelessWidget {
                       textPrimary: textPrimary,
                       textSecondary: textSecondary,
                     ),
-                  if (showLocIn && showLocOut) const SizedBox(height: 8),
+                  if (showLocIn && showLocOut) const SizedBox(height: AppSpacing.xs),
                   if (showLocOut)
                     AttendanceLocationRow(
                       icon: Icons.logout_rounded,

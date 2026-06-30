@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme_colors.dart';
+import '../../../core/theme/design_tokens.dart';
 import '../../../data/models/task_model.dart';
 import '../../../data/models/user_model.dart';
 import '../../../data/repositories/user_repository.dart';
@@ -115,7 +116,16 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
           ],
         ),
         body: task == null
-            ? const Center(child: LoadingWidget())
+            ? ListView(
+                padding: AppThemeColors.pagePaddingAll,
+                children: const [
+                  ShimmerCard(height: 200),
+                  SizedBox(height: AppSpacing.lg),
+                  ShimmerCard(height: 120),
+                  SizedBox(height: AppSpacing.lg),
+                  ShimmerCard(height: 160),
+                ],
+              )
             : SingleChildScrollView(
                 padding: AppThemeColors.pagePaddingAll,
                 child: Column(
@@ -143,7 +153,7 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
                             ],
                           ),
                           if (task.note != null && task.note!.isNotEmpty) ...[
-                            const SizedBox(height: 16),
+                            const SizedBox(height: AppSpacing.md),
                             Text(
                               task.note!,
                               style: TextStyle(
@@ -152,9 +162,9 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
                               ),
                             ),
                           ],
-                          const SizedBox(height: 16),
+                          const SizedBox(height: AppSpacing.md),
                           Divider(color: textSecondary.withValues(alpha: 0.3)),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: AppSpacing.md),
                           _buildInfoRow(
                             'Company',
                             task.company?.name ?? 'N/A',
@@ -184,7 +194,7 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
                         ],
                       ),
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: AppSpacing.lg),
 
                     // Status Actions
                     Text(
@@ -195,7 +205,7 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
                       ),
                     ),
                     if (task.status == 'completed' && !isAdmin) ...[
-                      const SizedBox(height: 8),
+                      const SizedBox(height: AppSpacing.xs),
                       Text(
                         'Only an admin can change status after a task is completed.',
                         style: TextStyle(
@@ -205,10 +215,10 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
                         ),
                       ),
                     ],
-                    const SizedBox(height: 12),
+                    const SizedBox(height: AppSpacing.sm),
                     Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
+                      spacing: AppSpacing.xs,
+                      runSpacing: AppSpacing.xs,
                       children: [
                         _buildStatusButton(
                           context,
@@ -244,7 +254,7 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: AppSpacing.lg),
                     _buildActivityLogSection(
                       context,
                       task,
@@ -285,21 +295,9 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
             fontWeight: FontWeight.w600,
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppSpacing.sm),
         logsAsync.when(
-          loading: () => Padding(
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            child: Center(
-              child: SizedBox(
-                width: 28,
-                height: 28,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: primaryColor,
-                ),
-              ),
-            ),
-          ),
+          loading: () => const ShimmerCard(height: 120),
           error: (e, _) => CRMCard(
             child: Row(
               children: [
@@ -667,7 +665,7 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
     Color textSecondary,
   ) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
@@ -760,7 +758,7 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
                           content: Text(
                             'Status updated to ${status.replaceAll('_', ' ').toUpperCase()}',
                           ),
-                          backgroundColor: Colors.green,
+                          backgroundColor: AppThemeColors.successForeground(context),
                           duration: const Duration(seconds: 2),
                         ),
                       );

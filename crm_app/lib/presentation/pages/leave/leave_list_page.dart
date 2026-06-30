@@ -621,7 +621,7 @@ class _LeaveListPageState extends ConsumerState<LeaveListPage> {
                                 size: 64,
                                 color: textSecondary,
                               ),
-                              const SizedBox(height: 12),
+                              const SizedBox(height: AppSpacing.sm),
                               Text(
                                 'No leave requests here',
                                 style: TextStyle(
@@ -629,7 +629,7 @@ class _LeaveListPageState extends ConsumerState<LeaveListPage> {
                                   color: textSecondary,
                                 ),
                               ),
-                              const SizedBox(height: 8),
+                              const SizedBox(height: AppSpacing.xs),
                               Text(
                                 'Try another tab or tap Apply',
                                 style: TextStyle(
@@ -712,7 +712,7 @@ class _LeaveListPageState extends ConsumerState<LeaveListPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(e.toString().replaceFirst('Exception: ', '')),
-          backgroundColor: Colors.red.shade700,
+          backgroundColor: Theme.of(context).colorScheme.error,
         ),
       );
     }
@@ -765,7 +765,7 @@ class _LeaveListPageState extends ConsumerState<LeaveListPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(e.toString().replaceFirst('Exception: ', '')),
-          backgroundColor: Colors.red.shade700,
+          backgroundColor: Theme.of(context).colorScheme.error,
         ),
       );
     }
@@ -773,18 +773,12 @@ class _LeaveListPageState extends ConsumerState<LeaveListPage> {
 
   Widget _buildComingSoon(BuildContext context) {
     final bg = AppThemeColors.backgroundColor(context);
-    final surface = AppThemeColors.surfaceColor(context);
     final textPrimary = AppThemeColors.textPrimaryColor(context);
     final textSecondary = AppThemeColors.textSecondaryColor(context);
 
     return Scaffold(
       backgroundColor: bg,
-      appBar: AppBar(
-        title: Text('Leave', style: TextStyle(color: textPrimary)),
-        backgroundColor: surface,
-        foregroundColor: textPrimary,
-        elevation: 0,
-      ),
+      appBar: AppThemeColors.appBarTitle(context, 'Leave'),
       body: Center(
         child: Padding(
           padding: AppThemeColors.pagePaddingAll,
@@ -796,7 +790,7 @@ class _LeaveListPageState extends ConsumerState<LeaveListPage> {
                 size: 64,
                 color: textSecondary,
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.md),
               Text(
                 'Coming soon',
                 style: TextStyle(
@@ -805,7 +799,7 @@ class _LeaveListPageState extends ConsumerState<LeaveListPage> {
                   color: textPrimary,
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpacing.xs),
               Text(
                 'Leave management will be available soon.',
                 textAlign: TextAlign.center,
@@ -902,7 +896,7 @@ class _LeaveTile extends StatelessWidget {
     final daysLine = _daysSummaryLine();
 
     return CRMCard(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: AppThemeColors.cardListItemMargin,
       onTap: onTileTap,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

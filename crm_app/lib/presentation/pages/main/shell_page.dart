@@ -620,7 +620,7 @@ class _ShellNavigationBar extends StatelessWidget {
       child: SafeArea(
         top: false,
         child: SizedBox(
-          height: 80,
+          height: AppSizes.navBarHeight,
           child: LayoutBuilder(
             builder: (context, constraints) {
               final w = constraints.maxWidth;

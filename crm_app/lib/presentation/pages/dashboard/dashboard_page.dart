@@ -21,6 +21,8 @@ import '../../providers/rbac_provider.dart'
 import '../../widgets/crm_card.dart';
 import '../../widgets/loading_widget.dart';
 import '../../widgets/error_widget.dart' as app_widgets;
+import '../../widgets/app_section_header.dart';
+import '../../widgets/status_badge.dart';
 import '../sales/sale_detail_page.dart';
 import '../tasks/task_detail_page.dart';
 import '../tasks/tasks_list_page.dart';
@@ -94,15 +96,13 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
         me != null &&
         (me.hasNav(RbacPageKey.attendance) || me.hasNav(RbacPageKey.hr));
     final hasAnyQuickAction = canSales || canExpenses || canTasks;
-
     final userFilteredTasks = ref.watch(userFilteredTasksProvider);
-    final userPendingTasksSorted = ref.watch(userPendingTasksSortedProvider);
+    final greeting = _greetingForTimeOfDay();
+    final dailyQuote = _dailyInspirationalQuote();
 
     final bgColor = AppThemeColors.backgroundColor(context);
-    final surfaceColor = AppThemeColors.surfaceColor(context);
     final textPrimary = AppThemeColors.textPrimaryColor(context);
     final textSecondary = AppThemeColors.textSecondaryColor(context);
-    final borderColor = AppThemeColors.borderColor(context);
     final cs = Theme.of(context).colorScheme;
     final primary = cs.primary;
 
@@ -118,193 +118,153 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
               SliverToBoxAdapter(
                 child: Padding(
                   padding: AppThemeColors.pagePaddingAll,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Welcome back!',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    color: textSecondary,
-                                  ),
-                                ),
-                                if (authState.user?.name.isNotEmpty ?? false)
-                                  Padding(
-                                    padding: const EdgeInsets.only(top: 2),
-                                    child: Text(
-                                      authState.user!.name,
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        fontSize: 28,
-                                        fontWeight: FontWeight.bold,
-                                        color: textPrimary,
-                                        height: 1.15,
-                                      ),
-                                    ),
-                                  ),
-                                const SizedBox(height: 12),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Row(
-                            children: [
-                              Container(
-                                decoration: BoxDecoration(
-                                  color: surfaceColor,
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(color: borderColor),
-                                ),
-                                child: Stack(
-                                  clipBehavior: Clip.none,
-                                  children: [
-                                    IconButton(
-                                      onPressed: () {
-                                        Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (context) =>
-                                                const NotificationsPage(),
-                                          ),
-                                        );
-                                      },
-                                      icon: Icon(
-                                        Icons.notifications_outlined,
-                                        color: textSecondary,
-                                      ),
-                                    ),
-                                    if (notificationsState.unreadCount > 0)
-                                      Positioned(
-                                        right: 6,
-                                        top: 6,
-                                        child: Container(
-                                          width: 9,
-                                          height: 9,
-                                          decoration: BoxDecoration(
-                                            color: cs.error,
-                                            shape: BoxShape.circle,
-                                          ),
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Container(
-                                decoration: BoxDecoration(
-                                  color: surfaceColor,
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(color: borderColor),
-                                ),
-                                child: IconButton(
-                                  onPressed: () {
-                                    ref
-                                        .read(themeProvider.notifier)
-                                        .toggleTheme();
-                                  },
-                                  icon: Icon(
-                                    isDarkMode
-                                        ? Icons.light_mode_outlined
-                                        : Icons.dark_mode_outlined,
-                                    color: textSecondary,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              // Quick Actions (modules from GET /api/rbac/me)
-              if (hasAnyQuickAction)
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: AppThemeColors.pagePaddingHorizontal,
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(AppSpacing.md),
+                    decoration: AppThemeColors.heroSurface(context),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          'Quick Actions',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
-                            color: textPrimary,
-                          ),
-                        ),
-                        const SizedBox(height: 14),
                         Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            if (canSales) ...[
-                              Expanded(
-                                child: _QuickActionButton(
-                                  icon: salesLead
-                                      ? Icons.person_add_outlined
-                                      : Icons.trending_up_outlined,
-                                  label: salesLead ? 'Add Lead' : 'Add Deal',
-                                  color: primary,
-                                  onTap: () {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (context) =>
-                                            const SaleFormPage(),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    greeting,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .labelLarge
+                                        ?.copyWith(
+                                          color: textSecondary,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                  ),
+                                  if (authState.user?.name.isNotEmpty ?? false)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 4),
+                                      child: Text(
+                                        authState.user!.name,
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: AppTypography.pageTitle(
+                                          context,
+                                        )?.copyWith(color: textPrimary),
                                       ),
-                                    );
-                                  },
-                                ),
+                                    ),
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: AppSpacing.sm),
+                                    child: Text(
+                                      dailyQuote,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall
+                                          ?.copyWith(
+                                            color: textSecondary,
+                                            fontStyle: FontStyle.italic,
+                                            height: 1.45,
+                                          ),
+                                    ),
+                                  ),
+                                ],
                               ),
-                              if (canExpenses || canTasks)
-                                const SizedBox(width: 12),
-                            ],
-                            if (canExpenses) ...[
-                              Expanded(
-                                child: _QuickActionButton(
-                                  icon: Icons.receipt_outlined,
-                                  label: 'Add Expense',
-                                  color: cs.secondary,
-                                  onTap: () {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (context) =>
-                                            const ExpenseFormPage(),
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ),
-                              if (canTasks) const SizedBox(width: 12),
-                            ],
-                            if (canTasks)
-                              Expanded(
-                                child: _QuickActionButton(
-                                  icon: Icons.checklist_outlined,
-                                  label: 'Tasks',
-                                  color: cs.tertiary,
-                                  onTap: () {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (context) =>
-                                            const TasksListPage(),
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ),
+                            ),
+                            _DashboardIconButton(
+                              icon: Icons.notifications_outlined,
+                              badge: notificationsState.unreadCount > 0,
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) =>
+                                        const NotificationsPage(),
+                                  ),
+                                );
+                              },
+                            ),
+                            const SizedBox(width: AppSpacing.xs),
+                            _DashboardIconButton(
+                              icon: isDarkMode
+                                  ? Icons.light_mode_outlined
+                                  : Icons.dark_mode_outlined,
+                              onPressed: () {
+                                ref.read(themeProvider.notifier).toggleTheme();
+                              },
+                            ),
                           ],
                         ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              if (hasAnyQuickAction)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: AppThemeColors.pagePaddingHorizontal.copyWith(
+                      top: AppSpacing.sm,
+                    ),
+                    child: Row(
+                      children: [
+                        if (canSales) ...[
+                          Expanded(
+                            child: _QuickActionButton(
+                              icon: salesLead
+                                  ? Icons.person_add_outlined
+                                  : Icons.trending_up_outlined,
+                              label: salesLead ? 'Add Lead' : 'Add Deal',
+                              color: primary,
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => const SaleFormPage(),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                          if (canExpenses || canTasks)
+                            const SizedBox(width: AppSpacing.sm),
+                        ],
+                        if (canExpenses) ...[
+                          Expanded(
+                            child: _QuickActionButton(
+                              icon: Icons.receipt_outlined,
+                              label: 'Add Expense',
+                              color: cs.secondary,
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) =>
+                                        const ExpenseFormPage(),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                          if (canTasks) const SizedBox(width: AppSpacing.sm),
+                        ],
+                        if (canTasks)
+                          Expanded(
+                            child: _QuickActionButton(
+                              icon: Icons.checklist_outlined,
+                              label: 'Tasks',
+                              color: cs.tertiary,
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) =>
+                                        const TasksListPage(),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
                       ],
                     ),
                   ),
@@ -319,169 +279,16 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          'Attendance',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: textPrimary,
-                          ),
+                        AppSectionHeader(
+                          title: 'Attendance',
+                          subtitle: 'Check in and track your day',
                         ),
-                        const SizedBox(height: 6),
+                        const SizedBox(height: AppSpacing.xs),
                         const TodayAttendanceCardWidget(),
                       ],
                     ),
                   ),
                 ),
-
-              // Pending Tasks for non-admin (after Quick Actions + attendance)
-              if (!tasksModuleAdmin && canTasks) ...[
-                SliverToBoxAdapter(child: SizedBox(height: AppSpacing.md)),
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: AppThemeColors.pagePaddingHorizontal,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              'Pending Tasks',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w600,
-                                color: textPrimary,
-                              ),
-                            ),
-                            TextButton(
-                              onPressed: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => const TasksListPage(),
-                                  ),
-                                );
-                              },
-                              child: const Text('View All'),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                      ],
-                    ),
-                  ),
-                ),
-                if (userPendingTasksSorted.isEmpty)
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: AppThemeColors.pagePaddingHorizontalBottomTight,
-                      child: Text(
-                        'No pending tasks',
-                        style: TextStyle(fontSize: 14, color: textSecondary),
-                      ),
-                    ),
-                  )
-                else
-                  SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) {
-                        if (index >= 3) return null;
-                        final task = userPendingTasksSorted[index];
-                        final dueStr = task.dueDatetime != null
-                            ? 'Due: ${task.dueDatetime!.day}/${task.dueDatetime!.month}'
-                            : 'No due date';
-                        final accent = cs.secondary;
-                        final chipBg = accent.withValues(alpha: 0.12);
-                        return Padding(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: AppSpacing.md,
-                            vertical: 6,
-                          ),
-                          child: CRMCard(
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) =>
-                                      TaskDetailPage(taskId: task.id),
-                                ),
-                              );
-                            },
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: 4,
-                                  height: 40,
-                                  decoration: BoxDecoration(
-                                    color: accent,
-                                    borderRadius: BorderRadius.circular(2),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        task.title,
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.w500,
-                                          color: textPrimary,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        task.company?.name ?? 'No company',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: textSecondary,
-                                        ),
-                                      ),
-                                      if (task.dueDatetime != null) ...[
-                                        const SizedBox(height: 2),
-                                        Text(
-                                          dueStr,
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: accent,
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                        ),
-                                      ],
-                                    ],
-                                  ),
-                                ),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 10,
-                                    vertical: 4,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: chipBg,
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Text(
-                                    'Pending',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w500,
-                                      color: accent,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                      childCount: userPendingTasksSorted.length > 3
-                          ? 3
-                          : userPendingTasksSorted.length,
-                    ),
-                  ),
-              ],
 
               if (tasksModuleAdmin && canTasks) ...[
                 SliverToBoxAdapter(child: SizedBox(height: AppSpacing.lg)),
@@ -493,31 +300,21 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              'Recent Tasks',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w600,
-                                color: textPrimary,
-                              ),
-                            ),
-                            TextButton(
-                              onPressed: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => const TasksListPage(),
-                                  ),
-                                );
-                              },
-                              child: const Text('View All'),
-                            ),
-                          ],
+                        AppSectionHeader(
+                          title: 'Recent Tasks',
+                          trailing: TextButton(
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => const TasksListPage(),
+                                ),
+                              );
+                            },
+                            child: const Text('View All'),
+                          ),
                         ),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: AppSpacing.sm),
                       ],
                     ),
                   ),
@@ -549,9 +346,11 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                         if (index >= 5) return null;
                         final task = userFilteredTasks[index];
                         return Padding(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: AppSpacing.md,
-                            vertical: 6,
+                          padding: EdgeInsets.fromLTRB(
+                            AppSpacing.md,
+                            AppSpacing.xxs,
+                            AppSpacing.md,
+                            AppSpacing.xxs,
                           ),
                           child: CRMCard(
                             onTap: () {
@@ -577,7 +376,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                                     borderRadius: BorderRadius.circular(2),
                                   ),
                                 ),
-                                const SizedBox(width: 12),
+                                const SizedBox(width: AppSpacing.sm),
                                 Expanded(
                                   child: Column(
                                     crossAxisAlignment:
@@ -603,28 +402,12 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                                 ),
                                 Container(
                                   padding: const EdgeInsets.symmetric(
-                                    horizontal: 10,
-                                    vertical: 4,
+                                    horizontal: AppSpacing.sm,
+                                    vertical: AppSpacing.xxs,
                                   ),
-                                  decoration: BoxDecoration(
-                                    color: task.status == 'completed'
-                                        ? cs.tertiary.withValues(alpha: 0.12)
-                                        : task.status == 'in_progress'
-                                        ? primary.withValues(alpha: 0.12)
-                                        : cs.secondary.withValues(alpha: 0.12),
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Text(
-                                    task.status.replaceAll('_', ' '),
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w500,
-                                      color: task.status == 'completed'
-                                          ? cs.tertiary
-                                          : task.status == 'in_progress'
-                                          ? primary
-                                          : cs.secondary,
-                                    ),
+                                  child: StatusBadge(
+                                    status: task.status,
+                                    type: 'task',
                                   ),
                                 ),
                               ],
@@ -642,6 +425,101 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+String _greetingForTimeOfDay() {
+  final hour = DateTime.now().hour;
+  if (hour < 12) return 'Good morning';
+  if (hour < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+
+const _inspirationalQuotes = [
+  'Small steps every day lead to big results.',
+  'Your focus today shapes your success tomorrow.',
+  'Progress, not perfection.',
+  'Make today count.',
+  'Consistency beats intensity.',
+  'One task at a time, one win at a time.',
+  'Show up. Do the work. Repeat.',
+  'Excellence is a habit, not an act.',
+  'Start where you are. Use what you have.',
+  'Discipline is choosing what you want most over what you want now.',
+  'The best way to predict the future is to create it.',
+  'Done is better than perfect.',
+  'Energy flows where focus goes.',
+  'Be proud of how far you have come.',
+  'Today is a fresh chance to move forward.',
+  'Action is the foundation of success.',
+  'Stay curious. Keep learning. Keep growing.',
+  'Your effort today is an investment in tomorrow.',
+  'Clear mind, clear priorities.',
+  'Turn plans into progress.',
+  'Every expert was once a beginner.',
+  'Build momentum with one good decision at a time.',
+  'Trust the process and keep going.',
+  'You do not have to be extreme, just consistent.',
+  'Make it simple. Make it happen.',
+  'Opportunities favor the prepared.',
+  'Lead with clarity and follow through.',
+  'A productive day starts with a clear intention.',
+  'Celebrate progress, then keep moving.',
+  'Your work matters. Make it meaningful today.',
+  'Stay patient and trust your journey.',
+];
+
+String _dailyInspirationalQuote([DateTime? date]) {
+  final now = date ?? DateTime.now();
+  final dayKey = now.year * 10000 + now.month * 100 + now.day;
+  return _inspirationalQuotes[dayKey % _inspirationalQuotes.length];
+}
+
+class _DashboardIconButton extends StatelessWidget {
+  const _DashboardIconButton({
+    required this.icon,
+    required this.onPressed,
+    this.badge = false,
+  });
+
+  final IconData icon;
+  final VoidCallback onPressed;
+  final bool badge;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final border = AppThemeColors.borderColor(context);
+    return Container(
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+        border: Border.all(color: border),
+      ),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          IconButton(
+            onPressed: onPressed,
+            icon: Icon(icon, color: cs.onSurfaceVariant),
+            visualDensity: VisualDensity.compact,
+          ),
+          if (badge)
+            Positioned(
+              right: 8,
+              top: 8,
+              child: Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: cs.error,
+                  shape: BoxShape.circle,
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -665,10 +543,10 @@ class _QuickActionButton extends StatelessWidget {
     final tonal = AppThemeColors.tonalForAccent(context, color);
     return Material(
       color: tonal.background,
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(AppRadius.md),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(AppRadius.md),
         splashColor: tonal.foreground.withValues(alpha: 0.12),
         highlightColor: tonal.foreground.withValues(alpha: 0.06),
         child: Padding(

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../core/theme/design_tokens.dart';
+
 class AvatarWidget extends StatelessWidget {
   final String? name;
   final String? imageUrl;
@@ -10,7 +12,7 @@ class AvatarWidget extends StatelessWidget {
     super.key,
     this.name,
     this.imageUrl,
-    this.size = 40,
+    this.size = AppSizes.avatarDefault,
     this.backgroundColor,
   });
 
@@ -48,14 +50,26 @@ class AvatarWidget extends StatelessWidget {
       decoration: BoxDecoration(
         color: backgroundColor ?? cs.primaryContainer,
         shape: BoxShape.circle,
+        border: Border.all(
+          color: cs.outlineVariant.withValues(alpha: 0.45),
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: cs.primary.withValues(alpha: 0.08),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Center(
         child: Text(
           initials,
           style: TextStyle(
             color: cs.onPrimaryContainer,
-            fontSize: size * 0.4,
-            fontWeight: FontWeight.w600,
+            fontSize: size * 0.38,
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.2,
           ),
         ),
       ),

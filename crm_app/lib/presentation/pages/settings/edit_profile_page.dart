@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme_colors.dart';
+import '../../../core/theme/design_tokens.dart';
 import '../../providers/auth_provider.dart';
 
 /// `PATCH /api/users/me` — name & phone (Postman: Update me).
@@ -103,7 +104,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
             ),
             textCapitalization: TextCapitalization.words,
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppSpacing.md),
           TextField(
             controller: _phone,
             decoration: const InputDecoration(

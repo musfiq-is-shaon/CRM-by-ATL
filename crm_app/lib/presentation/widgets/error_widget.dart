@@ -17,36 +17,39 @@ class ErrorWidget extends StatelessWidget {
 
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(AppSpacing.xxl),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-              padding: const EdgeInsets.all(16),
+              width: AppSizes.emptyStateIconBox,
+              height: AppSizes.emptyStateIconBox,
               decoration: BoxDecoration(
                 color: cs.errorContainer,
                 shape: BoxShape.circle,
               ),
-              child: Icon(Icons.error_outline, color: cs.error, size: 48),
+              child: Icon(
+                Icons.error_outline,
+                color: cs.error,
+                size: AppSizes.emptyStateIcon,
+              ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.lg),
             Text(
               'Oops! Something went wrong',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                color: textPrimary,
-              ),
+              style: AppTypography.sectionTitle(context)?.copyWith(
+                    color: textPrimary,
+                  ),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpacing.sm),
             Text(
               message,
-              style: TextStyle(fontSize: 14, color: textSecondary),
+              style: AppTypography.body(context)?.copyWith(color: textSecondary),
               textAlign: TextAlign.center,
             ),
             if (onRetry != null) ...[
-              const SizedBox(height: 24),
+              const SizedBox(height: AppSpacing.xxl),
               CRMButton(
                 text: 'Try Again',
                 onPressed: onRetry,
@@ -79,11 +82,8 @@ class EmptyStateWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final textPrimary = AppThemeColors.textPrimaryColor(context);
-    final textSecondary = AppThemeColors.textSecondaryColor(context);
     final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    // Dark: primaryContainer/onPrimaryContainer often reads muddy; use a soft primary halo + primary glyph.
     final iconBg = isDark
         ? cs.primary.withValues(alpha: 0.22)
         : cs.primaryContainer;
@@ -91,13 +91,12 @@ class EmptyStateWidget extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        // Unbounded height (e.g. broken parent) + minHeight: infinity caused huge overflows.
         final minH = constraints.hasBoundedHeight && constraints.maxHeight.isFinite
             ? constraints.maxHeight
             : 0.0;
         return SingleChildScrollView(
           padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.md,
+            horizontal: AppSpacing.pagePadding,
             vertical: AppSpacing.lg,
           ),
           child: ConstrainedBox(
@@ -117,12 +116,18 @@ class EmptyStateWidget extends StatelessWidget {
                     ),
                   ),
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 32, 24, 28),
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.xxl,
+                      AppSpacing.sectionGap,
+                      AppSpacing.xxl,
+                      AppSpacing.xxl,
+                    ),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Container(
-                          padding: const EdgeInsets.all(18),
+                          width: AppSizes.emptyStateIconBox,
+                          height: AppSizes.emptyStateIconBox,
                           decoration: BoxDecoration(
                             color: iconBg,
                             shape: BoxShape.circle,
@@ -130,31 +135,29 @@ class EmptyStateWidget extends StatelessWidget {
                           child: Icon(
                             icon,
                             color: iconFg,
-                            size: 40,
+                            size: AppSizes.emptyStateIcon,
                           ),
                         ),
-                        const SizedBox(height: AppSpacing.md),
+                        const SizedBox(height: AppSpacing.lg),
                         Text(
                           title,
-                          style: tt.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
-                            color: textPrimary,
-                          ),
+                          style: AppTypography.sectionTitle(context)?.copyWith(
+                                color: textPrimary,
+                              ),
                           textAlign: TextAlign.center,
                         ),
                         if (subtitle != null) ...[
-                          const SizedBox(height: AppSpacing.xs),
+                          const SizedBox(height: AppSpacing.sm),
                           Text(
                             subtitle!,
-                            style: tt.bodyMedium?.copyWith(
-                              color: textSecondary,
-                              height: 1.4,
-                            ),
+                            style: AppTypography.bodySmall(context)?.copyWith(
+                                  height: 1.4,
+                                ),
                             textAlign: TextAlign.center,
                           ),
                         ],
                         if (buttonText != null && onButtonPressed != null) ...[
-                          const SizedBox(height: AppSpacing.lg),
+                          const SizedBox(height: AppSpacing.xxl),
                           SizedBox(
                             width: double.infinity,
                             child: CRMButton(

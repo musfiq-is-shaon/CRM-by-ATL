@@ -82,10 +82,6 @@ class _SearchableDropdownState<T> extends State<SearchableDropdown<T>>
   int _highlightedIndex = -1;
   String _searchText = '';
 
-  // Debounce timer
-  DateTime _lastSearchTime = DateTime.now();
-  static const _debounceMs = 300;
-
   @override
   void initState() {
     super.initState();
@@ -145,19 +141,13 @@ class _SearchableDropdownState<T> extends State<SearchableDropdown<T>>
   }
 
   void _onSearchChanged() {
-    final now = DateTime.now();
-    final diff = now.difference(_lastSearchTime).inMilliseconds;
-
-    if (diff >= _debounceMs) {
-      _filterItems(_searchController.text);
-    }
+    _filterItems(_searchController.text);
     if (mounted) setState(() {});
   }
 
   void _filterItems(String searchText) {
     if (!mounted) return;
     _searchText = searchText.toLowerCase();
-    _lastSearchTime = DateTime.now();
 
     setState(() {
       _filteredItems = widget.items.where((item) {
@@ -521,7 +511,11 @@ class _SearchableDropdownState<T> extends State<SearchableDropdown<T>>
                   color: widget.textColor,
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.check, size: 14, color: Colors.white),
+                child: Icon(
+                  Icons.check,
+                  size: 14,
+                  color: Theme.of(context).colorScheme.onPrimary,
+                ),
               ),
           ],
         ),
@@ -694,7 +688,7 @@ class _SearchableDropdownState<T> extends State<SearchableDropdown<T>>
             ),
             errorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Colors.red),
+              borderSide: BorderSide(color: Theme.of(context).colorScheme.error),
             ),
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 16,

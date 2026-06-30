@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import '../../../../core/services/app_haptics.dart';
 import '../../../../core/theme/app_theme_colors.dart';
+import '../../../../core/theme/design_tokens.dart';
+import '../../../widgets/crm_card.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../providers/attendance_provider.dart';
 import '../../../providers/dashboard_live_location_provider.dart';
@@ -574,7 +576,6 @@ class _TodayAttendanceCardWidgetState extends ConsumerState<TodayAttendanceCardW
     final hasLocationLines = showLocIn || showLocOut;
     final textPrimary = AppThemeColors.textPrimaryColor(context);
     final textSecondary = AppThemeColors.textSecondaryColor(context);
-    final surfaceColor = AppThemeColors.surfaceColor(context);
     final borderColor = AppThemeColors.borderColor(context);
     final cs = Theme.of(context).colorScheme;
     final statusColor = onLeaveWithoutCheckIn
@@ -597,19 +598,8 @@ class _TodayAttendanceCardWidgetState extends ConsumerState<TodayAttendanceCardW
       }
     });
 
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: surfaceColor,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
+    return CRMCard(
+      padding: const EdgeInsets.all(AppSpacing.sm),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

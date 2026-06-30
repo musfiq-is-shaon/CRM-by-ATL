@@ -1,6 +1,8 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:image_picker/image_picker.dart';
 
 /// Continuous multi-page camera capture for business cards (front, back, …).
@@ -56,7 +58,10 @@ class _BusinessCardMultiCapturePageState
 
       if (file == null) {
         setState(() => _busy = false);
-        _finish();
+        // On iOS a failed re-present can look like cancel; keep captured pages.
+        if (_pages.isEmpty) {
+          _finish();
+        }
         return;
       }
 
@@ -70,12 +75,33 @@ class _BusinessCardMultiCapturePageState
         return;
       }
 
-      await _captureNext();
+      await _scheduleNextCapture();
     } catch (_) {
       if (!mounted) return;
       setState(() => _busy = false);
-      _finish();
+      if (_pages.isEmpty) {
+        _finish();
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Could not open the camera again. Tap Capture to try the next page.',
+          ),
+        ),
+      );
     }
+  }
+
+  /// iOS UIImagePickerController must fully dismiss before it can be shown again.
+  Future<void> _scheduleNextCapture() async {
+    if (defaultTargetPlatform == TargetPlatform.iOS) {
+      await Future<void>.delayed(const Duration(milliseconds: 800));
+    } else {
+      await SchedulerBinding.instance.endOfFrame;
+    }
+    if (!mounted || _busy) return;
+    await _captureNext();
   }
 
   @override
@@ -120,8 +146,8 @@ class _BusinessCardMultiCapturePageState
               ),
               const SizedBox(height: 8),
               Text(
-                'Photograph each side of the card. The camera opens again '
-                'automatically until you cancel or reach ${widget.maxPages} pages.',
+                'Photograph each side of the card. After each shot the camera '
+                'opens again until you tap Done or reach ${widget.maxPages} pages.',
                 style: theme.textTheme.bodyMedium,
               ),
               const SizedBox(height: 20),
@@ -131,7 +157,7 @@ class _BusinessCardMultiCapturePageState
                   child: ListView.separated(
                     scrollDirection: Axis.horizontal,
                     itemCount: _pages.length,
-                    separatorBuilder: (_, __) => const SizedBox(width: 10),
+                    separatorBuilder: (_, _) => const SizedBox(width: 10),
                     itemBuilder: (context, index) {
                       return Column(
                         children: [

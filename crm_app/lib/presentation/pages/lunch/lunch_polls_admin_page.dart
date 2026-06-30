@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/theme/design_tokens.dart';
 import '../../../core/theme/app_theme_colors.dart';
 import '../../../data/models/lunch_model.dart';
 import '../../providers/lunch_provider.dart';
 import '../../widgets/crm_card.dart';
+import '../../widgets/error_widget.dart' as app_widgets;
 import '../../widgets/loading_widget.dart';
 import 'lunch_hub_chrome.dart';
 import 'lunch_poll_form_page.dart';
@@ -40,7 +42,6 @@ class _LunchPollsAdminPageState extends ConsumerState<LunchPollsAdminPage> {
     final state = ref.watch(lunchProvider);
     final textPrimary = AppThemeColors.textPrimaryColor(context);
     final textSecondary = AppThemeColors.textSecondaryColor(context);
-    final border = AppThemeColors.borderColor(context);
     final primary = Theme.of(context).colorScheme.primary;
 
     return RefreshIndicator(
@@ -59,17 +60,21 @@ class _LunchPollsAdminPageState extends ConsumerState<LunchPollsAdminPage> {
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppSpacing.md),
           if (state.status == LunchLoadStatus.loading && state.adminPolls.isEmpty)
-            const LoadingWidget(message: 'Loading polls…')
+            const ListSkeletonLoader(itemCount: 4, shrinkWrap: true)
           else if (state.adminPolls.isEmpty)
-            CRMCard(
-              child: Text('No polls yet', style: TextStyle(color: textSecondary)),
+            app_widgets.EmptyStateWidget(
+              title: 'No polls yet',
+              subtitle: 'Create your first lunch poll for the team',
+              icon: Icons.poll_outlined,
+              buttonText: 'Create poll',
+              onButtonPressed: () => showLunchPollFormSheet(context, ref),
             )
           else
             ...state.adminPolls.map(
               (poll) => Padding(
-                padding: const EdgeInsets.only(bottom: 8),
+                padding: AppThemeColors.cardListItemMargin,
                 child: CRMCard(
                   onTap: () => showLunchPollFormSheet(context, ref, existing: poll),
                   child: Column(
@@ -128,16 +133,36 @@ class _LunchPollsAdminPageState extends ConsumerState<LunchPollsAdminPage> {
                               } else if (v == 'close' && poll.isVotingOpen) {
                                 await ref.read(lunchProvider.notifier).closePoll(poll.id);
                                 await _load();
+                              } else if (v == 'votes') {
+                                showLunchPollVotesSheet(context, poll);
                               }
                             },
                             itemBuilder: (_) => [
                               const PopupMenuItem(value: 'edit', child: Text('Edit')),
+                              if (poll.totalVoteCount > 0)
+                                const PopupMenuItem(value: 'votes', child: Text('View votes')),
                               if (poll.isVotingOpen)
                                 const PopupMenuItem(value: 'close', child: Text('Close poll')),
                             ],
                           ),
                         ],
                       ),
+                      if (poll.mergedOptions.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        LunchPollVoteBreakdown(poll: poll),
+                        if (poll.totalVoteCount > 0)
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: TextButton.icon(
+                              onPressed: () => showLunchPollVotesSheet(context, poll),
+                              icon: Icon(Icons.people_outline, size: 16, color: primary),
+                              label: Text(
+                                'View all votes',
+                                style: TextStyle(color: primary, fontSize: 13),
+                              ),
+                            ),
+                          ),
+                      ],
                     ],
                   ),
                 ),

@@ -204,7 +204,12 @@ class _LeaveBalancesPageState extends ConsumerState<LeaveBalancesPage> {
           ),
           if (_error != null) ...[
             const SizedBox(height: 16),
-            Text(_error!, style: TextStyle(color: Colors.red.shade700)),
+            Text(
+              _error!,
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.error,
+              ),
+            ),
           ],
           if (_result != null && _result!.balances.isEmpty) ...[
             const SizedBox(height: 24),

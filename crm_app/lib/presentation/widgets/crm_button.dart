@@ -1,41 +1,52 @@
 import 'package:flutter/material.dart';
 
+import '../../core/theme/design_tokens.dart';
+
 enum CRMButtonType { primary, secondary, text, danger }
+
+enum CRMButtonSize { normal, large, small }
 
 class CRMButton extends StatelessWidget {
   final String text;
   final VoidCallback? onPressed;
   final CRMButtonType type;
+  final CRMButtonSize size;
   final bool isLoading;
   final bool isFullWidth;
   final IconData? icon;
   final double? width;
-  final double height;
 
   const CRMButton({
     super.key,
     required this.text,
     this.onPressed,
     this.type = CRMButtonType.primary,
+    this.size = CRMButtonSize.normal,
     this.isLoading = false,
     this.isFullWidth = false,
     this.icon,
     this.width,
-    this.height = 50,
   });
+
+  double get _height => switch (size) {
+        CRMButtonSize.large => AppSizes.buttonHeightLarge,
+        CRMButtonSize.small => AppSizes.buttonHeightSmall,
+        CRMButtonSize.normal => AppSizes.buttonHeight,
+      };
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return SizedBox(
       width: isFullWidth ? double.infinity : width,
-      height: height,
+      height: _height,
       child: _buildButton(context, cs),
     );
   }
 
   Widget _buildButton(BuildContext context, ColorScheme cs) {
-    final radius = BorderRadius.circular(14);
+    final radius = BorderRadius.circular(AppRadius.md);
+    final textStyle = AppTypography.button(context);
     switch (type) {
       case CRMButtonType.primary:
         return FilledButton(
@@ -43,11 +54,15 @@ class CRMButton extends StatelessWidget {
           style: FilledButton.styleFrom(
             backgroundColor: cs.primary,
             foregroundColor: cs.onPrimary,
+            disabledBackgroundColor: cs.onSurface.withValues(alpha: 0.12),
+            disabledForegroundColor: cs.onSurface.withValues(alpha: 0.38),
             elevation: 0,
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+            minimumSize: Size(64, _height),
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
             shape: RoundedRectangleBorder(borderRadius: radius),
+            textStyle: textStyle,
           ),
-          child: _buildChild(cs.onPrimary),
+          child: _buildChild(context, cs.onPrimary),
         );
       case CRMButtonType.secondary:
         return OutlinedButton(
@@ -55,17 +70,23 @@ class CRMButton extends StatelessWidget {
           style: OutlinedButton.styleFrom(
             foregroundColor: cs.primary,
             backgroundColor: cs.surfaceContainerHighest,
-            side: BorderSide(color: cs.outline),
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+            side: BorderSide(color: cs.outline.withValues(alpha: 0.65)),
+            minimumSize: Size(64, _height),
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
             shape: RoundedRectangleBorder(borderRadius: radius),
+            textStyle: textStyle,
           ),
-          child: _buildChild(cs.primary),
+          child: _buildChild(context, cs.primary),
         );
       case CRMButtonType.text:
         return TextButton(
           onPressed: isLoading ? null : onPressed,
-          style: TextButton.styleFrom(foregroundColor: cs.primary),
-          child: _buildChild(cs.primary),
+          style: TextButton.styleFrom(
+            foregroundColor: cs.primary,
+            minimumSize: Size(48, _height),
+            textStyle: textStyle,
+          ),
+          child: _buildChild(context, cs.primary),
         );
       case CRMButtonType.danger:
         return FilledButton(
@@ -74,34 +95,42 @@ class CRMButton extends StatelessWidget {
             backgroundColor: cs.error,
             foregroundColor: cs.onError,
             elevation: 0,
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+            minimumSize: Size(64, _height),
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
             shape: RoundedRectangleBorder(borderRadius: radius),
+            textStyle: textStyle,
           ),
-          child: _buildChild(cs.onError),
+          child: _buildChild(context, cs.onError),
         );
     }
   }
 
-  Widget _buildChild(Color foreground) {
+  Widget _buildChild(BuildContext context, Color foreground) {
     if (isLoading) {
       return SizedBox(
         width: 22,
         height: 22,
         child: CircularProgressIndicator(
-          strokeWidth: 2,
+          strokeWidth: 2.5,
           valueColor: AlwaysStoppedAnimation<Color>(foreground),
         ),
       );
     }
 
+    final labelStyle = AppTypography.button(context)?.copyWith(color: foreground);
+
     if (icon != null) {
       return Row(
         mainAxisSize: MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.center,
-        children: [Icon(icon, size: 20), const SizedBox(width: 8), Text(text)],
+        children: [
+          Icon(icon, size: AppSizes.iconChipIcon),
+          const SizedBox(width: AppSpacing.sm),
+          Text(text, style: labelStyle),
+        ],
       );
     }
 
-    return Text(text);
+    return Text(text, style: labelStyle);
   }
 }

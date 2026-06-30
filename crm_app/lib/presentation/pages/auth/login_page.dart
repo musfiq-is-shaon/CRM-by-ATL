@@ -4,8 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/network/storage_service.dart';
 import '../../../core/theme/app_theme_colors.dart';
+import '../../../core/theme/design_tokens.dart';
 import '../../providers/auth_provider.dart';
 import '../../widgets/crm_button.dart';
+import '../../widgets/crm_card.dart';
 import '../../widgets/crm_text_field.dart';
 import 'forgot_password_page.dart';
 
@@ -238,89 +240,85 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const SizedBox(height: 48),
+                    const SizedBox(height: 32),
                     Center(
-                      child: Column(
-                        children: [
-                          Container(
-                            width: 80,
-                            height: 80,
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [
-                                  colorScheme.primary,
-                                  colorScheme.primary.withValues(alpha: 0.8),
-                                ],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
+                      child: Container(
+                        width: double.infinity,
+                        constraints: const BoxConstraints(maxWidth: 420),
+                        padding: const EdgeInsets.all(AppSpacing.lg),
+                        decoration: AppThemeColors.heroSurface(context),
+                        child: Column(
+                          children: [
+                            Container(
+                              width: 72,
+                              height: 72,
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [
+                                    colorScheme.primary,
+                                    colorScheme.primary.withValues(alpha: 0.82),
+                                  ],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                borderRadius: BorderRadius.circular(AppRadius.lg),
+                                boxShadow: AppElevation.cardLight,
                               ),
-                              borderRadius: BorderRadius.circular(20),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: colorScheme.primary.withValues(alpha: 0.3),
-                                  blurRadius: 20,
-                                  offset: const Offset(0, 10),
-                                ),
-                              ],
+                              child: Icon(
+                                Icons.dashboard_rounded,
+                                color: colorScheme.onPrimary,
+                                size: 36,
+                              ),
                             ),
-                            child: Icon(
-                              Icons.dashboard_rounded,
-                              color: colorScheme.onPrimary,
-                              size: 40,
+                            const SizedBox(height: AppSpacing.md),
+                            Text(
+                              'CRM',
+                              style: AppTypography.pageTitle(context)?.copyWith(
+                                    color: textPrimary,
+                                  ),
                             ),
-                          ),
-                          const SizedBox(height: 24),
-                          Text(
-                            'CRM',
-                            style:
-                                textTheme.headlineLarge?.copyWith(
-                                  color: textPrimary,
-                                ) ??
-                                TextStyle(
-                                  fontSize: 28,
-                                  fontWeight: FontWeight.bold,
-                                  color: textPrimary,
-                                ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Welcome back! Please login to continue',
-                            style:
-                                textTheme.bodySmall?.copyWith(
-                                  color: textSecondary,
-                                ) ??
-                                TextStyle(fontSize: 14, color: textSecondary),
-                          ),
-                        ],
+                            const SizedBox(height: AppSpacing.xs),
+                            Text(
+                              'Sign in to your workspace',
+                              style: textTheme.bodySmall?.copyWith(
+                                color: textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 48),
-                    CRMTextField(
-                      label: 'Email',
-                      hint: 'Enter your email',
-                      controller: _emailController,
-                      focusNode: _emailFocus,
-                      keyboardType: TextInputType.emailAddress,
-                      textInputAction: TextInputAction.next,
-                      prefixIcon: const Icon(Icons.email_outlined),
-                      disableAutofill: true,
-                      onTap: _onEmailTap,
-                      onChanged: (_) {
-                        setState(() => _skipSavedPickerOnNextEmailTap = false);
-                        _onCredentialsChanged();
-                      },
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Please enter your email';
-                        }
-                        if (!value.contains('@')) {
-                          return 'Please enter a valid email';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 20),
-                    CRMTextField(
+                    const SizedBox(height: AppSpacing.xl),
+                    CRMCard(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          CRMTextField(
+                            label: 'Email',
+                            hint: 'Enter your email',
+                            controller: _emailController,
+                            focusNode: _emailFocus,
+                            keyboardType: TextInputType.emailAddress,
+                            textInputAction: TextInputAction.next,
+                            prefixIcon: const Icon(Icons.email_outlined),
+                            disableAutofill: true,
+                            onTap: _onEmailTap,
+                            onChanged: (_) {
+                              setState(() => _skipSavedPickerOnNextEmailTap = false);
+                              _onCredentialsChanged();
+                            },
+                            validator: (value) {
+                              if (value == null || value.isEmpty) {
+                                return 'Please enter your email';
+                              }
+                              if (!value.contains('@')) {
+                                return 'Please enter a valid email';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 20),
+                          CRMTextField(
                       label: 'Password',
                       hint: 'Enter your password',
                       controller: _passwordController,
@@ -456,6 +454,9 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                       isFullWidth: true,
                       isLoading: authState.status == AuthStatus.loading,
                       onPressed: _handleLogin,
+                    ),
+                        ],
+                      ),
                     ),
                   ],
                 ),

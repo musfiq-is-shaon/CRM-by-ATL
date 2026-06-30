@@ -29,15 +29,15 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>CRM uses the camera to scan business cards and attach photos.</string>
+	<string>CRM uses the camera to photograph business cards for contact scanning and to capture images you attach to records.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>CRM uses your location for attendance check-in and check-out.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>CRM uses your location for attendance check-in and check-out.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>CRM needs microphone access when you record a video attachment.</string>
+	<string>CRM needs microphone access only when you record a video attachment from the camera.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>CRM needs photo library access so you can attach files to leave requests.</string>
+	<string>CRM needs photo library access to import business card images and to attach photos or documents to leave requests, sales orders, and other records.</string>
 	<key>NSUserTrackingUsageDescription</key>
 	<string>This lets CRM use the advertising identifier only for measurement and compatibility with optional analytics, in line with your App Store privacy choices. It is not used for attendance location.</string>
 	<key>UIApplicationSceneManifest</key>

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme_colors.dart';
+import '../../../core/theme/design_tokens.dart';
 import '../../../data/repositories/user_repository.dart';
 import '../../../data/models/user_model.dart';
 import '../../providers/shift_provider.dart';
@@ -97,12 +98,12 @@ class UsersPage extends ConsumerWidget {
                 await ref.read(userShiftTimingsProvider.future);
               },
               child: ListView.builder(
-                padding: AppThemeColors.pagePaddingAll,
+                padding: AppThemeColors.listPagePadding,
                 itemCount: users.length,
                 itemBuilder: (context, index) {
                   final user = users[index];
                   return Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
+                    padding: AppThemeColors.cardListItemMargin,
                     child: CRMCard(
                       onTap: () {
                         _showUserDetailsDialog(
@@ -119,7 +120,7 @@ class UsersPage extends ConsumerWidget {
                       child: Row(
                         children: [
                           AvatarWidget(name: user.name, size: 50),
-                          const SizedBox(width: 12),
+                          const SizedBox(width: AppSpacing.sm),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/rbac_page_keys.dart';
 import '../../../core/theme/app_theme_colors.dart';
+import '../../../core/theme/design_tokens.dart';
 import '../../../data/models/contact_model.dart';
 import '../../../core/utils/business_card_ocr_canonical.dart';
 import '../../providers/contact_provider.dart';
@@ -12,6 +13,7 @@ import '../../providers/company_provider.dart';
 import '../../providers/currency_provider.dart';
 import '../../providers/user_provider.dart';
 import '../../widgets/crm_card.dart';
+import '../../widgets/app_section_header.dart';
 import '../../widgets/loading_widget.dart';
 import '../../widgets/searchable_dropdown.dart';
 import '../../widgets/create_company_dialog.dart';
@@ -37,7 +39,7 @@ class ContactDetailPage extends ConsumerWidget {
 
     final bgColor = AppThemeColors.backgroundColor(context);
     final textPrimary = AppThemeColors.textPrimaryColor(context);
-            final textSecondary = AppThemeColors.textSecondaryColor(context);
+    final textSecondary = AppThemeColors.textSecondaryColor(context);
     final primaryColor = Theme.of(context).colorScheme.primary;
     final errorColor = Theme.of(context).colorScheme.error;
 
@@ -75,33 +77,38 @@ class ContactDetailPage extends ConsumerWidget {
         ],
       ),
       body: contact == null
-          ? const Center(child: LoadingWidget())
+          ? ListView(
+              padding: AppThemeColors.pagePaddingAll,
+              children: const [
+                ShimmerCard(height: 160),
+                SizedBox(height: AppSpacing.lg),
+                ShimmerCard(height: 56),
+                SizedBox(height: AppSpacing.lg),
+                ShimmerCard(height: 180),
+              ],
+            )
           : SingleChildScrollView(
               padding: AppThemeColors.pagePaddingAll,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Contact Header
-                  CRMCard(
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(AppSpacing.lg),
+                    decoration: AppThemeColors.heroSurface(context),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        CircleAvatar(
-                          radius: 40,
-                          backgroundColor: primaryColor.withValues(alpha: 0.1),
-                          child: Text(
-                            contact.name.isNotEmpty
-                                ? contact.name[0].toUpperCase()
-                                : '?',
-                            style: TextStyle(
-                              fontSize: 32,
-                              fontWeight: FontWeight.bold,
-                              color: primaryColor,
-                            ),
-                          ),
+                        AppThemeColors.iconChip(
+                          context,
+                          icon: Icons.person_outline,
+                          accent: primaryColor,
+                          size: 64,
+                          iconSize: 32,
                         ),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: AppSpacing.md),
                         Text(
                           contact.name,
                           textAlign: TextAlign.center,
@@ -111,16 +118,16 @@ class ContactDetailPage extends ConsumerWidget {
                             color: textPrimary,
                           ),
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: AppSpacing.xs),
                         // Designation with consistent display
                         Container(
                           padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
+                            horizontal: AppSpacing.sm,
+                            vertical: AppSpacing.xxs + 2,
                           ),
                           decoration: BoxDecoration(
                             color: primaryColor.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(20),
+                            borderRadius: BorderRadius.circular(AppRadius.full),
                           ),
                           child: Text(
                             contact.designation ?? 'No Designation',
@@ -134,7 +141,7 @@ class ContactDetailPage extends ConsumerWidget {
                             ),
                           ),
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: AppSpacing.xs),
                         // Company with icon
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -144,7 +151,7 @@ class ContactDetailPage extends ConsumerWidget {
                               size: 16,
                               color: textSecondary,
                             ),
-                            const SizedBox(width: 4),
+                            const SizedBox(width: AppSpacing.xxs),
                             Flexible(
                               child: Text(
                                 companyName ?? 'No Company',
@@ -164,7 +171,7 @@ class ContactDetailPage extends ConsumerWidget {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: AppSpacing.lg),
 
                   // Quick Actions
                   Row(
@@ -180,7 +187,7 @@ class ContactDetailPage extends ConsumerWidget {
                               : null,
                         ),
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: AppSpacing.sm),
                       Expanded(
                         child: _ActionButton(
                           icon: Icons.email,
@@ -194,19 +201,11 @@ class ContactDetailPage extends ConsumerWidget {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: AppSpacing.lg),
 
                   // Contact Info
-                  Text(
-                    'Contact Information',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      color: textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
+                  AppSectionHeader(title: 'Contact Information'),
+                  const SizedBox(height: AppSpacing.sm),
                   CRMCard(
                     child: Column(
                       children: [
@@ -242,7 +241,9 @@ class ContactDetailPage extends ConsumerWidget {
                             contact.mobile == null &&
                             companyName == null)
                           Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            padding: const EdgeInsets.symmetric(
+                              vertical: AppSpacing.md,
+                            ),
                             child: Text(
                               'No contact information available',
                               style: TextStyle(
@@ -308,18 +309,18 @@ class ContactDetailPage extends ConsumerWidget {
     Color textSecondary,
   ) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(8),
+            padding: const EdgeInsets.all(AppSpacing.xs),
             decoration: BoxDecoration(
               color: primaryColor.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(AppRadius.sm),
             ),
             child: Icon(icon, color: primaryColor, size: 20),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: AppSpacing.md),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -383,17 +384,17 @@ class _ActionButton extends StatelessWidget {
         enabled ? cs.onPrimary : cs.onSurface.withValues(alpha: 0.45);
     return Material(
       color: bg,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(AppRadius.md),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppRadius.md),
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 16),
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(icon, color: fg, size: 20),
-              const SizedBox(width: 8),
+              const SizedBox(width: AppSpacing.xs),
               Text(
                 label,
                 style: TextStyle(
@@ -481,6 +482,7 @@ class _ContactFormPageState extends ConsumerState<ContactFormPage> {
       initialLocation: initialLocation,
     );
     if (result != null && result.isNotEmpty && mounted) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
       setState(() {
         _selectedCompanyId = result;
         _ocrCompanySuggestion = null;
@@ -519,6 +521,7 @@ class _ContactFormPageState extends ConsumerState<ContactFormPage> {
         .join(', ');
 
     if (matchedId == null && card.companyName != null) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -527,11 +530,17 @@ class _ContactFormPageState extends ConsumerState<ContactFormPage> {
           duration: const Duration(seconds: 5),
           action: SnackBarAction(
             label: 'Create',
-            onPressed: () => _showCreateCompanyDialog(
-              context,
-              initialName: card.companyName,
-              initialLocation: card.companyLocation,
-            ),
+            onPressed: () {
+              ScaffoldMessenger.of(context).hideCurrentSnackBar();
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (!mounted) return;
+                _showCreateCompanyDialog(
+                  context,
+                  initialName: card.companyName,
+                  initialLocation: card.companyLocation,
+                );
+              });
+            },
           ),
         ),
       );
@@ -670,14 +679,14 @@ class _ContactFormPageState extends ConsumerState<ContactFormPage> {
                     _selectedCompanyId == null) ...[
                   Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.all(12),
-                    margin: const EdgeInsets.only(bottom: 16),
+                    padding: const EdgeInsets.all(AppSpacing.sm),
+                    margin: const EdgeInsets.only(bottom: AppSpacing.md),
                     decoration: BoxDecoration(
                       color: Theme.of(context)
                           .colorScheme
                           .tertiaryContainer
                           .withValues(alpha: 0.5),
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(AppRadius.md),
                     ),
                     child: Row(
                       children: [
@@ -686,7 +695,7 @@ class _ContactFormPageState extends ConsumerState<ContactFormPage> {
                           size: 20,
                           color: Theme.of(context).colorScheme.tertiary,
                         ),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: AppSpacing.xs),
                         Expanded(
                           child: Text(
                             'OCR company: $_ocrCompanySuggestion — select or create below.',
@@ -695,6 +704,26 @@ class _ContactFormPageState extends ConsumerState<ContactFormPage> {
                               color: textSecondary,
                             ),
                           ),
+                        ),
+                        IconButton(
+                          tooltip: 'Dismiss',
+                          visualDensity: VisualDensity.compact,
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(
+                            minWidth: 32,
+                            minHeight: 32,
+                          ),
+                          icon: Icon(
+                            Icons.close,
+                            size: 18,
+                            color: textSecondary,
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              _ocrCompanySuggestion = null;
+                              _ocrCompanyLocationSuggestion = null;
+                            });
+                          },
                         ),
                       ],
                     ),
@@ -717,7 +746,7 @@ class _ContactFormPageState extends ConsumerState<ContactFormPage> {
                     return null;
                   },
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: AppSpacing.md),
 
                 // Company Dropdown (Required)
                 Consumer(
@@ -764,7 +793,7 @@ class _ContactFormPageState extends ConsumerState<ContactFormPage> {
                     );
                   },
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: AppSpacing.md),
 
                 // Designation Field
                 TextFormField(
@@ -777,7 +806,7 @@ class _ContactFormPageState extends ConsumerState<ContactFormPage> {
                     hintStyle: TextStyle(color: textSecondary.withValues(alpha: 0.6)),
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: AppSpacing.md),
 
                 // Mobile Field
                 TextFormField(
@@ -791,7 +820,7 @@ class _ContactFormPageState extends ConsumerState<ContactFormPage> {
                   ),
                   keyboardType: TextInputType.phone,
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: AppSpacing.md),
 
                 // Email Field
                 TextFormField(
@@ -805,7 +834,7 @@ class _ContactFormPageState extends ConsumerState<ContactFormPage> {
                   ),
                   keyboardType: TextInputType.emailAddress,
                 ),
-                const SizedBox(height: 32),
+                const SizedBox(height: AppSpacing.xl),
               ],
             ),
           ),

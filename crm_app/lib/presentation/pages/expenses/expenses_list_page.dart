@@ -445,7 +445,10 @@ class _ExpensesListPageState extends ConsumerState<ExpensesListPage>
     final expenseIconTonal = AppThemeColors.tonalForAccent(context, primaryColor);
 
     if (state.isLoading) {
-      return const LoadingWidget();
+      return const ListSkeletonLoader(
+        itemCount: 8,
+        padding: AppThemeColors.pagePaddingHorizontal,
+      );
     }
 
     if (state.error != null) {
@@ -477,12 +480,12 @@ class _ExpensesListPageState extends ConsumerState<ExpensesListPage>
     return RefreshIndicator(
       onRefresh: () => ref.read(expensesProvider.notifier).loadExpenses(),
       child: ListView.builder(
-        padding: AppThemeColors.pagePaddingAll,
+        padding: AppThemeColors.listPagePadding,
         itemCount: expenses.length,
         itemBuilder: (context, index) {
           final expense = expenses[index];
           return Padding(
-            padding: const EdgeInsets.only(bottom: 12),
+            padding: AppThemeColors.cardListItemMargin,
             child: CRMCard(
               onTap: () {
                 Navigator.push(

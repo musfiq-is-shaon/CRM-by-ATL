@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/rbac_page_keys.dart';
 import '../../../core/theme/app_theme_colors.dart';
+import '../../../core/theme/design_tokens.dart';
 import '../../../data/models/company_model.dart';
 import '../../providers/contact_provider.dart';
 import '../../providers/rbac_provider.dart'
@@ -51,8 +52,6 @@ class _ContactsListPageState extends ConsumerState<ContactsListPage> {
 
     final bgColor = AppThemeColors.backgroundColor(context);
     final textPrimary = AppThemeColors.textPrimaryColor(context);
-    final textSecondary = AppThemeColors.textSecondaryColor(context);
-    final textTertiary = AppThemeColors.textTertiaryColor(context);
     final cs = Theme.of(context).colorScheme;
     final primaryColor = cs.primary;
     final secondaryColor = cs.tertiary;
@@ -93,7 +92,10 @@ class _ContactsListPageState extends ConsumerState<ContactsListPage> {
           ),
           Expanded(
             child: contactsState.isLoading
-                ? const LoadingWidget()
+                ? const ListSkeletonLoader(
+                    itemCount: 8,
+                    padding: AppThemeColors.pagePaddingHorizontal,
+                  )
                 : contactsState.filteredContacts.isEmpty
                 ? app_widgets.EmptyStateWidget(
                     title: 'No contacts found',
@@ -106,7 +108,7 @@ class _ContactsListPageState extends ConsumerState<ContactsListPage> {
                     onRefresh: () =>
                         ref.read(contactsProvider.notifier).loadContacts(),
                     child: ListView.builder(
-                      padding: AppThemeColors.pagePaddingHorizontal,
+                      padding: AppThemeColors.listPagePadding,
                       itemCount: contactsState.filteredContacts.length,
                       itemBuilder: (context, index) {
                         final contact = contactsState.filteredContacts[index];
@@ -114,8 +116,12 @@ class _ContactsListPageState extends ConsumerState<ContactsListPage> {
                           companiesState.companies,
                         );
                         return Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
+                          padding: AppThemeColors.cardListItemMargin,
                           child: CRMCard(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.cardPadding,
+                              vertical: AppSpacing.md,
+                            ),
                             onTap: () {
                               Navigator.push(
                                 context,
@@ -126,63 +132,73 @@ class _ContactsListPageState extends ConsumerState<ContactsListPage> {
                               );
                             },
                             child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.center,
                               children: [
-                                AvatarWidget(name: contact.name, size: 50),
-                                const SizedBox(width: 12),
+                                AvatarWidget(
+                                  name: contact.name,
+                                  size: AppSizes.iconChip,
+                                ),
+                                const SizedBox(width: AppSpacing.md),
                                 Expanded(
                                   child: Column(
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
+                                    mainAxisSize: MainAxisSize.min,
                                     children: [
                                       Text(
                                         contact.name,
-                                        style: TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w600,
-                                          color: textPrimary,
-                                        ),
+                                        style: AppTypography.cardTitle(context)
+                                            ?.copyWith(color: textPrimary),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
                                       ),
-                                      const SizedBox(height: 4),
-                                      if (contact.designation != null)
+                                      if (contact.designation != null &&
+                                          contact.designation!.isNotEmpty) ...[
+                                        const SizedBox(height: AppSpacing.xs),
                                         Text(
                                           contact.designation!,
-                                          style: TextStyle(
-                                            fontSize: 14,
-                                            color: textSecondary,
-                                          ),
+                                          style: AppTypography.bodySmall(context),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
                                         ),
-                                      if (companyName != null)
+                                      ],
+                                      if (companyName != null) ...[
+                                        const SizedBox(height: AppSpacing.xs),
                                         Text(
                                           companyName,
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: textTertiary,
-                                          ),
+                                          style: AppTypography.caption(context),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
                                         ),
+                                      ],
                                     ],
                                   ),
                                 ),
-
-                                Column(
-                                  children: [
-                                    if (contact.mobile != null)
-                                      IconButton(
-                                        icon: const Icon(Icons.phone_outlined),
-                                        color: primaryColor,
-                                        iconSize: 20,
-                                        onPressed: () =>
-                                            _makeCall(contact.mobile!),
-                                      ),
-                                    if (contact.email != null)
-                                      IconButton(
-                                        icon: const Icon(Icons.email_outlined),
-                                        color: secondaryColor,
-                                        iconSize: 20,
-                                        onPressed: () =>
-                                            _sendEmail(contact.email!),
-                                      ),
-                                  ],
-                                ),
+                                if (contact.mobile != null ||
+                                    contact.email != null) ...[
+                                  const SizedBox(width: AppSpacing.xs),
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      if (contact.mobile != null)
+                                        _ContactActionIcon(
+                                          icon: Icons.phone_outlined,
+                                          color: primaryColor,
+                                          tooltip: 'Call',
+                                          onPressed: () =>
+                                              _makeCall(contact.mobile!),
+                                        ),
+                                      if (contact.email != null)
+                                        _ContactActionIcon(
+                                          icon: Icons.email_outlined,
+                                          color: secondaryColor,
+                                          tooltip: 'Email',
+                                          onPressed: () =>
+                                              _sendEmail(contact.email!),
+                                        ),
+                                    ],
+                                  ),
+                                ],
                               ],
                             ),
                           ),
@@ -359,5 +375,35 @@ class _ContactsListPageState extends ConsumerState<ContactsListPage> {
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri);
     }
+  }
+}
+
+class _ContactActionIcon extends StatelessWidget {
+  const _ContactActionIcon({
+    required this.icon,
+    required this.color,
+    required this.tooltip,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final Color color;
+  final String tooltip;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      tooltip: tooltip,
+      icon: Icon(icon, size: AppSizes.iconChipIcon),
+      color: color,
+      visualDensity: VisualDensity.compact,
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(
+        minWidth: 36,
+        minHeight: 36,
+      ),
+      onPressed: onPressed,
+    );
   }
 }

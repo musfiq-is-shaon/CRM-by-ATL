@@ -4,12 +4,16 @@ import 'package:intl/intl.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/theme/app_theme_colors.dart';
+import '../../../core/theme/design_tokens.dart';
 import '../../../data/models/leave_model.dart';
 import '../../../data/repositories/leave_repository.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/rbac_provider.dart' show leaveManagementElevatedProvider;
 import '../../providers/leave_provider.dart';
 import '../../widgets/crm_card.dart';
+import '../../widgets/error_widget.dart' as app_widgets;
+import '../../widgets/loading_widget.dart';
+import '../../widgets/status_badge.dart';
 import 'leave_edit_page.dart';
 
 class LeaveDetailPage extends ConsumerStatefulWidget {
@@ -91,7 +95,7 @@ class _LeaveDetailPageState extends ConsumerState<LeaveDetailPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(e.toString().replaceFirst('Exception: ', '')),
-            backgroundColor: Colors.red.shade700,
+            backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
       }
@@ -146,7 +150,7 @@ class _LeaveDetailPageState extends ConsumerState<LeaveDetailPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(e.toString().replaceFirst('Exception: ', '')),
-            backgroundColor: Colors.red.shade700,
+            backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
       }
@@ -350,23 +354,18 @@ class _LeaveDetailPageState extends ConsumerState<LeaveDetailPage> {
         ],
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? ListView(
+              padding: AppThemeColors.listPagePadding,
+              children: const [
+                ShimmerCard(height: 76),
+                SizedBox(height: AppSpacing.sm),
+                ShimmerCard(height: 280),
+              ],
+            )
           : _loadError != null
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(_loadError!, textAlign: TextAlign.center),
-                        const SizedBox(height: 16),
-                        FilledButton(
-                          onPressed: _load,
-                          child: const Text('Retry'),
-                        ),
-                      ],
-                    ),
-                  ),
+              ? app_widgets.ErrorWidget(
+                  message: _loadError!,
+                  onRetry: _load,
                 )
               : _buildBody(
                   context,
@@ -431,36 +430,10 @@ class _LeaveDetailPageState extends ConsumerState<LeaveDetailPage> {
                       ),
                     ),
                   ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: (approved
-                              ? Colors.green
-                              : rejected
-                                  ? Colors.red
-                                  : Theme.of(context).colorScheme.secondary)
-                          .withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text(
-                      _prettyStatus(entry.status),
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: approved
-                            ? Colors.green.shade800
-                            : rejected
-                                ? Colors.red.shade800
-                                : textSecondary,
-                      ),
-                    ),
-                  ),
+                  StatusBadge(status: entry.status, type: 'leave'),
                 ],
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpacing.xs),
               Text(
                 _dateLine(entry),
                 style: TextStyle(fontSize: 13, color: textSecondary),
@@ -468,20 +441,18 @@ class _LeaveDetailPageState extends ConsumerState<LeaveDetailPage> {
             ],
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppSpacing.sm),
         CRMCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 'Details',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: textSecondary,
-                ),
+                style: AppTypography.sectionTitle(context)?.copyWith(
+                      color: textSecondary,
+                    ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpacing.sm),
               _field('Leave Type', typeLabel, textPrimary, textSecondary),
               _divider(borderColor),
               _field('Status', _prettyStatus(entry.status), textPrimary, textSecondary),
@@ -599,7 +570,7 @@ class _LeaveDetailPageState extends ConsumerState<LeaveDetailPage> {
             ],
           ),
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: AppSpacing.lg),
         if (canEdit)
           FilledButton.icon(
             onPressed: () async {
@@ -615,7 +586,7 @@ class _LeaveDetailPageState extends ConsumerState<LeaveDetailPage> {
             label: const Text('Edit request'),
           ),
         if (showApproveReject) ...[
-          if (canEdit) const SizedBox(height: 12),
+          if (canEdit) const SizedBox(height: AppSpacing.sm),
           Row(
             children: [
               Expanded(
@@ -624,7 +595,7 @@ class _LeaveDetailPageState extends ConsumerState<LeaveDetailPage> {
                   child: const Text('Reject'),
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: AppSpacing.sm),
               Expanded(
                 child: FilledButton(
                   onPressed: _onApprove,
@@ -640,7 +611,7 @@ class _LeaveDetailPageState extends ConsumerState<LeaveDetailPage> {
 
   Widget _divider(Color borderColor) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
       child: Divider(height: 1, thickness: 1, color: borderColor),
     );
   }

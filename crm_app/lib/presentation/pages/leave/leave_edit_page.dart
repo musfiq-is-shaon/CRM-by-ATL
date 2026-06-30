@@ -239,7 +239,7 @@ class _LeaveEditPageState extends ConsumerState<LeaveEditPage> {
         messenger.showSnackBar(
           SnackBar(
             content: Text(e.toString().replaceFirst('Exception: ', '')),
-            backgroundColor: Colors.red.shade700,
+            backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
       }

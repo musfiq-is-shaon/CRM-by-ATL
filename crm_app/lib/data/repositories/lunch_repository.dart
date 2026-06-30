@@ -76,8 +76,7 @@ class LunchRepository {
 
   Future<LunchPoll> _ensurePollOptions(LunchPoll poll) async {
     if (poll.id.isEmpty) return poll;
-    if (poll.mergedOptions.isNotEmpty && poll.totalVoteCount > 0) return poll;
-    return _hydratePoll(poll);
+    return _hydratePollWithVoteTotal(poll);
   }
 
   Future<List<LunchPoll>> listPollsHydrated({
@@ -95,15 +94,14 @@ class LunchRepository {
 
   Future<LunchPoll> _hydratePollWithVoteTotal(LunchPoll poll) async {
     var hydrated = await _hydratePoll(poll);
-    if (hydrated.id.isEmpty || hydrated.totalVoteCount > 0) return hydrated;
+    if (hydrated.id.isEmpty) return hydrated;
+    if (hydrated.hasPerOptionVotes) return hydrated;
     try {
       final summary = await getPollSummary(hydrated.id, poll: hydrated);
-      if (summary.totalVotes > 0) {
-        hydrated = LunchPoll.merge(summary.poll, hydrated)
-            .withReportedTotalVotes(summary.totalVotes);
-      } else {
-        hydrated = LunchPoll.merge(summary.poll, hydrated);
-      }
+      hydrated = LunchPoll.merge(summary.poll, hydrated).withVoteSummary(
+        breakdown: summary.menuBreakdown,
+        totalVotes: summary.totalVotes,
+      );
     } catch (_) {}
     return hydrated;
   }
@@ -126,9 +124,39 @@ class LunchRepository {
         .toList();
   }
 
+  /// Lightweight poll list for pickers — one list request + today's bundle, no per-poll hydration.
+  Future<List<LunchPoll>> fetchPollPickerList({
+    required DateTime from,
+    required DateTime to,
+  }) async {
+    final results = await Future.wait([
+      listPolls(from: from, to: to),
+      getTodayPolls(),
+    ]);
+    final listed = results[0] as List<LunchPoll>;
+    final today = (results[1] as LunchTodayBundle).items;
+
+    final byId = <String, LunchPoll>{};
+    for (final poll in [...today, ...listed]) {
+      if (poll.id.isNotEmpty) byId[poll.id] = poll;
+    }
+
+    final polls = byId.values.toList()
+      ..sort((a, b) {
+        final ad = a.date ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final bd = b.date ?? DateTime.fromMillisecondsSinceEpoch(0);
+        return bd.compareTo(ad);
+      });
+    return polls;
+  }
+
   Future<LunchPoll> getPoll(String pollId) async {
     final response = await _api.get(AppConstants.lunchPollById(pollId));
     return LunchPoll.fromJson(_unwrapPollMap(response.data));
+  }
+
+  Future<LunchPoll> refreshPollHydrated(String pollId) async {
+    return _hydratePollWithVoteTotal(await getPoll(pollId));
   }
 
   Future<LunchPoll> createPoll(LunchPoll poll) async {
@@ -219,9 +247,10 @@ class LunchRepository {
     var canonical = enriched != null
         ? LunchPoll.merge(summary.poll, enriched)
         : summary.poll;
-    if (summary.totalVotes > 0 && canonical.totalVoteCount == 0) {
-      canonical = canonical.withReportedTotalVotes(summary.totalVotes);
-    }
+    canonical = canonical.withVoteSummary(
+      breakdown: summary.menuBreakdown,
+      totalVotes: summary.totalVotes,
+    );
     return LunchOrderSummary(
       poll: canonical,
       officeOrders: summary.officeOrders,
