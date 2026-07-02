@@ -84,16 +84,16 @@ class _LunchMyLunchPageState extends ConsumerState<LunchMyLunchPage> {
       );
     }
 
-    final poll = state.todayPolls.isNotEmpty ? state.todayPolls.first : null;
+    final polls = state.todayPolls;
+    final userName = user?.name ?? 'You';
 
     return RefreshIndicator(
       onRefresh: _refresh,
       child: LayoutBuilder(
         builder: (context, constraints) {
           final wide = constraints.maxWidth >= 640;
-          final pollCard = poll != null
-              ? _TodayPollCard(poll: poll, userName: user?.name ?? 'You')
-              : CRMCard(
+          final pollsSection = polls.isEmpty
+              ? CRMCard(
                   child: Column(
                     children: [
                       AppThemeColors.iconChip(
@@ -118,10 +118,26 @@ class _LunchMyLunchPageState extends ConsumerState<LunchMyLunchPage> {
                       ),
                     ],
                   ),
+                )
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (var i = 0; i < polls.length; i++) ...[
+                      if (i > 0) const SizedBox(height: AppSpacing.md),
+                      _TodayPollCard(
+                        key: ValueKey(polls[i].id),
+                        poll: polls[i],
+                        userName: userName,
+                      ),
+                    ],
+                  ],
                 );
+          final balanceLoading = state.myBalanceLoading ||
+              state.myBalanceMonth != _monthKey(_balanceMonth);
           final balanceCard = _BalanceCard(
             month: _balanceMonth,
-            balance: state.myBalance,
+            balance: balanceLoading ? null : state.myBalance,
+            loading: balanceLoading,
             onPrev: () => _shiftMonth(-1),
             onNext: () => _shiftMonth(1),
           );
@@ -135,13 +151,13 @@ class _LunchMyLunchPageState extends ConsumerState<LunchMyLunchPage> {
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(flex: 3, child: pollCard),
+                    Expanded(flex: 3, child: pollsSection),
                     const SizedBox(width: AppSpacing.md),
                     Expanded(flex: 2, child: balanceCard),
                   ],
                 )
               else ...[
-                pollCard,
+                pollsSection,
                 const SizedBox(height: AppSpacing.md),
                 balanceCard,
               ],
@@ -159,28 +175,32 @@ class _LunchMyLunchPageState extends ConsumerState<LunchMyLunchPage> {
 }
 
 class _TodayPollCard extends ConsumerWidget {
-  const _TodayPollCard({required this.poll, required this.userName});
+  const _TodayPollCard({
+    super.key,
+    required this.poll,
+    required this.userName,
+  });
 
   final LunchPoll poll;
   final String userName;
 
-  String get _statusHint {
-    if (poll.isCancelled) return 'Poll cancelled — voting is disabled';
-    if (poll.effectiveStatus == 'closed') {
-      if (poll.isPastEndTime && poll.isActive) {
-        return 'Voting ended at ${formatLunchEndTimeDisplay(poll.endTime)}';
+  String _statusHintFor(LunchPoll p) {
+    if (p.isCancelled) return 'Poll cancelled — voting is disabled';
+    if (p.effectiveStatus == 'closed') {
+      if (p.isPastEndTime && p.isActive) {
+        return 'Voting ended at ${formatLunchEndTimeDisplay(p.endTime)}';
       }
       return 'Poll closed — voting has ended';
     }
-    if (poll.isVotingOpen && poll.endTime != null && poll.endTime!.isNotEmpty) {
-      return 'Closes at ${formatLunchEndTimeDisplay(poll.endTime)}';
+    if (p.isVotingOpen && p.endTime != null && p.endTime!.isNotEmpty) {
+      return 'Closes at ${formatLunchEndTimeDisplay(p.endTime)}';
     }
-    return poll.statusHint;
+    return p.statusHint;
   }
 
-  IconData get _statusIcon {
-    if (poll.isCancelled) return Icons.cancel_outlined;
-    if (poll.effectiveStatus == 'closed') return Icons.lock_outline;
+  IconData _statusIconFor(LunchPoll p) {
+    if (p.isCancelled) return Icons.cancel_outlined;
+    if (p.effectiveStatus == 'closed') return Icons.lock_outline;
     return Icons.schedule;
   }
 
@@ -188,16 +208,20 @@ class _TodayPollCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(lunchProvider);
     final voting = state.votingPollId == poll.id;
+    final livePoll = state.todayPolls
+        .where((p) => p.id == poll.id)
+        .fold<LunchPoll?>(null, (_, p) => p) ??
+        poll;
     final textPrimary = AppThemeColors.textPrimaryColor(context);
     final textSecondary = AppThemeColors.textSecondaryColor(context);
     final cs = Theme.of(context).colorScheme;
-    final canVote = poll.isVotingOpen;
-    final myOptionId = poll.myVote?.optionId;
-    final hasVoted = myOptionId != null;
+    final canVote = livePoll.isVotingOpen;
+    final myOptionId = livePoll.scopedMyVote?.optionId;
+    final hasVoted = myOptionId != null && myOptionId.isNotEmpty;
     final optionsLocked =
-        voting || (hasVoted && !poll.allowVoteChange) || !canVote;
-    final options = poll.mergedOptions;
-    final total = poll.totalVoteCount;
+        voting || (hasVoted && !livePoll.allowVoteChange) || !canVote;
+    final options = livePoll.mergedOptions;
+    final total = livePoll.totalVoteCount;
 
     return CRMCard(
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
@@ -231,7 +255,7 @@ class _TodayPollCard extends ConsumerWidget {
                   ],
                 ),
               ),
-              lunchPollStatusBadge(poll.effectiveStatus),
+              lunchPollStatusBadge(livePoll.effectiveStatus),
             ],
           ),
           const SizedBox(height: 6),
@@ -239,39 +263,40 @@ class _TodayPollCard extends ConsumerWidget {
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
-              color: poll.isCancelled
+              color: livePoll.isCancelled
                   ? cs.errorContainer.withValues(alpha: 0.35)
-                  : poll.effectiveStatus == 'closed'
+                  : livePoll.effectiveStatus == 'closed'
                   ? cs.surfaceContainerHighest
                   : cs.surfaceContainerHighest.withValues(alpha: 0.6),
               borderRadius: BorderRadius.circular(AppRadius.sm),
-              border: poll.effectiveStatus == 'closed'
+              border: livePoll.effectiveStatus == 'closed'
                   ? Border.all(color: cs.outline.withValues(alpha: 0.35))
                   : null,
             ),
             child: Row(
               children: [
                 Icon(
-                  _statusIcon,
+                  _statusIconFor(livePoll),
                   size: 14,
-                  color: poll.isCancelled
+                  color: livePoll.isCancelled
                       ? cs.error
-                      : poll.effectiveStatus == 'closed'
+                      : livePoll.effectiveStatus == 'closed'
                       ? cs.onSurfaceVariant
                       : textSecondary,
                 ),
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
-                    _statusHint,
+                    _statusHintFor(livePoll),
                     style: TextStyle(
                       fontSize: 12,
-                      fontWeight: poll.effectiveStatus == 'closed' || poll.isCancelled
+                      fontWeight: livePoll.effectiveStatus == 'closed' ||
+                              livePoll.isCancelled
                           ? FontWeight.w600
                           : FontWeight.w500,
-                      color: poll.isCancelled
+                      color: livePoll.isCancelled
                           ? cs.error
-                          : poll.effectiveStatus == 'closed'
+                          : livePoll.effectiveStatus == 'closed'
                           ? cs.onSurfaceVariant
                           : textSecondary,
                     ),
@@ -304,7 +329,7 @@ class _TodayPollCard extends ConsumerWidget {
                               }
                               return;
                             }
-                            if (!poll.allowVoteChange &&
+                            if (!livePoll.allowVoteChange &&
                                 myOptionId != null &&
                                 myOptionId != opt.id) {
                               ScaffoldMessenger.of(context).showSnackBar(
@@ -324,12 +349,12 @@ class _TodayPollCard extends ConsumerWidget {
                 ),
               ),
             ),
-          if (poll.myVote?.votedAt != null) ...[
+          if (livePoll.scopedMyVote?.votedAt != null) ...[
             const SizedBox(height: 4),
             Align(
               alignment: Alignment.centerRight,
               child: Text(
-                'Voted ${formatLunchVoteTime(poll.myVote!.votedAt)}',
+                'Voted ${formatLunchVoteTime(livePoll.scopedMyVote!.votedAt)}',
                 style: TextStyle(fontSize: 10, color: textSecondary),
               ),
             ),
@@ -367,10 +392,12 @@ class _BalanceCard extends StatelessWidget {
     required this.balance,
     required this.onPrev,
     required this.onNext,
+    this.loading = false,
   });
 
   final DateTime month;
   final LunchBalanceMe? balance;
+  final bool loading;
   final VoidCallback onPrev;
   final VoidCallback onNext;
 
@@ -379,8 +406,8 @@ class _BalanceCard extends StatelessWidget {
     final textPrimary = AppThemeColors.textPrimaryColor(context);
     final textSecondary = AppThemeColors.textSecondaryColor(context);
     final cs = Theme.of(context).colorScheme;
-    final bal = balance?.balance ?? 0;
-    final isOwed = bal < 0;
+    final monthAmount = balance?.monthNetChange ?? 0;
+    final isOwed = monthAmount < 0;
     final monthLabel = DateFormat('MMMM yyyy').format(month);
 
     return CRMCard(
@@ -400,7 +427,7 @@ class _BalanceCard extends StatelessWidget {
           Row(
             children: [
               IconButton(
-                onPressed: onPrev,
+                onPressed: loading ? null : onPrev,
                 icon: const Icon(Icons.chevron_left),
                 visualDensity: VisualDensity.compact,
               ),
@@ -412,44 +439,52 @@ class _BalanceCard extends StatelessWidget {
                 ),
               ),
               IconButton(
-                onPressed: onNext,
+                onPressed: loading ? null : onNext,
                 icon: const Icon(Icons.chevron_right),
                 visualDensity: VisualDensity.compact,
               ),
             ],
           ),
           const SizedBox(height: AppSpacing.xs),
-          Text(
-            '$bal ${AppConstants.currencySymbol}',
-            style: TextStyle(
-              fontSize: 36,
-              fontWeight: FontWeight.w800,
-              color: isOwed ? cs.error : lunchBrandGreen,
-              height: 1,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          if (isOwed)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: cs.errorContainer.withValues(alpha: 0.5),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Text(
-                'Amount owed',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: cs.error,
+          if (loading)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 12),
+              child: Center(
+                child: SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(strokeWidth: 2),
                 ),
               ),
+            )
+          else ...[
+            Text(
+              '$monthAmount ${AppConstants.currencySymbol}',
+              style: TextStyle(
+                fontSize: 36,
+                fontWeight: FontWeight.w800,
+                color: isOwed ? cs.error : lunchBrandGreen,
+                height: 1,
+              ),
             ),
-          const SizedBox(height: 10),
-          Text(
-            'Net change for $monthLabel: ${balance?.monthNetChange ?? 0}',
-            style: TextStyle(fontSize: 12, color: textSecondary),
-          ),
+            const SizedBox(height: AppSpacing.xs),
+            if (isOwed)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: cs.errorContainer.withValues(alpha: 0.5),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  'Amount owed',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: cs.error,
+                  ),
+                ),
+              ),
+          ],
         ],
       ),
     );

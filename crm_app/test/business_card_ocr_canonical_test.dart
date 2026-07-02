@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:crm/core/services/docstrange_extraction_service.dart';
 import 'package:crm/core/utils/business_card_ocr_canonical.dart';
+import 'package:crm/core/utils/company_name_match.dart';
 
 void main() {
   group('DocStrangeExtractionService.parseExtractResponse', () {
@@ -172,6 +173,169 @@ void main() {
       expect(matchCompanyIdByName(companies, 'Acme Corporation'), '1');
       expect(matchCompanyIdByName(companies, 'acme'), '1');
       expect(matchCompanyIdByName(companies, 'Unknown'), isNull);
+    });
+
+    test('ignores case and legal suffix differences', () {
+      final companies = [
+        (id: '1', name: 'Bongo Tech Limited'),
+        (id: '2', name: 'Globex Pvt Ltd'),
+      ];
+
+      expect(matchCompanyIdByName(companies, 'BONGO TECH LTD'), '1');
+      expect(matchCompanyIdByName(companies, 'bongo tech'), '1');
+      expect(matchCompanyIdByName(companies, 'Globex Limited'), '2');
+      expect(matchCompanyIdByName(companies, 'GLOBEX PVT. LTD.'), '2');
+    });
+
+    test('matches capitalization and full legal name variants', () {
+      final companies = [
+        (id: '1', name: 'Grameenphone Limited'),
+        (id: '2', name: 'The Acme Corporation'),
+      ];
+
+      expect(matchCompanyIdByName(companies, 'GRAMEENPHONE LTD'), '1');
+      expect(matchCompanyIdByName(companies, 'grameenphone'), '1');
+      expect(matchCompanyIdByName(companies, 'ACME CORP'), '2');
+      expect(matchCompanyIdByName(companies, 'Acme Corporation'), '2');
+    });
+
+    test('matches dotted abbreviations and ampersand', () {
+      final companies = [
+        (id: '1', name: 'Smith and Sons Limited'),
+        (id: '2', name: 'Johnson & Johnson Pvt. Ltd.'),
+      ];
+
+      expect(matchCompanyIdByName(companies, 'SMITH & SONS LTD'), '1');
+      expect(matchCompanyIdByName(companies, 'Johnson and Johnson'), '2');
+      expect(matchCompanyIdByName(companies, 'JOHNSON & JOHNSON PVT LTD'), '2');
+    });
+
+    test('matches technology vs tech and international acronym', () {
+      final companies = [
+        (id: '1', name: 'Bongo Technology Limited'),
+        (id: '2', name: 'International Business Machines'),
+      ];
+
+      expect(matchCompanyIdByName(companies, 'BONGO TECH LTD'), '1');
+      expect(matchCompanyIdByName(companies, 'IBM'), '2');
+    });
+
+    test('matches hyphenated and extra punctuation from OCR', () {
+      final companies = [
+        (id: '1', name: 'Hewlett Packard Enterprise'),
+      ];
+
+      expect(matchCompanyIdByName(companies, 'Hewlett-Packard Enterprise'), '1');
+      expect(matchCompanyIdByName(companies, 'HEWLETT PACKARD'), '1');
+    });
+
+    test('ignores legal-only OCR text and prefers distinctive names', () {
+      final companies = [
+        (id: '1', name: 'Alpha Industries Limited'),
+        (id: '2', name: 'Beta Group Pvt Ltd'),
+      ];
+
+      expect(matchCompanyIdByName(companies, 'Limited'), isNull);
+      expect(matchCompanyIdByName(companies, 'Group Ltd'), isNull);
+      expect(matchCompanyIdByName(companies, 'Pvt. Ltd.'), isNull);
+      expect(matchCompanyIdByName(companies, 'Alpha Group Limited'), '1');
+      expect(matchCompanyIdByName(companies, 'Beta'), '2');
+    });
+
+    test('picks best core-name match when multiple companies share legal suffixes', () {
+      final companies = [
+        (id: '1', name: 'Square Pharmaceuticals Ltd'),
+        (id: '2', name: 'Beximco Pharmaceuticals Ltd'),
+      ];
+
+      expect(matchCompanyIdByName(companies, 'Square Pharma Ltd'), '1');
+      expect(matchCompanyIdByName(companies, 'BEXIMCO PHARMACEUTICALS'), '2');
+    });
+
+    test('matches when OCR includes head office suffix noise', () {
+      final companies = [
+        (id: '1', name: 'Unilever Bangladesh Limited'),
+      ];
+
+      expect(
+        matchCompanyIdByName(companies, 'UNILEVER BANGLADESH LTD\nHead Office'),
+        '1',
+      );
+    });
+
+    test('suggests similar companies without auto-selecting ambiguous matches', () {
+      final companies = [
+        (id: '1', name: 'Square Pharmaceuticals Ltd'),
+        (id: '2', name: 'Beximco Pharmaceuticals Ltd'),
+      ];
+
+      final result = rankCompaniesByName(companies, 'Pharmaceuticals Ltd');
+      expect(result.autoSelectId, isNull);
+      expect(result.suggestions.length, 2);
+      expect(
+        result.suggestions.map((c) => c.id),
+        containsAll(['1', '2']),
+      );
+    });
+
+    test('auto-selects only when OCR clearly matches one company', () {
+      final companies = [
+        (id: '1', name: 'Square Pharmaceuticals Ltd'),
+        (id: '2', name: 'Beximco Pharmaceuticals Ltd'),
+      ];
+
+      final square = rankCompaniesByName(companies, 'Square Pharma Ltd');
+      expect(square.autoSelectId, '1');
+      expect(square.suggestions.first.id, '1');
+    });
+
+    test('suggests companies with OCR spelling mistakes', () {
+      final companies = [
+        (id: '1', name: 'Grameenphone Limited'),
+        (id: '2', name: 'Robi Axiata Limited'),
+        (id: '3', name: 'Banglalink Digital Communications'),
+      ];
+
+      final typo = rankCompaniesByName(companies, 'Grameenphne Ltd');
+      expect(typo.autoSelectId, '1');
+      expect(typo.suggestions.map((c) => c.id), contains('1'));
+
+      final squareTypo = rankCompaniesByName(
+        [
+          (id: '4', name: 'Square Pharmaceuticals Ltd'),
+          (id: '5', name: 'Beximco Pharmaceuticals Ltd'),
+        ],
+        'Sqare Pharmaceuticls Ltd',
+      );
+      expect(squareTypo.suggestions.map((c) => c.id), contains('4'));
+      expect(squareTypo.suggestions.first.id, '4');
+    });
+  });
+
+  group('normalizeCompanyNameForMatch', () {
+    test('strips punctuation and legal suffixes', () {
+      expect(normalizeCompanyNameForMatch('Acme Corp.'), 'acme');
+      expect(normalizeCompanyNameForMatch('ACME LIMITED'), 'acme');
+      expect(normalizeCompanyNameForMatch('Globex Pvt. Ltd.'), 'globex');
+      expect(normalizeCompanyNameForMatch('L.L.C. Widgets'), 'widgets');
+      expect(normalizeCompanyNameForMatch('The Acme Corporation'), 'acme');
+      expect(
+        normalizeCompanyNameForMatch('Bongo Technology Limited'),
+        'bongo technology',
+      );
+    });
+  });
+
+  group('cleanOcrCompanyName', () {
+    test('keeps first line and drops office suffix noise', () {
+      expect(
+        cleanOcrCompanyName('Acme Corp Ltd\nHead Office'),
+        'Acme Corp Ltd',
+      );
+      expect(
+        cleanOcrCompanyName('Globex Branch Office'),
+        'Globex',
+      );
     });
   });
 }

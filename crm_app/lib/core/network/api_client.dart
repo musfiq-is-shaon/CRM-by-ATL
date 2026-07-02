@@ -111,6 +111,13 @@ class ApiClient {
     Options? options,
   }) async {
     try {
+      if (kDebugMode) {
+        debugPrint('=== API PUT REQUEST ===');
+        debugPrint('Path: $path');
+        debugPrint('Data: $data');
+        debugPrint('========================');
+      }
+
       return await _dio.put(
         path,
         data: data,
@@ -118,6 +125,13 @@ class ApiClient {
         options: options,
       );
     } on DioException catch (e) {
+      if (kDebugMode) {
+        debugPrint('=== API PUT ERROR ===');
+        debugPrint('Error: $e');
+        debugPrint('Response: ${e.response?.data}');
+        debugPrint('Status Code: ${e.response?.statusCode}');
+        debugPrint('=====================');
+      }
       throw _handleError(e);
     }
   }

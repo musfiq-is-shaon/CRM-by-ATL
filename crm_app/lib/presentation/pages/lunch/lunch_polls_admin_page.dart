@@ -21,21 +21,79 @@ class LunchPollsAdminPage extends ConsumerStatefulWidget {
 }
 
 class _LunchPollsAdminPageState extends ConsumerState<LunchPollsAdminPage> {
+  bool _loading = true;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
   }
 
-  Future<void> _load() async {
+  Future<void> _load({bool hydrate = true}) async {
+    final hadPolls = ref.read(lunchProvider).adminPolls.isNotEmpty;
+    if (!hadPolls && mounted) setState(() => _loading = true);
     final now = DateTime.now();
-    await ref.read(lunchProvider.notifier).loadAdminPolls(
-      from: now.subtract(const Duration(days: 30)),
-      to: now.add(const Duration(days: 7)),
-    );
+    try {
+      await ref.read(lunchProvider.notifier).loadAdminPolls(
+        from: now.subtract(const Duration(days: 30)),
+        to: now.add(const Duration(days: 7)),
+        hydrate: hydrate,
+        silent: hadPolls,
+      );
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   int _voteTotal(LunchPoll poll) => poll.totalVoteCount;
+
+  Future<void> _openCreatePoll() async {
+    final saved = await showLunchPollFormSheet(context, ref);
+    if (saved && mounted) await _load(hydrate: false);
+  }
+
+  Future<void> _openEditPoll(LunchPoll poll) async {
+    final saved = await showLunchPollFormSheet(context, ref, existing: poll);
+    if (saved && mounted) await _load();
+  }
+
+  Future<void> _confirmDeletePoll(LunchPoll poll) async {
+    final cs = Theme.of(context).colorScheme;
+    final textPrimary = AppThemeColors.textPrimaryColor(context);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Delete poll', style: TextStyle(color: textPrimary)),
+        content: Text(
+          'Delete "${poll.title}"? This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(backgroundColor: cs.error),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    try {
+      await ref.read(lunchProvider.notifier).deletePoll(poll.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Poll deleted')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not delete poll: $e')),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -54,14 +112,14 @@ class _LunchPollsAdminPageState extends ConsumerState<LunchPollsAdminPage> {
             subtitle: 'Create and manage daily lunch polls.',
             trailing: [
               FilledButton.icon(
-                onPressed: () => showLunchPollFormSheet(context, ref),
+                onPressed: _openCreatePoll,
                 icon: const Icon(Icons.add, size: 18),
                 label: const Text('Create'),
               ),
             ],
           ),
           const SizedBox(height: AppSpacing.md),
-          if (state.status == LunchLoadStatus.loading && state.adminPolls.isEmpty)
+          if (_loading && state.adminPolls.isEmpty)
             const ListSkeletonLoader(itemCount: 4, shrinkWrap: true)
           else if (state.adminPolls.isEmpty)
             app_widgets.EmptyStateWidget(
@@ -69,14 +127,14 @@ class _LunchPollsAdminPageState extends ConsumerState<LunchPollsAdminPage> {
               subtitle: 'Create your first lunch poll for the team',
               icon: Icons.poll_outlined,
               buttonText: 'Create poll',
-              onButtonPressed: () => showLunchPollFormSheet(context, ref),
+              onButtonPressed: _openCreatePoll,
             )
           else
             ...state.adminPolls.map(
               (poll) => Padding(
                 padding: AppThemeColors.cardListItemMargin,
                 child: CRMCard(
-                  onTap: () => showLunchPollFormSheet(context, ref, existing: poll),
+                  onTap: () => _openEditPoll(poll),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -128,21 +186,29 @@ class _LunchPollsAdminPageState extends ConsumerState<LunchPollsAdminPage> {
                             icon: Icon(Icons.more_vert, color: textSecondary, size: 20),
                             onSelected: (v) async {
                               if (v == 'edit') {
-                                await showLunchPollFormSheet(context, ref, existing: poll);
-                                await _load();
+                                await _openEditPoll(poll);
                               } else if (v == 'close' && poll.isVotingOpen) {
                                 await ref.read(lunchProvider.notifier).closePoll(poll.id);
                                 await _load();
                               } else if (v == 'votes') {
                                 showLunchPollVotesSheet(context, poll);
+                              } else if (v == 'delete') {
+                                await _confirmDeletePoll(poll);
                               }
                             },
-                            itemBuilder: (_) => [
+                            itemBuilder: (ctx) => [
                               const PopupMenuItem(value: 'edit', child: Text('Edit')),
                               if (poll.totalVoteCount > 0)
                                 const PopupMenuItem(value: 'votes', child: Text('View votes')),
                               if (poll.isVotingOpen)
                                 const PopupMenuItem(value: 'close', child: Text('Close poll')),
+                              PopupMenuItem(
+                                value: 'delete',
+                                child: Text(
+                                  'Delete poll',
+                                  style: TextStyle(color: Theme.of(ctx).colorScheme.error),
+                                ),
+                              ),
                             ],
                           ),
                         ],

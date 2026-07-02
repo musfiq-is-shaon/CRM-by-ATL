@@ -18,9 +18,14 @@ class LunchState {
     this.settings,
     this.dashboard,
     this.myBalance,
+    this.myBalanceMonth,
+    this.myBalanceLoading = false,
     this.transactions = const [],
     this.voteHistory = const [],
     this.employeeBalances = const [],
+    this.employeeBalancesLoading = false,
+    this.employeeBalancesFrom,
+    this.employeeBalancesTo,
     this.error,
     this.votingPollId,
     this.orderSummaryLoading = false,
@@ -34,9 +39,14 @@ class LunchState {
   final LunchSettings? settings;
   final LunchDashboardStats? dashboard;
   final LunchBalanceMe? myBalance;
+  final String? myBalanceMonth;
+  final bool myBalanceLoading;
   final List<LunchBalanceTransaction> transactions;
   final List<LunchVoteHistoryRow> voteHistory;
   final List<LunchEmployeeBalance> employeeBalances;
+  final bool employeeBalancesLoading;
+  final String? employeeBalancesFrom;
+  final String? employeeBalancesTo;
   final String? error;
   final String? votingPollId;
   final bool orderSummaryLoading;
@@ -62,9 +72,16 @@ class LunchState {
     LunchSettings? settings,
     LunchDashboardStats? dashboard,
     LunchBalanceMe? myBalance,
+    String? myBalanceMonth,
+    bool clearMyBalance = false,
+    bool? myBalanceLoading,
     List<LunchBalanceTransaction>? transactions,
     List<LunchVoteHistoryRow>? voteHistory,
     List<LunchEmployeeBalance>? employeeBalances,
+    bool? employeeBalancesLoading,
+    String? employeeBalancesFrom,
+    String? employeeBalancesTo,
+    bool clearEmployeeBalancesRange = false,
     String? error,
     bool clearError = false,
     String? votingPollId,
@@ -79,10 +96,20 @@ class LunchState {
       adminPolls: adminPolls ?? this.adminPolls,
       settings: settings ?? this.settings,
       dashboard: dashboard ?? this.dashboard,
-      myBalance: myBalance ?? this.myBalance,
+      myBalance: clearMyBalance ? null : (myBalance ?? this.myBalance),
+      myBalanceMonth: myBalanceMonth ?? this.myBalanceMonth,
+      myBalanceLoading: myBalanceLoading ?? this.myBalanceLoading,
       transactions: transactions ?? this.transactions,
       voteHistory: voteHistory ?? this.voteHistory,
       employeeBalances: employeeBalances ?? this.employeeBalances,
+      employeeBalancesLoading:
+          employeeBalancesLoading ?? this.employeeBalancesLoading,
+      employeeBalancesFrom: clearEmployeeBalancesRange
+          ? null
+          : (employeeBalancesFrom ?? this.employeeBalancesFrom),
+      employeeBalancesTo: clearEmployeeBalancesRange
+          ? null
+          : (employeeBalancesTo ?? this.employeeBalancesTo),
       error: clearError ? null : (error ?? this.error),
       votingPollId: clearVoting ? null : (votingPollId ?? this.votingPollId),
       orderSummaryLoading: orderSummaryLoading ?? this.orderSummaryLoading,
@@ -94,6 +121,26 @@ class LunchNotifier extends StateNotifier<LunchState> {
   LunchNotifier(this._repo) : super(const LunchState());
 
   final LunchRepository _repo;
+  int _balanceRequestId = 0;
+  int _employeeBalancesRequestId = 0;
+  int _adminPollsRequestId = 0;
+
+  static DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
+
+  static String _monthKeyFrom(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}';
+
+  static String _dateKey(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  static (DateTime from, DateTime to) _monthRange(String monthKey) {
+    final parts = monthKey.split('-');
+    final year = int.tryParse(parts.first) ?? DateTime.now().year;
+    final month = int.tryParse(parts.length > 1 ? parts[1] : '1') ?? 1;
+    final from = DateTime(year, month, 1);
+    final to = DateTime(year, month + 1, 0);
+    return (from, to);
+  }
 
   void _upsertPoll(LunchPoll poll) {
     if (poll.id.isEmpty) return;
@@ -148,7 +195,6 @@ class LunchNotifier extends StateNotifier<LunchState> {
     try {
       await _repo.castVote(pollId, optionId);
       try {
-        final refreshed = await _repo.refreshPollHydrated(pollId);
         LunchPoll? existing;
         for (final p in state.todayPolls) {
           if (p.id == pollId) {
@@ -156,9 +202,47 @@ class LunchNotifier extends StateNotifier<LunchState> {
             break;
           }
         }
-        if (existing != null) {
-          _upsertPoll(LunchPoll.merge(refreshed, existing));
+        if (existing == null) return;
+
+        LunchPoll refreshed;
+        LunchPoll? todayPeer;
+        try {
+          final results = await Future.wait<Object>([
+            _repo.refreshPollHydrated(pollId),
+            _repo.getTodayPolls(),
+          ]);
+          refreshed = results[0] as LunchPoll;
+          final bundle = results[1] as LunchTodayBundle;
+          for (final p in bundle.items) {
+            if (p.id == pollId) {
+              todayPeer = p;
+              break;
+            }
+          }
+        } catch (_) {
+          refreshed = existing;
         }
+
+        var merged = LunchPoll.mergeAfterVote(local: existing, server: refreshed);
+        final todayVote = todayPeer?.scopedMyVote;
+        if (todayVote != null && todayVote.optionId.isNotEmpty) {
+          merged = LunchPoll(
+            id: merged.id,
+            title: merged.title,
+            date: merged.date,
+            costAmount: merged.costAmount,
+            allowVoteChange: merged.allowVoteChange,
+            endTime: merged.endTime,
+            status: merged.status,
+            options: merged.options,
+            results: merged.results,
+            myVote: todayVote,
+            reportedTotalVotes: merged.reportedTotalVotes,
+          );
+        }
+        _upsertPoll(merged);
+        final month = state.myBalanceMonth ?? _monthKeyFrom(DateTime.now());
+        await loadMyBalance(month: month, silent: true);
       } catch (_) {
         // Keep optimistic state if refresh fails.
       }
@@ -240,19 +324,29 @@ class LunchNotifier extends StateNotifier<LunchState> {
     required DateTime to,
     String? status,
     bool silent = false,
+    bool hydrate = true,
   }) async {
+    final requestId = ++_adminPollsRequestId;
+    final hadPolls = state.adminPolls.isNotEmpty;
     if (!silent) {
       state = state.copyWith(status: LunchLoadStatus.loading, clearError: true);
     }
     try {
-      final polls = await _repo.listPollsHydrated(from: from, to: to, status: status);
+      final polls = hydrate
+          ? await _repo.listPollsHydrated(from: from, to: to, status: status)
+          : await _repo.listPolls(from: from, to: to, status: status);
+      if (requestId != _adminPollsRequestId) return;
       state = state.copyWith(
         status: LunchLoadStatus.loaded,
         adminPolls: polls,
         selectedPollId: state.selectedPollId ?? (polls.isNotEmpty ? polls.first.id : null),
       );
     } catch (e) {
-      state = state.copyWith(status: LunchLoadStatus.error, error: e.toString());
+      if (requestId != _adminPollsRequestId) return;
+      state = state.copyWith(
+        status: hadPolls ? LunchLoadStatus.loaded : LunchLoadStatus.error,
+        error: e.toString(),
+      );
     }
   }
 
@@ -294,22 +388,42 @@ class LunchNotifier extends StateNotifier<LunchState> {
   }
 
   Future<void> loadMyBalance({String? month, bool silent = false}) async {
+    final monthKey = month ?? _monthKeyFrom(DateTime.now());
+    final requestId = ++_balanceRequestId;
+    final keepExisting =
+        silent && state.myBalanceMonth == monthKey && state.myBalance != null;
+
     if (!silent) {
       state = state.copyWith(status: LunchLoadStatus.loading, clearError: true);
     }
+    state = state.copyWith(
+      myBalanceLoading: !keepExisting,
+      myBalanceMonth: monthKey,
+      clearMyBalance: !keepExisting,
+    );
+
     try {
-      final bal = await _repo.getMyBalance(month: month);
-      final now = DateTime.now();
-      final from = DateTime(now.year, now.month, 1);
-      final to = DateTime(now.year, now.month + 1, 0);
+      final bal = await _repo.getMyBalance(month: monthKey);
+      if (requestId != _balanceRequestId) return;
+
+      final (from, to) = _monthRange(monthKey);
       final tx = await _repo.getBalanceTransactions(from: from, to: to);
+      if (requestId != _balanceRequestId) return;
+
       state = state.copyWith(
         status: LunchLoadStatus.loaded,
         myBalance: bal,
+        myBalanceMonth: monthKey,
+        myBalanceLoading: false,
         transactions: tx,
       );
     } catch (e) {
-      state = state.copyWith(status: LunchLoadStatus.error, error: e.toString());
+      if (requestId != _balanceRequestId) return;
+      state = state.copyWith(
+        status: LunchLoadStatus.error,
+        myBalanceLoading: false,
+        error: e.toString(),
+      );
     }
   }
 
@@ -335,15 +449,31 @@ class LunchNotifier extends StateNotifier<LunchState> {
     required DateTime from,
     required DateTime to,
   }) async {
-    state = state.copyWith(status: LunchLoadStatus.loading, clearError: true);
+    final requestId = ++_employeeBalancesRequestId;
+    final fromDate = _dateOnly(from);
+    final toDate = _dateOnly(to);
+
+    state = state.copyWith(
+      employeeBalancesLoading: true,
+      employeeBalances: const [],
+      clearEmployeeBalancesRange: true,
+      clearError: true,
+    );
     try {
-      final rows = await _repo.getEmployeeBalances(from: from, to: to);
+      final rows = await _repo.getEmployeeBalances(from: fromDate, to: toDate);
+      if (requestId != _employeeBalancesRequestId) return;
       state = state.copyWith(
-        status: LunchLoadStatus.loaded,
         employeeBalances: rows,
+        employeeBalancesLoading: false,
+        employeeBalancesFrom: _dateKey(fromDate),
+        employeeBalancesTo: _dateKey(toDate),
       );
     } catch (e) {
-      state = state.copyWith(status: LunchLoadStatus.error, error: e.toString());
+      if (requestId != _employeeBalancesRequestId) return;
+      state = state.copyWith(
+        employeeBalancesLoading: false,
+        error: e.toString(),
+      );
     }
   }
 
@@ -357,13 +487,22 @@ class LunchNotifier extends StateNotifier<LunchState> {
 
   Future<LunchPoll> createPoll(LunchPoll poll) async {
     final created = await _repo.createPoll(poll);
-    await loadTodayPolls(silent: true);
+    loadTodayPolls(silent: true);
     return created;
   }
 
-  Future<LunchPoll> updatePoll(String pollId, LunchPoll poll) async {
-    final updated = await _repo.updatePoll(pollId, poll.toUpdateJson());
-    await loadTodayPolls(silent: true);
+  Future<LunchPoll> updatePoll(
+    String pollId,
+    LunchPoll poll, {
+    LunchPoll? original,
+  }) async {
+    var updated = poll;
+    for (final payload in poll.toUpdateJsonSequence(original: original)) {
+      updated = await _repo.updatePoll(pollId, payload);
+    }
+    // Polls admin page reloads with hydrate: true after save — avoid racing
+    // an unhydrated list refresh that briefly clears vote counts on cards.
+    loadTodayPolls(silent: true);
     return updated;
   }
 
@@ -377,6 +516,24 @@ class LunchNotifier extends StateNotifier<LunchState> {
 
   Future<void> deletePoll(String pollId) async {
     await _repo.deletePoll(pollId);
+    final wasSelected = state.selectedPollId == pollId;
+    final today = [
+      for (final p in state.todayPolls)
+        if (p.id != pollId) p,
+    ];
+    final admin = [
+      for (final p in state.adminPolls)
+        if (p.id != pollId) p,
+    ];
+    state = state.copyWith(
+      todayPolls: today,
+      adminPolls: admin,
+      clearSummary: wasSelected,
+      selectedPollId: wasSelected
+          ? (today.isNotEmpty ? today.first.id : null)
+          : state.selectedPollId,
+      clearError: true,
+    );
     await loadTodayPolls(silent: true);
   }
 

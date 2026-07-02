@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_theme_colors.dart';
 import '../../providers/lunch_provider.dart';
-import 'lunch_employees_page.dart';
 import 'lunch_my_lunch_page.dart';
 import 'lunch_order_summary_page.dart';
 import 'lunch_polls_admin_page.dart';
@@ -40,7 +39,7 @@ class _LunchHubPageState extends ConsumerState<LunchHubPage>
   Widget build(BuildContext context) {
     final isAdmin = ref.watch(lunchAdminProvider);
     final bg = AppThemeColors.backgroundColor(context);
-    final tabCount = isAdmin ? 4 : 1;
+    final tabCount = isAdmin ? 3 : 1;
     _syncTabController(tabCount);
 
     if (!isAdmin) {
@@ -64,7 +63,6 @@ class _LunchHubPageState extends ConsumerState<LunchHubPage>
             Tab(text: 'My Lunch'),
             Tab(text: 'Polls'),
             Tab(text: 'Order Summary'),
-            Tab(text: 'Employees'),
           ],
         ),
       ),
@@ -74,7 +72,6 @@ class _LunchHubPageState extends ConsumerState<LunchHubPage>
           LunchMyLunchPage(),
           LunchPollsAdminPage(),
           LunchOrderSummaryPage(),
-          LunchEmployeesPage(),
         ],
       ),
     );

@@ -44,19 +44,43 @@ class _LunchEmployeesPageState extends ConsumerState<LunchEmployeesPage> {
     await ref.read(lunchProvider.notifier).loadEmployeeBalances(from: _from, to: _to);
   }
 
-  int get _activeFilterCount {
-    var n = 0;
+  static DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
+
+  String _dateKey(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  bool _rangeMatchesLoaded(LunchState state) =>
+      state.employeeBalancesFrom == _dateKey(_from) &&
+      state.employeeBalancesTo == _dateKey(_to);
+
+  String get _rangeLabel =>
+      '${DateFormat('MMM d').format(_from)} – ${DateFormat('MMM d, yyyy').format(_to)}';
+
+  DateTime get _defaultFrom {
     final now = DateTime.now();
-    if (_from != DateTime(now.year, now.month, 1) ||
-        _to != DateTime(now.year, now.month + 1, 0)) {
-      n++;
-    }
-    return n;
+    return DateTime(now.year, now.month, 1);
   }
 
-  List<String> get _filterLabels => [
-    '${DateFormat('MMM d').format(_from)} – ${DateFormat('MMM d, yyyy').format(_to)}',
-  ];
+  DateTime get _defaultTo {
+    final now = DateTime.now();
+    return DateTime(now.year, now.month + 1, 0);
+  }
+
+  bool get _isDefaultRange =>
+      _dateOnly(_from) == _dateOnly(_defaultFrom) &&
+      _dateOnly(_to) == _dateOnly(_defaultTo);
+
+  void _resetToDefaultRange() {
+    setState(() {
+      _from = _defaultFrom;
+      _to = _defaultTo;
+    });
+    _load();
+  }
+
+  int get _activeFilterCount => _isDefaultRange ? 0 : 1;
+
+  List<String> get _filterLabels => [_rangeLabel];
 
   void _showFilterSheet() {
     final surfaceColor = AppThemeColors.surfaceColor(context);
@@ -92,11 +116,8 @@ class _LunchEmployeesPageState extends ConsumerState<LunchEmployeesPage> {
                   ),
                   TextButton(
                     onPressed: () {
-                      final now = DateTime.now();
-                      setModal(() {
-                        from = DateTime(now.year, now.month, 1);
-                        to = DateTime(now.year, now.month + 1, 0);
-                      });
+                      Navigator.pop(ctx);
+                      _resetToDefaultRange();
                     },
                     child: Text('Clear', style: TextStyle(color: primaryColor)),
                   ),
@@ -113,8 +134,8 @@ class _LunchEmployeesPageState extends ConsumerState<LunchEmployeesPage> {
                   );
                   if (picked != null) {
                     setModal(() {
-                      from = picked.start;
-                      to = picked.end;
+                      from = _dateOnly(picked.start);
+                      to = _dateOnly(picked.end);
                     });
                   }
                 },
@@ -127,8 +148,8 @@ class _LunchEmployeesPageState extends ConsumerState<LunchEmployeesPage> {
               FilledButton(
                 onPressed: () {
                   setState(() {
-                    _from = from;
-                    _to = to;
+                    _from = _dateOnly(from);
+                    _to = _dateOnly(to);
                   });
                   Navigator.pop(ctx);
                   _load();
@@ -191,6 +212,7 @@ class _LunchEmployeesPageState extends ConsumerState<LunchEmployeesPage> {
       if (_search.isEmpty) return true;
       return r.userName.toLowerCase().contains(_search.toLowerCase());
     }).toList();
+    final loading = state.employeeBalancesLoading || !_rangeMatchesLoaded(state);
 
     return RefreshIndicator(
       onRefresh: _load,
@@ -199,7 +221,7 @@ class _LunchEmployeesPageState extends ConsumerState<LunchEmployeesPage> {
         children: [
           const LunchPageTitle(
             title: 'Employees',
-            subtitle: 'Lunch balance by employee for the selected period.',
+            subtitle: 'Net lunch change per employee for the selected date range.',
           ),
           AppSearchFilterBar(
             controller: _searchController,
@@ -215,16 +237,9 @@ class _LunchEmployeesPageState extends ConsumerState<LunchEmployeesPage> {
           ),
           LunchActiveFiltersRow(
             labels: _filterLabels,
-            onRemove: (_) {
-              final now = DateTime.now();
-              setState(() {
-                _from = DateTime(now.year, now.month, 1);
-                _to = DateTime(now.year, now.month + 1, 0);
-              });
-              _load();
-            },
+            onRemove: _isDefaultRange ? null : (_) => _resetToDefaultRange(),
           ),
-          if (state.status == LunchLoadStatus.loading && state.employeeBalances.isEmpty)
+          if (loading)
             const LoadingWidget(message: 'Loading balances…')
           else if (rows.isEmpty)
             CRMCard(
@@ -255,22 +270,32 @@ class _LunchEmployeesPageState extends ConsumerState<LunchEmployeesPage> {
                       ),
                       const SizedBox(width: 10),
                       Expanded(
-                        child: Text(
-                          row.userName,
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            color: textPrimary,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              row.userName,
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                color: textPrimary,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            if (row.runningBalance != null)
+                              Text(
+                                'Total balance: ${row.runningBalance} ${AppConstants.currencySymbol}',
+                                style: TextStyle(fontSize: 11, color: textSecondary),
+                              ),
+                          ],
                         ),
                       ),
                       Text(
-                        '${row.balance} ${AppConstants.currencySymbol}',
+                        '${row.periodNetChange >= 0 ? '+' : ''}${row.periodNetChange} ${AppConstants.currencySymbol}',
                         style: TextStyle(
                           fontWeight: FontWeight.w700,
                           fontSize: 15,
-                          color: row.balance < 0 ? cs.error : textPrimary,
+                          color: row.periodNetChange < 0 ? cs.error : textPrimary,
                         ),
                       ),
                       IconButton(

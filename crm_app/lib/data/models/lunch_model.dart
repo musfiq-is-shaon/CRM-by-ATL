@@ -70,7 +70,11 @@ enum LunchOptionKind {
 
 LunchOptionKind lunchOptionKindFrom(String? raw) {
   final s = (raw ?? '').toLowerCase().replaceAll(' ', '_').replaceAll('-', '_');
-  if (s.contains('office') || s == 'yes' || s == 'menu') {
+  if (s == 'office' ||
+      s == 'office_menu' ||
+      s.contains('office_menu') ||
+      s == 'yes' ||
+      s == 'menu') {
     return LunchOptionKind.officeMenu;
   }
   if (s.contains('personal') || s == 'own') {
@@ -203,6 +207,28 @@ class LunchPollOption {
     'optionType': optionType,
   };
 
+  /// PUT/append shape — matches production poll options (`orderIndex`, `pollId`).
+  Map<String, dynamic> toPutJson({required int orderIndex, String? pollId}) {
+    final json = <String, dynamic>{
+      'label': label,
+      'optionType': optionType,
+      'orderIndex': orderIndex,
+    };
+    if (id.isNotEmpty) json['id'] = id;
+    if (pollId != null && pollId.isNotEmpty) json['pollId'] = pollId;
+    return json;
+  }
+
+  /// Append new options on poll edit — same shape as POST create.
+  Map<String, dynamic> toAddOptionJson() => toCreateJson();
+
+  /// PUT payload entry — includes [id] when updating an existing option.
+  Map<String, dynamic> toUpdateJson() {
+    final json = toCreateJson();
+    if (id.isNotEmpty) json['id'] = id;
+    return json;
+  }
+
   LunchPollOption copyWith({
     int? voteCount,
     List<LunchOptionVoter>? voters,
@@ -267,6 +293,7 @@ class LunchPoll {
     required this.id,
     required this.title,
     this.date,
+    this.createdAt,
     this.costAmount,
     this.allowVoteChange = true,
     this.endTime,
@@ -280,6 +307,7 @@ class LunchPoll {
   final String id;
   final String title;
   final DateTime? date;
+  final DateTime? createdAt;
   final num? costAmount;
   final bool allowVoteChange;
   final String? endTime;
@@ -293,6 +321,13 @@ class LunchPoll {
   bool get isClosed => status.toLowerCase() == 'closed';
   bool get isCancelled => status.toLowerCase() == 'cancelled';
 
+  /// Best-effort timestamp for newest-first ordering.
+  DateTime get recencyInstant =>
+      createdAt?.toLocal() ??
+      _createdAtFromObjectId(id) ??
+      date?.toLocal() ??
+      DateTime.fromMillisecondsSinceEpoch(0);
+
   /// Options merged with live result counts + voter avatars.
   List<LunchPollOption> get mergedOptions {
     if (options.isEmpty) return results;
@@ -302,14 +337,93 @@ class LunchPoll {
     final byLabel = {for (final r in results) if (r.label.isNotEmpty) r.label: r};
 
     return options.map((o) {
-      final r = (o.id.isNotEmpty ? byId[o.id] : null) ??
-          (o.label.isNotEmpty ? byLabel[o.label] : null);
+      // Prefer id match — label fallback only when the option has no id (legacy API).
+      final r = o.id.isNotEmpty
+          ? byId[o.id]
+          : (o.label.isNotEmpty ? byLabel[o.label] : null);
       if (r == null) return o;
       return o.copyWith(
         voteCount: _resolvedVoteCount(o, r),
         voters: r.voters.isNotEmpty ? r.voters : o.voters,
       );
     }).toList();
+  }
+
+  Set<String> get _optionIds => {
+    for (final o in options) if (o.id.isNotEmpty) o.id,
+  };
+
+  /// [myVote] only when its option id belongs to this poll's choices.
+  LunchMyVote? get scopedMyVote {
+    final vote = myVote;
+    if (vote == null || vote.optionId.isEmpty) return null;
+    final ids = _optionIds;
+    if (ids.isEmpty || ids.contains(vote.optionId)) return vote;
+    return null;
+  }
+
+  List<LunchPollOption> get _scopedResults {
+    if (options.isEmpty || results.isEmpty) return results;
+    final ids = _optionIds;
+    if (ids.isEmpty) return results;
+    return results.where((r) => r.id.isEmpty || ids.contains(r.id)).toList();
+  }
+
+  /// Drops cross-poll vote bleed from shared option ids / API shells.
+  LunchPoll withPollScopedVotes() {
+    final vote = scopedMyVote;
+    final filtered = _scopedResults;
+    if (vote == myVote && filtered.length == results.length) return this;
+    return LunchPoll(
+      id: id,
+      title: title,
+      date: date,
+      createdAt: createdAt,
+      costAmount: costAmount,
+      allowVoteChange: allowVoteChange,
+      endTime: endTime,
+      status: status,
+      options: options,
+      myVote: vote,
+      results: filtered,
+      reportedTotalVotes: reportedTotalVotes,
+    );
+  }
+
+  LunchPoll withoutMyVote() {
+    if (myVote == null) return this;
+    return LunchPoll(
+      id: id,
+      title: title,
+      date: date,
+      createdAt: createdAt,
+      costAmount: costAmount,
+      allowVoteChange: allowVoteChange,
+      endTime: endTime,
+      status: status,
+      options: options,
+      results: results,
+      reportedTotalVotes: reportedTotalVotes,
+    );
+  }
+
+  static LunchMyVote? _resolveScopedMyVote({
+    required List<LunchPollOption> options,
+    LunchMyVote? preferred,
+    LunchMyVote? fallback,
+  }) {
+    final ids = {for (final o in options) if (o.id.isNotEmpty) o.id};
+    if (preferred != null &&
+        preferred.optionId.isNotEmpty &&
+        (ids.isEmpty || ids.contains(preferred.optionId))) {
+      return preferred;
+    }
+    if (fallback != null &&
+        fallback.optionId.isNotEmpty &&
+        (ids.isEmpty || ids.contains(fallback.optionId))) {
+      return fallback;
+    }
+    return null;
   }
 
   static int _resolvedVoteCount(LunchPollOption primary, LunchPollOption? result) {
@@ -373,20 +487,64 @@ class LunchPoll {
 
   /// Prefer [primary] ids/status; fill missing options/results/votes from [secondary].
   static LunchPoll merge(LunchPoll primary, LunchPoll? secondary) {
-    if (secondary == null) return primary;
-    return LunchPoll(
+    if (secondary == null) return primary.withPollScopedVotes();
+    final options =
+        primary.options.isNotEmpty ? primary.options : secondary.options;
+    final merged = LunchPoll(
       id: primary.id.isNotEmpty ? primary.id : secondary.id,
       title: primary.title.isNotEmpty ? primary.title : secondary.title,
       date: primary.date ?? secondary.date,
+      createdAt: _newerDateTime(primary.createdAt, secondary.createdAt),
       costAmount: primary.costAmount ?? secondary.costAmount,
       allowVoteChange: primary.allowVoteChange,
       endTime: primary.endTime ?? secondary.endTime,
       status: _pickStatus(primary.status, secondary.status),
-      options: primary.options.isNotEmpty ? primary.options : secondary.options,
+      options: options,
       results: _pickRicherResults(primary.results, secondary.results),
-      myVote: primary.myVote ?? secondary.myVote,
-      reportedTotalVotes: primary.reportedTotalVotes ?? secondary.reportedTotalVotes,
+      myVote: _resolveScopedMyVote(
+        options: options,
+        preferred: secondary.myVote,
+        fallback: primary.myVote,
+      ),
+      reportedTotalVotes:
+          primary.reportedTotalVotes ?? secondary.reportedTotalVotes,
     );
+    return merged.withPollScopedVotes();
+  }
+
+  /// After casting/changing a vote: keep server counts, but prefer [local] myVote when
+  /// the server response is missing or still shows the previous choice.
+  static LunchPoll mergeAfterVote({
+    required LunchPoll local,
+    required LunchPoll server,
+  }) {
+    final merged = merge(server, local);
+    final localId = local.myVote?.optionId ?? '';
+    final serverId = server.myVote?.optionId ?? '';
+    final LunchMyVote? preferred;
+    if (localId.isNotEmpty && (serverId.isEmpty || serverId != localId)) {
+      preferred = local.myVote;
+    } else {
+      preferred = server.myVote ?? local.myVote;
+    }
+    return LunchPoll(
+      id: merged.id,
+      title: merged.title,
+      date: merged.date,
+      createdAt: merged.createdAt,
+      costAmount: merged.costAmount,
+      allowVoteChange: merged.allowVoteChange,
+      endTime: merged.endTime,
+      status: merged.status,
+      options: merged.options,
+      results: merged.results,
+      myVote: _resolveScopedMyVote(
+        options: merged.options,
+        preferred: preferred,
+        fallback: null,
+      ),
+      reportedTotalVotes: merged.reportedTotalVotes,
+    ).withPollScopedVotes();
   }
 
   static String _pickStatus(String a, String b) {
@@ -403,6 +561,7 @@ class LunchPoll {
       id: id,
       title: title,
       date: date,
+      createdAt: createdAt,
       costAmount: costAmount,
       allowVoteChange: allowVoteChange,
       endTime: endTime,
@@ -427,6 +586,7 @@ class LunchPoll {
       id: id,
       title: title,
       date: date,
+      createdAt: createdAt,
       costAmount: costAmount,
       allowVoteChange: allowVoteChange,
       endTime: endTime,
@@ -439,17 +599,36 @@ class LunchPoll {
   }
 
   LunchPoll withMyVote(String optionId) {
+    final previousId = myVote?.optionId ?? '';
+    LunchPollOption adjustCounts(LunchPollOption o) {
+      var count = o.effectiveVoteCount;
+      if (previousId.isNotEmpty &&
+          previousId != optionId &&
+          o.id == previousId &&
+          count > 0) {
+        count--;
+      }
+      if (o.id == optionId && previousId != optionId) {
+        count++;
+      }
+      return o.copyWith(voteCount: count);
+    }
+
+    final adjustedResults = results.map(adjustCounts).toList();
+    final adjustedOptions = options.map(adjustCounts).toList();
+
     return LunchPoll(
       id: id,
       title: title,
       date: date,
+      createdAt: createdAt,
       costAmount: costAmount,
       allowVoteChange: allowVoteChange,
       endTime: endTime,
       status: status,
-      options: options,
+      options: adjustedOptions,
       myVote: LunchMyVote(optionId: optionId, votedAt: DateTime.now()),
-      results: results,
+      results: adjustedResults,
       reportedTotalVotes: reportedTotalVotes,
     );
   }
@@ -482,6 +661,9 @@ class LunchPoll {
       id: _id(m['id'] ?? m['_id'] ?? m['pollId']),
       title: _str(m['title'] ?? m['name'], 'Lunch'),
       date: DateTime.tryParse(_str(m['date'] ?? m['pollDate'])),
+      createdAt: _parseDateTime(
+        m['createdAt'] ?? m['created_at'] ?? m['updatedAt'] ?? m['updated_at'],
+      ),
       costAmount: parseOptionalNum(m['costAmount'] ?? m['cost_amount']),
       allowVoteChange:
           parseOptionalBool(m['allowVoteChange'] ?? m['allow_vote_change']) ??
@@ -502,39 +684,267 @@ class LunchPoll {
   Map<String, dynamic> toCreateJson() => {
     if (date != null) 'date': _dateOnly(date!),
     'title': title,
+    if (costAmount != null) ...{
+      'costAmount': costAmount,
+      'cost_amount': costAmount,
+    },
+    'allowVoteChange': allowVoteChange,
+    'allow_vote_change': allowVoteChange,
+    if (endTime != null && endTime!.isNotEmpty) ...{
+      'endTime': endTime,
+      'end_time': endTime,
+    },
+    'options': optionsOrderedForCreate().map((o) => o.toCreateJson()).toList(),
+  };
+
+  /// Web/API order: office menu items, then Personal, then Off.
+  List<LunchPollOption> optionsOrderedForCreate() {
+    final menus = <LunchPollOption>[];
+    final personal = <LunchPollOption>[];
+    final off = <LunchPollOption>[];
+    final other = <LunchPollOption>[];
+    for (final o in options) {
+      switch (o.kind) {
+        case LunchOptionKind.officeMenu:
+          menus.add(o);
+        case LunchOptionKind.personal:
+          personal.add(o);
+        case LunchOptionKind.offAbsent:
+          off.add(o);
+        case LunchOptionKind.other:
+          other.add(o);
+      }
+    }
+    return [...menus, ...personal, ...off, ...other];
+  }
+
+  /// Staged create fallback — Personal + Off first, office menus appended.
+  ({List<LunchPollOption> initial, List<LunchPollOption> extras})
+      partitionForCreate() {
+    if (options.length <= 2) {
+      return (initial: options, extras: const []);
+    }
+    final ordered = optionsOrderedForCreate();
+    final menus = ordered.where((o) => o.kind == LunchOptionKind.officeMenu).toList();
+    final personal = ordered.where((o) => o.kind == LunchOptionKind.personal).toList();
+    final off = ordered.where((o) => o.kind == LunchOptionKind.offAbsent).toList();
+    final initial = <LunchPollOption>[
+      if (personal.isNotEmpty) personal.first,
+      if (off.isNotEmpty) off.first,
+    ];
+    final extras = <LunchPollOption>[
+      ...menus,
+      if (personal.length > 1) ...personal.skip(1),
+      if (off.length > 1) ...off.skip(1),
+      ...ordered.where((o) => o.kind == LunchOptionKind.other),
+    ];
+    return (initial: initial, extras: extras);
+  }
+
+  LunchPoll withOptions(List<LunchPollOption> next) {
+    return LunchPoll(
+      id: id,
+      title: title,
+      date: date,
+      createdAt: createdAt,
+      costAmount: costAmount,
+      allowVoteChange: allowVoteChange,
+      endTime: endTime,
+      status: status,
+      options: next,
+      myVote: myVote,
+      results: results,
+      reportedTotalVotes: reportedTotalVotes,
+    );
+  }
+
+  /// PUT payloads for poll edit — never send `options` and `optionUpdates` together.
+  List<Map<String, dynamic>> toUpdateJsonSequence({LunchPoll? original}) {
+    final payloads = <Map<String, dynamic>>[];
+    final parts = partitionUpdateOptions(original);
+
+    if (_metadataChanged(original)) {
+      payloads.add(toUpdateBaseJson());
+    }
+    if (parts.newOptions.isNotEmpty) {
+      payloads.add({'options': optionsForPut()});
+    } else if (parts.optionUpdates.isNotEmpty) {
+      payloads.add({'optionUpdates': parts.optionUpdates});
+    }
+
+    if (payloads.isEmpty) {
+      payloads.add(toUpdateBaseJson());
+    }
+    return payloads;
+  }
+
+  /// Full options array for PUT — production shape with orderIndex + pollId.
+  List<Map<String, dynamic>> optionsForPut() {
+    final ordered = optionsOrderedForCreate();
+    final pollId = id;
+    return [
+      for (var i = 0; i < ordered.length; i++)
+        ordered[i].toPutJson(
+          orderIndex: i,
+          pollId: pollId.isEmpty ? null : pollId,
+        ),
+    ];
+  }
+
+  /// Splits new vs changed options for separate PUT requests.
+  ({List<Map<String, dynamic>> newOptions, List<Map<String, dynamic>> optionUpdates})
+      partitionUpdateOptions(LunchPoll? original) {
+    final newOptions = <Map<String, dynamic>>[];
+    final optionUpdates = <Map<String, dynamic>>[];
+    final byId = original != null
+        ? {for (final o in original.options) o.id: o}
+        : <String, LunchPollOption>{};
+    final ordered = optionsOrderedForCreate();
+    final indexById = {
+      for (var i = 0; i < ordered.length; i++)
+        if (ordered[i].id.isNotEmpty) ordered[i].id: i,
+    };
+    final pollId = id.isEmpty ? null : id;
+
+    for (final o in options) {
+      if (o.id.isEmpty) {
+        newOptions.add(o.toAddOptionJson());
+      } else {
+        final prev = byId[o.id];
+        if (prev != null &&
+            (prev.label.trim() != o.label.trim() ||
+                prev.optionType != o.optionType)) {
+          optionUpdates.add(
+            o.toPutJson(orderIndex: indexById[o.id] ?? 0, pollId: pollId),
+          );
+        }
+      }
+    }
+    return (newOptions: newOptions, optionUpdates: optionUpdates);
+  }
+
+  bool _metadataChanged(LunchPoll? original) {
+    if (original == null) return true;
+    if (title.trim() != original.title.trim()) return true;
+    if (allowVoteChange != original.allowVoteChange) return true;
+    if (costAmount != original.costAmount) return true;
+    final d = date;
+    final od = original.date;
+    if (d != null && od != null && _dateOnly(d) != _dateOnly(od)) return true;
+    if ((endTime ?? '') != (original.endTime ?? '')) return true;
+    return false;
+  }
+
+  /// Base metadata fields only — no option arrays (API rejects both keys together).
+  Map<String, dynamic> toUpdateBaseJson() => {
+    if (date != null) 'date': _dateOnly(date!),
+    'title': title,
     if (costAmount != null) 'costAmount': costAmount,
     'allowVoteChange': allowVoteChange,
     if (endTime != null && endTime!.isNotEmpty) 'endTime': endTime,
-    'options': options.map((o) => o.toCreateJson()).toList(),
   };
-
-  /// Update payload — keeps existing option ids via `optionUpdates`.
-  Map<String, dynamic> toUpdateJson() {
-    final newOptions = <Map<String, dynamic>>[];
-    final optionUpdates = <Map<String, dynamic>>[];
-    for (final o in options) {
-      final json = o.toCreateJson();
-      if (o.id.isNotEmpty) {
-        optionUpdates.add({...json, 'id': o.id});
-      } else {
-        newOptions.add(json);
-      }
-    }
-    return {
-      if (date != null) 'date': _dateOnly(date!),
-      'title': title,
-      if (costAmount != null) 'costAmount': costAmount,
-      'allowVoteChange': allowVoteChange,
-      if (endTime != null && endTime!.isNotEmpty) 'endTime': endTime,
-      'options': newOptions,
-      if (optionUpdates.isNotEmpty) 'optionUpdates': optionUpdates,
-    };
-  }
 
   static String _dateOnly(DateTime d) {
     final l = d.toLocal();
     return '${l.year}-${l.month.toString().padLeft(2, '0')}-${l.day.toString().padLeft(2, '0')}';
   }
+}
+
+LunchPoll _applyTodayFeaturedShell({
+  required LunchPoll poll,
+  required List<LunchPollOption> topOptions,
+  required List<LunchPollOption> topResults,
+  LunchMyVote? topVote,
+}) {
+  var merged = poll;
+  if (topVote != null ||
+      topResults.isNotEmpty ||
+      topOptions.isNotEmpty) {
+    merged = LunchPoll.merge(
+      merged,
+      LunchPoll(
+        id: merged.id,
+        title: merged.title,
+        options: topOptions,
+        results: topResults,
+        myVote: topVote,
+      ),
+    );
+  }
+  if (merged.mergedOptions.isEmpty && topOptions.isNotEmpty) {
+    merged = LunchPoll.merge(
+      merged,
+      LunchPoll(
+        id: merged.id,
+        title: merged.title,
+        options: topOptions,
+        results: topResults,
+      ),
+    );
+  }
+  return merged.withPollScopedVotes();
+}
+
+/// Keeps first-seen order; merges only duplicate poll ids.
+List<LunchPoll> dedupeTodayPolls(List<LunchPoll> polls) {
+  final seenIds = <String>{};
+  final result = <LunchPoll>[];
+  for (final poll in polls) {
+    if (poll.id.isEmpty) {
+      result.add(poll);
+      continue;
+    }
+    if (seenIds.contains(poll.id)) {
+      final idx = result.indexWhere((p) => p.id == poll.id);
+      if (idx >= 0) {
+        result[idx] =
+            LunchPoll.merge(poll, result[idx]).withPollScopedVotes();
+      }
+      continue;
+    }
+    seenIds.add(poll.id);
+    result.add(poll);
+  }
+  return result;
+}
+
+int _pollRecencyCompare(LunchPoll a, LunchPoll b) {
+  final byRecency = b.recencyInstant.compareTo(a.recencyInstant);
+  if (byRecency != 0) return byRecency;
+  return b.id.compareTo(a.id);
+}
+
+DateTime? _newerDateTime(DateTime? a, DateTime? b) {
+  if (a == null) return b;
+  if (b == null) return a;
+  return a.isAfter(b) ? a : b;
+}
+
+DateTime? _createdAtFromObjectId(String id) {
+  final raw = id.trim();
+  if (raw.length != 24) return null;
+  try {
+    final seconds = int.parse(raw.substring(0, 8), radix: 16);
+    return DateTime.fromMillisecondsSinceEpoch(seconds * 1000, isUtc: true)
+        .toLocal();
+  } catch (_) {
+    return null;
+  }
+}
+
+List<LunchPoll> sortTodayPollsNewestFirst(List<LunchPoll> polls) {
+  final copy = [...polls];
+  copy.sort(_pollRecencyCompare);
+  return copy;
+}
+
+void _upsertTodayPoll(Map<String, LunchPoll> byId, LunchPoll poll) {
+  if (poll.id.isEmpty) return;
+  final clean = poll.withoutMyVote();
+  final existing = byId[poll.id];
+  byId[poll.id] = existing == null
+      ? clean
+      : LunchPoll.merge(clean, existing).withoutMyVote();
 }
 
 class LunchTodayBundle {
@@ -545,13 +955,20 @@ class LunchTodayBundle {
 
   factory LunchTodayBundle.fromJson(dynamic raw) {
     if (raw is List) {
+      final byId = <String, LunchPoll>{};
+      for (final entry in raw.whereType<Map>()) {
+        _upsertTodayPoll(
+          byId,
+          LunchPoll.fromJson(Map<String, dynamic>.from(entry)),
+        );
+      }
       return LunchTodayBundle(
-        items: raw
-            .whereType<Map>()
-            .map((e) => LunchPoll.fromJson(Map<String, dynamic>.from(e)))
-            .toList(),
+        items: sortTodayPollsNewestFirst(
+          byId.values.map((p) => p.withPollScopedVotes()).toList(),
+        ),
       );
     }
+
     final m = _map(raw);
     final data = m['data'];
     final root = data is Map ? _map(data) : m;
@@ -569,41 +986,51 @@ class LunchTodayBundle {
       root['options'] ?? root['pollOptions'] ?? root['choices'],
     );
 
-    LunchPoll? legacy;
+    LunchPoll? featured;
     final p = root['poll'];
-    if (p is Map) legacy = LunchPoll.fromJson(Map<String, dynamic>.from(p));
+    if (p is Map) {
+      featured = LunchPoll.fromJson(Map<String, dynamic>.from(p));
+    }
 
-    final shellWithTop = LunchPoll(
-      id: '',
-      title: 'Lunch',
-      options: topOptions,
-      results: topResults,
-      myVote: topVote,
+    final byId = <String, LunchPoll>{};
+    for (final poll
+        in _mapList(root, const ['items', 'polls']).map(LunchPoll.fromJson)) {
+      _upsertTodayPoll(byId, poll);
+    }
+    if (featured != null) {
+      _upsertTodayPoll(byId, featured);
+    }
+
+    final featuredId = featured?.id ?? '';
+    if (byId.length == 1) {
+      final onlyId = byId.keys.first;
+      byId[onlyId] = _applyTodayFeaturedShell(
+        poll: byId[onlyId]!,
+        topOptions: topOptions,
+        topResults: topResults,
+        topVote: topVote,
+      );
+    } else if (featuredId.isNotEmpty && byId.containsKey(featuredId)) {
+      byId[featuredId] = _applyTodayFeaturedShell(
+        poll: byId[featuredId]!,
+        topOptions: topOptions,
+        topResults: topResults,
+        topVote: topVote,
+      );
+    } else if (byId.isEmpty && featured != null && featured.id.isNotEmpty) {
+      byId[featured.id] = _applyTodayFeaturedShell(
+        poll: featured.withoutMyVote(),
+        topOptions: topOptions,
+        topResults: topResults,
+        topVote: topVote,
+      );
+    }
+
+    final items = sortTodayPollsNewestFirst(
+      byId.values.map((p) => p.withPollScopedVotes()).toList(),
     );
-    if (legacy != null) {
-      legacy = LunchPoll.merge(legacy, shellWithTop);
-    } else if (topOptions.isNotEmpty || topResults.isNotEmpty || topVote != null) {
-      legacy = shellWithTop;
-    }
 
-    LunchPoll enrich(LunchPoll poll) {
-      var merged = legacy != null ? LunchPoll.merge(poll, legacy) : poll;
-      if (merged.mergedOptions.isEmpty && topOptions.isNotEmpty) {
-        merged = LunchPoll.merge(
-          merged,
-          LunchPoll(id: merged.id, title: merged.title, options: topOptions, results: topResults),
-        );
-      }
-      return merged;
-    }
-
-    var items = _mapList(root, const ['items', 'polls']).map(LunchPoll.fromJson).map(enrich).toList();
-
-    if (items.isEmpty && legacy != null) {
-      items = [legacy];
-    }
-
-    return LunchTodayBundle(items: items, legacyPoll: legacy);
+    return LunchTodayBundle(items: items, legacyPoll: featured);
   }
 }
 
@@ -1017,6 +1444,20 @@ class LunchEmployeeBalance {
   final num netChange;
   final num balance;
 
+  /// Net change for the selected date range (primary value for the employees table).
+  num get periodNetChange {
+    if (netChange != 0) return netChange;
+    return balance;
+  }
+
+  /// Running account balance — only when distinct from [periodNetChange].
+  num? get runningBalance {
+    if (balance == 0) return null;
+    if (netChange != 0 && balance != netChange) return balance;
+    if (netChange == 0) return null;
+    return null;
+  }
+
   factory LunchEmployeeBalance.fromJson(Map<String, dynamic> json) {
     final user = json['user'];
     var name = _str(json['userName'] ?? json['user_name'] ?? json['name']);
@@ -1026,11 +1467,47 @@ class LunchEmployeeBalance {
       if (name.isEmpty) name = _str(um['name']);
       if (uid.isEmpty) uid = _id(um['id'] ?? um['_id']);
     }
+
+    num? net = parseOptionalNum(
+      json['netChange'] ??
+          json['net_change'] ??
+          json['monthNetChange'] ??
+          json['month_net_change'] ??
+          json['change'] ??
+          json['periodChange'] ??
+          json['period_change'] ??
+          json['amount'],
+    );
+    num? total;
+
+    final balRaw = json['balance'];
+    if (balRaw is Map) {
+      final bm = Map<String, dynamic>.from(balRaw);
+      total = parseOptionalNum(
+        bm['balance'] ?? bm['current'] ?? bm['total'] ?? bm['amount'],
+      );
+      net ??= parseOptionalNum(
+        bm['netChange'] ??
+            bm['net_change'] ??
+            bm['monthNetChange'] ??
+            bm['change'],
+      );
+    } else {
+      total = parseOptionalNum(balRaw);
+      if (net == null && total != null) {
+        // Employees endpoint sometimes returns period change only as `balance`.
+        net = total;
+        total = parseOptionalNum(
+          json['totalBalance'] ?? json['total_balance'] ?? json['currentBalance'],
+        );
+      }
+    }
+
     return LunchEmployeeBalance(
       userId: uid,
       userName: name.isEmpty ? 'Unknown' : name,
-      netChange: parseOptionalNum(json['netChange'] ?? json['net_change']) ?? 0,
-      balance: parseOptionalNum(json['balance']) ?? 0,
+      netChange: net ?? 0,
+      balance: total ?? 0,
     );
   }
 }

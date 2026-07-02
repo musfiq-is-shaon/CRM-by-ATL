@@ -28,15 +28,14 @@ class LunchPollOptionRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final textPrimary = AppThemeColors.textPrimaryColor(context);
     final textSecondary = AppThemeColors.textSecondaryColor(context);
-    final accent = lunchOptionKindColor(option.kind, cs);
+    final voteAccent = enabled
+        ? (selected ? lunchBrandGreen : lunchBrandPurple)
+        : textSecondary.withValues(alpha: 0.45);
     final count = option.effectiveVoteCount;
     final fraction = totalVotes > 0 ? count / totalVotes : 0.0;
-    final labelColor = enabled ? textPrimary : textSecondary;
-    final radioColor = enabled
-        ? (selected ? lunchBrandGreen : textSecondary)
-        : textSecondary.withValues(alpha: 0.45);
+    final labelColor = enabled ? voteAccent : textSecondary;
+    final radioColor = voteAccent;
     final rowPad = compact ? 5.0 : 10.0;
     final radioSize = compact ? 20.0 : 22.0;
     final labelSize = compact ? 13.0 : 14.0;
@@ -88,7 +87,7 @@ class LunchPollOptionRow extends StatelessWidget {
                                 value: fraction.clamp(0.0, 1.0),
                                 minHeight: barHeight,
                                 backgroundColor: cs.surfaceContainerHighest,
-                                color: enabled ? accent : textSecondary.withValues(alpha: 0.35),
+                                color: voteAccent,
                               ),
                             ),
                           ),
@@ -217,18 +216,17 @@ class _TypeChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final fg = lunchOptionKindColor(kind, cs);
+    final accent = selected ? lunchBrandGreen : lunchBrandPurple;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(6),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
-          color: selected ? fg.withValues(alpha: 0.15) : cs.surfaceContainerHighest,
+          color: accent.withValues(alpha: selected ? 0.15 : 0.08),
           borderRadius: BorderRadius.circular(6),
           border: Border.all(
-            color: selected ? fg : cs.outlineVariant.withValues(alpha: 0.5),
+            color: selected ? accent : accent.withValues(alpha: 0.35),
             width: selected ? 1.5 : 1,
           ),
         ),
@@ -237,7 +235,7 @@ class _TypeChip extends StatelessWidget {
           style: TextStyle(
             fontSize: 10,
             fontWeight: FontWeight.w700,
-            color: selected ? fg : cs.onSurfaceVariant,
+            color: accent,
             letterSpacing: 0.2,
           ),
         ),

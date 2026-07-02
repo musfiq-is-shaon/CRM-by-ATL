@@ -373,19 +373,3 @@ CanonicalBusinessCardContact mergeBusinessCardPages(
   }
   return merged;
 }
-
-/// Match OCR company name to an existing CRM company id (exact then contains).
-String? matchCompanyIdByName(List<({String id, String name})> companies, String? companyName) {
-  final target = _nonEmpty(companyName);
-  if (target == null) return null;
-  final norm = target.toLowerCase();
-
-  for (final c in companies) {
-    if (c.name.trim().toLowerCase() == norm) return c.id;
-  }
-  for (final c in companies) {
-    final cn = c.name.trim().toLowerCase();
-    if (cn.contains(norm) || norm.contains(cn)) return c.id;
-  }
-  return null;
-}

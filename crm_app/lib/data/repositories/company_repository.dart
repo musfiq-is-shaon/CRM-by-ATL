@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/network/api_client.dart';
 import '../models/company_model.dart';
+import '../../core/utils/company_name_match.dart';
 
 class CompanyRepository {
   final ApiClient _apiClient;
@@ -153,13 +154,28 @@ class CompanyRepository {
     return company;
   }
 
-  Future<Company?> _findCompanyByName(String name) async {
-    final norm = name.trim().toLowerCase();
-    if (norm.isEmpty) return null;
-
+  Future<CompanyNameMatchResult> matchCompaniesByName(String? name) async {
+    if (name == null || name.trim().isEmpty) {
+      return const CompanyNameMatchResult();
+    }
     final companies = await getCompanies(forceRefresh: true);
+    return rankCompaniesByName(
+      companies.map((c) => (id: c.id, name: c.name)).toList(),
+      name,
+    );
+  }
+
+  Future<String?> findCompanyIdByName(String? name) async {
+    final result = await matchCompaniesByName(name);
+    return result.autoSelectId;
+  }
+
+  Future<Company?> _findCompanyByName(String name) async {
+    final matchedId = await findCompanyIdByName(name);
+    if (matchedId == null) return null;
+    final companies = await getCompanies();
     for (final company in companies) {
-      if (company.name.trim().toLowerCase() == norm) return company;
+      if (company.id == matchedId) return company;
     }
     return null;
   }

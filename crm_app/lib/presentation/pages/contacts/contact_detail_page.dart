@@ -4,8 +4,10 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/rbac_page_keys.dart';
 import '../../../core/theme/app_theme_colors.dart';
 import '../../../core/theme/design_tokens.dart';
+import '../../../data/repositories/company_repository.dart';
 import '../../../data/models/contact_model.dart';
 import '../../../core/utils/business_card_ocr_canonical.dart';
+import '../../../core/utils/company_name_match.dart';
 import '../../providers/contact_provider.dart';
 import '../../providers/rbac_provider.dart'
     show rbacAccessDigestProvider, rbacModuleAdminProvider;
@@ -430,6 +432,7 @@ class _ContactFormPageState extends ConsumerState<ContactFormPage> {
   bool _isLoading = false;
   String? _ocrCompanySuggestion;
   String? _ocrCompanyLocationSuggestion;
+  List<CompanyNameMatchCandidate> _ocrSimilarCompanies = [];
 
   @override
   void initState() {
@@ -487,6 +490,7 @@ class _ContactFormPageState extends ConsumerState<ContactFormPage> {
         _selectedCompanyId = result;
         _ocrCompanySuggestion = null;
         _ocrCompanyLocationSuggestion = null;
+        _ocrSimilarCompanies = [];
       });
     }
   }
@@ -499,17 +503,18 @@ class _ContactFormPageState extends ConsumerState<ContactFormPage> {
     if (card.mobile != null) _mobileController.text = card.mobile!;
     if (card.email != null) _emailController.text = card.email!;
 
-    final companies = ref.read(companiesProvider).companies;
-    final matchedId = matchCompanyIdByName(
-      companies.map((c) => (id: c.id, name: c.name)).toList(),
-      card.companyName,
-    );
+    final matchResult = await ref
+        .read(companyRepositoryProvider)
+        .matchCompaniesByName(card.companyName);
 
     setState(() {
       _ocrCompanySuggestion = card.companyName;
       _ocrCompanyLocationSuggestion = card.companyLocation;
-      if (matchedId != null) {
-        _selectedCompanyId = matchedId;
+      _ocrSimilarCompanies = matchResult.suggestions;
+      if (matchResult.autoSelectId != null) {
+        _selectedCompanyId = matchResult.autoSelectId;
+        _ocrSimilarCompanies = [];
+        _ocrCompanySuggestion = null;
       }
     });
 
@@ -520,30 +525,41 @@ class _ContactFormPageState extends ConsumerState<ContactFormPage> {
         .map((e) => e.key)
         .join(', ');
 
-    if (matchedId == null && card.companyName != null) {
+    if (matchResult.autoSelectId == null && card.companyName != null) {
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Filled $filled. Company "${card.companyName}" not found — tap + on Company to create it.',
+      if (matchResult.hasSuggestions) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Filled $filled. Similar spellings found for "${card.companyName}" — tap one below.',
+            ),
+            duration: const Duration(seconds: 5),
           ),
-          duration: const Duration(seconds: 5),
-          action: SnackBarAction(
-            label: 'Create',
-            onPressed: () {
-              ScaffoldMessenger.of(context).hideCurrentSnackBar();
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (!mounted) return;
-                _showCreateCompanyDialog(
-                  context,
-                  initialName: card.companyName,
-                  initialLocation: card.companyLocation,
-                );
-              });
-            },
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Filled $filled. Company "${card.companyName}" not found — tap + on Company to create it.',
+            ),
+            duration: const Duration(seconds: 5),
+            action: SnackBarAction(
+              label: 'Create',
+              onPressed: () {
+                ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (!mounted) return;
+                  _showCreateCompanyDialog(
+                    context,
+                    initialName: card.companyName,
+                    initialLocation: card.companyLocation,
+                  );
+                });
+              },
+            ),
           ),
-        ),
-      );
+        );
+      }
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Filled from card: $filled')),
@@ -688,43 +704,84 @@ class _ContactFormPageState extends ConsumerState<ContactFormPage> {
                           .withValues(alpha: 0.5),
                       borderRadius: BorderRadius.circular(AppRadius.md),
                     ),
-                    child: Row(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(
-                          Icons.business_outlined,
-                          size: 20,
-                          color: Theme.of(context).colorScheme.tertiary,
-                        ),
-                        const SizedBox(width: AppSpacing.xs),
-                        Expanded(
-                          child: Text(
-                            'OCR company: $_ocrCompanySuggestion — select or create below.',
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: textSecondary,
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.business_outlined,
+                              size: 20,
+                              color: Theme.of(context).colorScheme.tertiary,
                             ),
-                          ),
+                            const SizedBox(width: AppSpacing.xs),
+                            Expanded(
+                              child: Text(
+                                _ocrSimilarCompanies.isNotEmpty
+                                    ? 'OCR: $_ocrCompanySuggestion — similar spellings found, tap to pick:'
+                                    : 'OCR company: $_ocrCompanySuggestion — select or create below.',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: textSecondary,
+                                ),
+                              ),
+                            ),
+                            IconButton(
+                              tooltip: 'Dismiss',
+                              visualDensity: VisualDensity.compact,
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(
+                                minWidth: 32,
+                                minHeight: 32,
+                              ),
+                              icon: Icon(
+                                Icons.close,
+                                size: 18,
+                                color: textSecondary,
+                              ),
+                              onPressed: () {
+                                setState(() {
+                                  _ocrCompanySuggestion = null;
+                                  _ocrCompanyLocationSuggestion = null;
+                                  _ocrSimilarCompanies = [];
+                                });
+                              },
+                            ),
+                          ],
                         ),
-                        IconButton(
-                          tooltip: 'Dismiss',
-                          visualDensity: VisualDensity.compact,
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(
-                            minWidth: 32,
-                            minHeight: 32,
+                        if (_ocrSimilarCompanies.isNotEmpty) ...[
+                          const SizedBox(height: AppSpacing.sm),
+                          Wrap(
+                            spacing: AppSpacing.xs,
+                            runSpacing: AppSpacing.xs,
+                            children: _ocrSimilarCompanies.map((candidate) {
+                              return ActionChip(
+                                label: Text(
+                                  candidate.name,
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: textPrimary,
+                                  ),
+                                ),
+                                backgroundColor: surfaceColor,
+                                side: BorderSide(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .outline
+                                      .withValues(alpha: 0.4),
+                                ),
+                                onPressed: () {
+                                  setState(() {
+                                    _selectedCompanyId = candidate.id;
+                                    _ocrCompanySuggestion = null;
+                                    _ocrCompanyLocationSuggestion = null;
+                                    _ocrSimilarCompanies = [];
+                                  });
+                                },
+                              );
+                            }).toList(),
                           ),
-                          icon: Icon(
-                            Icons.close,
-                            size: 18,
-                            color: textSecondary,
-                          ),
-                          onPressed: () {
-                            setState(() {
-                              _ocrCompanySuggestion = null;
-                              _ocrCompanyLocationSuggestion = null;
-                            });
-                          },
-                        ),
+                        ],
                       ],
                     ),
                   ),
@@ -776,6 +833,7 @@ class _ContactFormPageState extends ConsumerState<ContactFormPage> {
                           if (value != null) {
                             _ocrCompanySuggestion = null;
                             _ocrCompanyLocationSuggestion = null;
+                            _ocrSimilarCompanies = [];
                           }
                         });
                       },

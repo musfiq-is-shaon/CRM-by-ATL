@@ -12,10 +12,12 @@ import '../../../data/models/lunch_model.dart';
 const Color lunchBrandGreen = Color(0xFF22C55E);
 const Color lunchBrandPurple = Color(0xFF6366F1);
 
+/// API option types: `office` (menu), `personal`, `off` (see production polls).
+/// Legacy reads also accept `office_menu` / `yes` — see [lunchOptionKindFrom].
 String lunchOptionKindApiValue(LunchOptionKind kind) {
   switch (kind) {
     case LunchOptionKind.officeMenu:
-      return 'office_menu';
+      return 'office';
     case LunchOptionKind.personal:
       return 'personal';
     case LunchOptionKind.offAbsent:
