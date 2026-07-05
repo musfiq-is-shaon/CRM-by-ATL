@@ -2,6 +2,7 @@ import 'dart:async' show Timer, unawaited;
 
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/services/attendance_reminder_controller.dart';
 import 'core/services/fcm_notification_sync.dart';
@@ -22,7 +23,8 @@ import 'data/repositories/company_repository.dart';
 import 'data/repositories/user_repository.dart';
 import 'presentation/pages/auth/login_page.dart';
 import 'presentation/pages/main/shell_page.dart' show ShellPage, loadedTabsProvider, selectedTabProvider;
-import 'presentation/widgets/loading_widget.dart';
+import 'presentation/widgets/app_launch_loader.dart';
+import 'presentation/widgets/fifa_trionda_ball_view.dart';
 
 class CRMApp extends ConsumerStatefulWidget {
   const CRMApp({super.key});
@@ -32,26 +34,41 @@ class CRMApp extends ConsumerStatefulWidget {
 }
 
 class _CRMAppState extends ConsumerState<CRMApp> with WidgetsBindingObserver {
+  static const _minLaunchDuration = Duration(milliseconds: 3000);
+
   /// [ref.listen] on auth may not run if the user is already authenticated when this widget mounts.
   bool _fcmNotificationBridgeRegistered = false;
+  bool _launchHold = true;
   Timer? _inAppNotificationPollTimer;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    unawaited(
+      rootBundle.load(FifaTriondaBallView.modelAsset),
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await ref.read(themeProvider.notifier).init();
-      await ref.read(accentColorProvider.notifier).init();
-      await ref.read(amoledDarkProvider.notifier).init();
+      await Future.wait([
+        _runStartup(),
+        Future<void>.delayed(_minLaunchDuration),
+      ]);
       if (!mounted) return;
-      // Must complete before checking auth — otherwise we skip FCM when session restores.
-      await ref.read(authProvider.notifier).checkAuthStatus();
-      if (!mounted) return;
-      if (ref.read(authProvider).status == AuthStatus.authenticated) {
-        _ensureFcmNotificationBridgeAndPolling();
-      }
+      setState(() => _launchHold = false);
     });
+  }
+
+  Future<void> _runStartup() async {
+    await ref.read(themeProvider.notifier).init();
+    await ref.read(accentColorProvider.notifier).init();
+    await ref.read(amoledDarkProvider.notifier).init();
+    if (!mounted) return;
+    // Must complete before checking auth — otherwise we skip FCM when session restores.
+    await ref.read(authProvider.notifier).checkAuthStatus();
+    if (!mounted) return;
+    if (ref.read(authProvider).status == AuthStatus.authenticated) {
+      _ensureFcmNotificationBridgeAndPolling();
+    }
   }
 
   @override
@@ -174,6 +191,9 @@ class _CRMAppState extends ConsumerState<CRMApp> with WidgetsBindingObserver {
     final themeMode = ref.watch(themeProvider);
     final accent = ref.watch(accentColorProvider);
     final amoledBlack = ref.watch(amoledDarkProvider);
+    final showLaunchLoader = _launchHold ||
+        authState.status == AuthStatus.initial ||
+        authState.status == AuthStatus.loading;
 
     return DynamicColorBuilder(
       builder: (ColorScheme? lightDynamic, ColorScheme? darkDynamic) {
@@ -193,10 +213,8 @@ class _CRMAppState extends ConsumerState<CRMApp> with WidgetsBindingObserver {
             duration: const Duration(milliseconds: 200),
             curve: Curves.easeOutCubic,
           ),
-          home:
-              authState.status == AuthStatus.initial ||
-                  authState.status == AuthStatus.loading
-              ? const Scaffold(body: Center(child: LoadingWidget()))
+          home: showLaunchLoader
+              ? const Scaffold(body: AppLaunchLoader())
               : authState.status == AuthStatus.authenticated
               ? const ShellPage()
               : const LoginPage(),

@@ -58,17 +58,20 @@ class LunchRepository {
   Future<List<LunchPoll>> getTodayPollsHydrated() async {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    final results = await Future.wait<Object>([
-      getTodayPolls(),
-      listPolls(from: today, to: today),
-    ]);
-    final bundle = results[0] as LunchTodayBundle;
-    final listed = results[1] as List<LunchPoll>;
+    final bundle = await getTodayPolls();
 
     final byId = <String, LunchPoll>{};
-    for (final poll in [...listed, ...bundle.items]) {
+    for (final poll in bundle.items) {
       _upsertTodayPollById(byId, poll);
     }
+
+    // `/api/lunch/polls` is admin-only — enrich when allowed, never block users.
+    try {
+      final listed = await listPolls(from: today, to: today);
+      for (final poll in listed) {
+        _upsertTodayPollById(byId, poll);
+      }
+    } catch (_) {}
 
     final ordered = sortTodayPollsNewestFirst(byId.values.toList());
     final out = <LunchPoll>[];
@@ -204,15 +207,15 @@ class LunchRepository {
     required DateTime from,
     required DateTime to,
   }) async {
-    final results = await Future.wait([
-      listPolls(from: from, to: to),
-      getTodayPolls(),
-    ]);
-    final listed = results[0] as List<LunchPoll>;
-    final today = (results[1] as LunchTodayBundle).items;
+    final today = await getTodayPolls();
+
+    List<LunchPoll> listed = [];
+    try {
+      listed = await listPolls(from: from, to: to);
+    } catch (_) {}
 
     final byId = <String, LunchPoll>{};
-    for (final poll in [...today, ...listed]) {
+    for (final poll in [...today.items, ...listed]) {
       if (poll.id.isNotEmpty) byId[poll.id] = poll;
     }
 
