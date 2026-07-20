@@ -451,6 +451,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                     const SizedBox(height: 24),
                     CRMButton(
                       text: 'Login',
+                      loadingText: 'Signing in…',
                       isFullWidth: true,
                       isLoading: authState.status == AuthStatus.loading,
                       onPressed: _handleLogin,

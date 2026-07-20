@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/utils/async_load_helper.dart';
 import '../../core/errors/exceptions.dart';
 import '../../data/models/attendance_model.dart';
 import '../../data/repositories/attendance_repository.dart';
@@ -7,12 +8,14 @@ import 'auth_provider.dart';
 class AttendanceReconciliationState {
   final List<AttendanceReconciliation> items;
   final bool isLoading;
+  final bool isRefreshing;
   final String? error;
   final String? statusFilter;
 
   const AttendanceReconciliationState({
     this.items = const [],
     this.isLoading = false,
+    this.isRefreshing = false,
     this.error,
     this.statusFilter,
   });
@@ -20,12 +23,14 @@ class AttendanceReconciliationState {
   AttendanceReconciliationState copyWith({
     List<AttendanceReconciliation>? items,
     bool? isLoading,
+    bool? isRefreshing,
     String? error,
     String? statusFilter,
   }) {
     return AttendanceReconciliationState(
       items: items ?? this.items,
       isLoading: isLoading ?? this.isLoading,
+      isRefreshing: isRefreshing ?? this.isRefreshing,
       error: error,
       statusFilter: statusFilter ?? this.statusFilter,
     );
@@ -71,8 +76,31 @@ class AttendanceReconciliationNotifier
     String? userId,
     String? dateFrom,
     String? dateTo,
+    bool refresh = false,
   }) async {
-    state = state.copyWith(isLoading: true, error: null, statusFilter: status);
+    final hadCache = state.items.isNotEmpty;
+    if (!hadCache) {
+      state = state.copyWith(
+        isLoading: true,
+        isRefreshing: false,
+        error: null,
+        statusFilter: status,
+      );
+    } else if (refresh) {
+      state = state.copyWith(
+        isRefreshing: true,
+        error: null,
+        statusFilter: status,
+      );
+    } else {
+      final flags = beginAsyncLoad(hasCachedData: true);
+      state = state.copyWith(
+        isLoading: flags.isLoading,
+        isRefreshing: flags.isRefreshing,
+        error: null,
+        statusFilter: status,
+      );
+    }
     try {
       final list = await _repository.getReconciliations(
         status: status,
@@ -80,9 +108,17 @@ class AttendanceReconciliationNotifier
         dateFrom: dateFrom,
         dateTo: dateTo,
       );
-      state = state.copyWith(items: list, isLoading: false);
+      state = state.copyWith(
+        items: list,
+        isLoading: false,
+        isRefreshing: false,
+      );
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
+      state = state.copyWith(
+        isLoading: false,
+        isRefreshing: false,
+        error: asyncLoadError(e),
+      );
     }
   }
 

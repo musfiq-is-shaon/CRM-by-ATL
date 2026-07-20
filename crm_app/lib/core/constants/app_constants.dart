@@ -5,7 +5,7 @@ class AppConstants {
   static const String currencySymbol = '৳';
 
   // API Base URL - Update this to your production URL
-  static const String baseUrl = 'https://be-crm-production-a948.up.railway.app';
+  static const String baseUrl = 'https://crm.apptriangle.com';
 
   // API Endpoints
   static const String authLogin = '/api/auth/login';

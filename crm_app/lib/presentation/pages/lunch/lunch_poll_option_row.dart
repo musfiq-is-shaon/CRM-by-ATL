@@ -6,6 +6,235 @@ import '../../../data/models/lunch_model.dart';
 import '../../widgets/avatar_widget.dart';
 import 'lunch_ui_helpers.dart';
 
+/// Card-style poll option — matches My Lunch reference layout.
+class LunchPollOptionCard extends StatelessWidget {
+  const LunchPollOptionCard({
+    super.key,
+    required this.option,
+    required this.selected,
+    required this.totalVotes,
+    required this.enabled,
+    required this.onTap,
+    this.compact = false,
+    this.dimmed = false,
+  });
+
+  final LunchPollOption option;
+  final bool selected;
+  final int totalVotes;
+  final bool enabled;
+  final VoidCallback? onTap;
+  final bool compact;
+  final bool dimmed;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final textPrimary = AppThemeColors.textPrimaryColor(context);
+    final textSecondary = AppThemeColors.textSecondaryColor(context);
+    final kind = option.kind;
+    final kindColor = lunchOptionKindColor(kind, cs);
+    final count = option.effectiveVoteCount;
+    final fraction = totalVotes > 0 ? count / totalVotes : 0.0;
+    final inactive = dimmed && !selected;
+    final borderColor = selected
+        ? lunchBrandOrange
+        : inactive
+            ? cs.outline.withValues(alpha: 0.18)
+            : cs.outline.withValues(alpha: 0.3);
+    final bgColor = selected
+        ? lunchBrandOrange.withValues(alpha: inactive ? 0.03 : 0.04)
+        : inactive
+            ? cs.surfaceContainerHighest.withValues(alpha: 0.45)
+            : cs.surface;
+    final labelColor = inactive ? textSecondary.withValues(alpha: 0.75) : textPrimary;
+    final iconBg = selected
+        ? lunchBrandOrange
+        : inactive
+            ? cs.outline.withValues(alpha: 0.12)
+            : kindColor.withValues(alpha: 0.12);
+    final iconFg = selected
+        ? Colors.white
+        : inactive
+            ? textSecondary.withValues(alpha: 0.55)
+            : kindColor;
+    final progressBg = inactive
+        ? cs.surfaceContainerHighest
+        : const Color(0xFFFEF3C7);
+    final progressFg = selected
+        ? lunchBrandOrange
+        : inactive
+            ? cs.outline.withValues(alpha: 0.35)
+            : const Color(0xFFFDE68A);
+    final radius = compact ? 10.0 : 14.0;
+    final iconSize = compact ? 32.0 : 40.0;
+    final iconGlyph = compact ? 16.0 : 20.0;
+    final labelSize = compact ? 13.0 : 15.0;
+    final gap = compact ? 6.0 : 10.0;
+    final cardPad = compact
+        ? const EdgeInsets.fromLTRB(8, 8, 8, 7)
+        : const EdgeInsets.fromLTRB(12, 12, 12, 10);
+    final checkSize = compact ? 20.0 : 26.0;
+    final checkIcon = compact ? 13.0 : 16.0;
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: compact ? 6 : 10),
+      child: Opacity(
+        opacity: inactive ? 0.52 : 1,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: enabled ? onTap : null,
+            borderRadius: BorderRadius.circular(radius),
+            child: Container(
+              padding: cardPad,
+              decoration: BoxDecoration(
+                color: bgColor,
+                borderRadius: BorderRadius.circular(radius),
+                border: Border.all(
+                  color: borderColor,
+                  width: selected ? (compact ? 1.5 : 2) : 1,
+                ),
+                boxShadow: compact || inactive
+                    ? null
+                    : [
+                        BoxShadow(
+                          color: cs.shadow.withValues(alpha: 0.04),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: iconSize,
+                        height: iconSize,
+                        decoration: BoxDecoration(
+                          color: iconBg,
+                          borderRadius: BorderRadius.circular(compact ? 8 : 10),
+                        ),
+                        child: Icon(
+                          lunchOptionKindIcon(kind),
+                          size: iconGlyph,
+                          color: iconFg,
+                        ),
+                      ),
+                      SizedBox(width: compact ? 8 : 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Wrap(
+                              spacing: compact ? 4 : 6,
+                              runSpacing: compact ? 2 : 4,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: [
+                                Text(
+                                  option.label,
+                                  style: TextStyle(
+                                    fontSize: labelSize,
+                                    fontWeight: FontWeight.w700,
+                                    color: labelColor,
+                                    height: 1.15,
+                                  ),
+                                ),
+                              if (selected)
+                                Container(
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: compact ? 6 : 8,
+                                    vertical: compact ? 1 : 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: lunchBrandOrange,
+                                    borderRadius: BorderRadius.circular(5),
+                                  ),
+                                  child: Text(
+                                    'YOUR VOTE',
+                                    style: TextStyle(
+                                      fontSize: compact ? 8 : 9,
+                                      fontWeight: FontWeight.w800,
+                                      color: Colors.white,
+                                      letterSpacing: 0.3,
+                                    ),
+                                  ),
+                                ),
+                              lunchOptionTypeBadge(
+                                option.optionType,
+                                fontSize: compact ? 8 : 9,
+                                shortLabel: true,
+                              ),
+                            ],
+                          ),
+                          if (option.voters.isNotEmpty || count > 0) ...[
+                            SizedBox(height: compact ? 4 : 8),
+                            Row(
+                              children: [
+                                if (option.voters.isNotEmpty)
+                                  Expanded(
+                                    child: LunchVoterAvatarStack(
+                                      voters: option.voters,
+                                      compact: compact,
+                                    ),
+                                  )
+                                else
+                                  const Spacer(),
+                                Text(
+                                  '$count ${count == 1 ? 'vote' : 'votes'}',
+                                  style: TextStyle(
+                                    fontSize: compact ? 10 : 12,
+                                    fontWeight: FontWeight.w500,
+                                    color: textSecondary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    if (selected) ...[
+                      SizedBox(width: compact ? 4 : 6),
+                      Container(
+                        width: checkSize,
+                        height: checkSize,
+                        decoration: const BoxDecoration(
+                          color: lunchBrandOrange,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.check_rounded,
+                          size: checkIcon,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                SizedBox(height: gap),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(3),
+                  child: LinearProgressIndicator(
+                    value: fraction.clamp(0.0, 1.0),
+                    minHeight: compact ? 3 : 5,
+                    backgroundColor: progressBg,
+                    color: progressFg,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    ),
+    );
+  }
+}
+
 /// Single poll choice row — radio, label, vote bar, voter avatars (web parity).
 class LunchPollOptionRow extends StatelessWidget {
   const LunchPollOptionRow({
@@ -30,7 +259,7 @@ class LunchPollOptionRow extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final textSecondary = AppThemeColors.textSecondaryColor(context);
     final voteAccent = enabled
-        ? (selected ? lunchBrandGreen : lunchBrandPurple)
+        ? lunchBrandPurple
         : textSecondary.withValues(alpha: 0.45);
     final count = option.effectiveVoteCount;
     final fraction = totalVotes > 0 ? count / totalVotes : 0.0;
@@ -104,7 +333,10 @@ class LunchPollOptionRow extends StatelessWidget {
                       ),
                       if (option.voters.isNotEmpty) ...[
                         SizedBox(height: gap),
-                        _VoterAvatarStack(voters: option.voters, compact: compact),
+                        LunchVoterAvatarStack(
+                          voters: option.voters,
+                          compact: compact,
+                        ),
                       ],
                     ],
                   ),
@@ -118,8 +350,8 @@ class LunchPollOptionRow extends StatelessWidget {
   }
 }
 
-class _VoterAvatarStack extends StatelessWidget {
-  const _VoterAvatarStack({required this.voters, this.compact = false});
+class LunchVoterAvatarStack extends StatelessWidget {
+  const LunchVoterAvatarStack({super.key, required this.voters, this.compact = false});
 
   final List<LunchOptionVoter> voters;
   final bool compact;
@@ -216,7 +448,7 @@ class _TypeChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final accent = selected ? lunchBrandGreen : lunchBrandPurple;
+    final accent = lunchBrandPurple;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(6),

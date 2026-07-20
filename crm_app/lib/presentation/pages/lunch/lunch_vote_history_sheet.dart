@@ -258,8 +258,29 @@ class _LunchVoteHistorySheetState extends ConsumerState<_LunchVoteHistorySheet> 
             ),
             const SizedBox(height: 12),
             Expanded(
-              child: state.status == LunchLoadStatus.loading && rows.isEmpty
+              child: state.voteHistoryLoading && rows.isEmpty
                   ? const LoadingWidget(message: 'Loading history…')
+                  : state.voteHistoryError != null && rows.isEmpty
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              state.voteHistoryError!,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(color: textSecondary),
+                            ),
+                            const SizedBox(height: 12),
+                            TextButton(
+                              onPressed: _load,
+                              child: const Text('Retry'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
                   : rows.isEmpty
                   ? Center(
                       child: Text(

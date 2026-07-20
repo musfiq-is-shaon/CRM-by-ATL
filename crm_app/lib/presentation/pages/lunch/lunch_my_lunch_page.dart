@@ -1,3 +1,5 @@
+import 'dart:async' show unawaited;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -35,8 +37,9 @@ class _LunchMyLunchPageState extends ConsumerState<LunchMyLunchPage> {
   Future<void> _bootstrap() async {
     final n = ref.read(lunchProvider.notifier);
     await n.bootstrapUser();
-    await n.loadSettings();
-    await n.loadMyBalance(month: _monthKey(_balanceMonth), silent: true);
+    await n.refreshTodayPollsIfStale();
+    unawaited(n.loadSettings());
+    unawaited(n.loadMyBalance(month: _monthKey(_balanceMonth), silent: true));
   }
 
   Future<void> _refresh() async {
@@ -63,6 +66,18 @@ class _LunchMyLunchPageState extends ConsumerState<LunchMyLunchPage> {
     final user = ref.watch(authProvider).user;
     final textPrimary = AppThemeColors.textPrimaryColor(context);
     final textSecondary = AppThemeColors.textSecondaryColor(context);
+
+    ref.listen(lunchProvider, (prev, next) {
+      if (next.error != null &&
+          prev?.error != next.error &&
+          next.todayPolls.isNotEmpty &&
+          context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(next.error!)),
+        );
+        ref.read(lunchProvider.notifier).clearError();
+      }
+    });
 
     if (state.status == LunchLoadStatus.loading && state.todayPolls.isEmpty) {
       return ListView(
@@ -185,23 +200,17 @@ class _TodayPollCard extends ConsumerWidget {
   final String userName;
 
   String _statusHintFor(LunchPoll p) {
-    if (p.isCancelled) return 'Poll cancelled — voting is disabled';
+    if (p.isCancelled) return 'Poll cancelled.';
     if (p.effectiveStatus == 'closed') {
-      if (p.isPastEndTime && p.isActive) {
-        return 'Voting ended at ${formatLunchEndTimeDisplay(p.endTime)}';
+      if (p.endTime != null && p.endTime!.isNotEmpty) {
+        return 'Closed · ended ${formatLunchEndTimeDisplay(p.endTime)}';
       }
-      return 'Poll closed — voting has ended';
+      return 'Poll closed.';
     }
     if (p.isVotingOpen && p.endTime != null && p.endTime!.isNotEmpty) {
-      return 'Closes at ${formatLunchEndTimeDisplay(p.endTime)}';
+      return 'Closes ${formatLunchEndTimeDisplay(p.endTime)}';
     }
     return p.statusHint;
-  }
-
-  IconData _statusIconFor(LunchPoll p) {
-    if (p.isCancelled) return Icons.cancel_outlined;
-    if (p.effectiveStatus == 'closed') return Icons.lock_outline;
-    return Icons.schedule;
   }
 
   @override
@@ -214,17 +223,25 @@ class _TodayPollCard extends ConsumerWidget {
         poll;
     final textPrimary = AppThemeColors.textPrimaryColor(context);
     final textSecondary = AppThemeColors.textSecondaryColor(context);
-    final cs = Theme.of(context).colorScheme;
     final canVote = livePoll.isVotingOpen;
     final myOptionId = livePoll.scopedMyVote?.optionId;
     final hasVoted = myOptionId != null && myOptionId.isNotEmpty;
     final optionsLocked =
-        voting || (hasVoted && !livePoll.allowVoteChange) || !canVote;
+        voting || (hasVoted && !livePoll.allowsVoteChanges) || !canVote;
     final options = livePoll.mergedOptions;
     final total = livePoll.totalVoteCount;
+    final endLabel = livePoll.endTime != null && livePoll.endTime!.isNotEmpty
+        ? formatLunchEndTimeDisplay(livePoll.endTime)
+        : null;
+    final dateLabel = livePoll.date != null
+        ? formatLunchPollDateShort(livePoll.date)
+        : null;
+    final pollClosed = !canVote;
 
-    return CRMCard(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+    return Opacity(
+      opacity: pollClosed ? 0.52 : 1,
+      child: CRMCard(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -232,123 +249,119 @@ class _TodayPollCard extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                child: Wrap(
+                  spacing: 4,
+                  runSpacing: 4,
                   children: [
-                    Text(
-                      userName,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: lunchBrandGreen,
-                      ),
+                    lunchPollStatusMetaChip(
+                      livePoll.effectiveStatus,
+                      compact: true,
                     ),
-                    Text(
-                      poll.title,
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: textPrimary,
-                        height: 1.2,
+                    if (dateLabel != null)
+                      lunchPollMetaChip(
+                        icon: Icons.calendar_today_rounded,
+                        label: dateLabel,
+                        compact: true,
                       ),
+                    lunchPollMetaChip(
+                      icon: Icons.people_outline_rounded,
+                      label: '$total ${total == 1 ? 'vote' : 'votes'}',
+                      compact: true,
                     ),
+                    if (endLabel != null)
+                      lunchPollMetaChip(
+                        icon: Icons.schedule_rounded,
+                        label: endLabel,
+                        compact: true,
+                      ),
                   ],
                 ),
               ),
-              lunchPollStatusBadge(livePoll.effectiveStatus),
             ],
           ),
-          const SizedBox(height: 6),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: livePoll.isCancelled
-                  ? cs.errorContainer.withValues(alpha: 0.35)
-                  : livePoll.effectiveStatus == 'closed'
-                  ? cs.surfaceContainerHighest
-                  : cs.surfaceContainerHighest.withValues(alpha: 0.6),
-              borderRadius: BorderRadius.circular(AppRadius.sm),
-              border: livePoll.effectiveStatus == 'closed'
-                  ? Border.all(color: cs.outline.withValues(alpha: 0.35))
-                  : null,
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  _statusIconFor(livePoll),
-                  size: 14,
-                  color: livePoll.isCancelled
-                      ? cs.error
-                      : livePoll.effectiveStatus == 'closed'
-                      ? cs.onSurfaceVariant
-                      : textSecondary,
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    _statusHintFor(livePoll),
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: livePoll.effectiveStatus == 'closed' ||
-                              livePoll.isCancelled
-                          ? FontWeight.w600
-                          : FontWeight.w500,
-                      color: livePoll.isCancelled
-                          ? cs.error
-                          : livePoll.effectiveStatus == 'closed'
-                          ? cs.onSurfaceVariant
-                          : textSecondary,
-                    ),
-                  ),
-                ),
-              ],
+          const SizedBox(height: 8),
+          Text(
+            poll.title,
+            style: TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w800,
+              color: textPrimary,
+              height: 1.15,
+              letterSpacing: -0.2,
             ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 2),
+          Text(
+            userName,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+              color: textSecondary,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            _statusHintFor(livePoll),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 11,
+              color: textSecondary,
+              height: 1.25,
+            ),
+          ),
+          const SizedBox(height: 8),
           if (options.isEmpty)
             Text('No menu options yet', style: TextStyle(color: textSecondary))
           else
             AbsorbPointer(
               absorbing: optionsLocked,
-              child: Opacity(
-                opacity: optionsLocked ? 0.42 : 1,
-                child: Column(
-                  children: options
-                      .map(
-                        (opt) => LunchPollOptionRow(
-                          option: opt,
-                          selected: myOptionId == opt.id,
-                          totalVotes: total,
-                          enabled: !optionsLocked,
-                          compact: true,
-                          onTap: () async {
-                            if (optionsLocked) {
-                              if (!canVote) {
-                                showLunchVoteDisabledMessage(context, poll);
-                              }
-                              return;
+              child: Column(
+                children: options
+                    .map(
+                      (opt) => LunchPollOptionCard(
+                        option: opt,
+                        selected: myOptionId == opt.id,
+                        totalVotes: total,
+                        enabled: !optionsLocked,
+                        dimmed: !pollClosed && hasVoted && myOptionId != opt.id,
+                        compact: true,
+                        onTap: () async {
+                          if (optionsLocked) {
+                            if (!canVote) {
+                              showLunchVoteDisabledMessage(context, poll);
                             }
-                            if (!livePoll.allowVoteChange &&
-                                myOptionId != null &&
-                                myOptionId != opt.id) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Vote changes are not allowed'),
-                                ),
-                              );
-                              return;
-                            }
-                            await ref
-                                .read(lunchProvider.notifier)
-                                .vote(poll.id, opt.id);
-                          },
-                        ),
-                      )
-                      .toList(),
-                ),
+                            return;
+                          }
+                          if (!livePoll.allowsVoteChanges &&
+                              myOptionId != null &&
+                              myOptionId != opt.id) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Vote changes are not allowed'),
+                              ),
+                            );
+                            return;
+                          }
+                          await ref
+                              .read(lunchProvider.notifier)
+                              .vote(poll.id, opt.id);
+                        },
+                      ),
+                    )
+                    .toList(),
               ),
             ),
+          if (voting) ...[
+            const SizedBox(height: 8),
+            const Center(
+              child: SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+          ],
           if (livePoll.scopedMyVote?.votedAt != null) ...[
             const SizedBox(height: 4),
             Align(
@@ -360,11 +373,10 @@ class _TodayPollCard extends ConsumerWidget {
             ),
           ],
           if (total > 0) ...[
-            const SizedBox(height: 2),
             Center(
               child: TextButton(
                 style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 0),
                   minimumSize: Size.zero,
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
@@ -372,8 +384,8 @@ class _TodayPollCard extends ConsumerWidget {
                 child: const Text(
                   'View all votes',
                   style: TextStyle(
-                    fontSize: 13,
-                    color: lunchBrandGreen,
+                    fontSize: 12,
+                    color: lunchBrandOrange,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -382,6 +394,7 @@ class _TodayPollCard extends ConsumerWidget {
           ],
         ],
       ),
+    ),
     );
   }
 }
@@ -407,6 +420,7 @@ class _BalanceCard extends StatelessWidget {
     final textSecondary = AppThemeColors.textSecondaryColor(context);
     final cs = Theme.of(context).colorScheme;
     final monthAmount = balance?.monthNetChange ?? 0;
+    final runningTotal = balance?.balance ?? 0;
     final isOwed = monthAmount < 0;
     final monthLabel = DateFormat('MMMM yyyy').format(month);
 
@@ -423,6 +437,17 @@ class _BalanceCard extends StatelessWidget {
               color: textSecondary,
             ),
           ),
+          if (!loading) ...[
+            const SizedBox(height: 4),
+            Text(
+              'Total owed: $runningTotal ${AppConstants.currencySymbol}',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: runningTotal < 0 ? cs.error : textSecondary,
+              ),
+            ),
+          ],
           const SizedBox(height: 10),
           Row(
             children: [
@@ -458,6 +483,16 @@ class _BalanceCard extends StatelessWidget {
               ),
             )
           else ...[
+            Text(
+              'THIS MONTH',
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.4,
+                color: textSecondary,
+              ),
+            ),
+            const SizedBox(height: 4),
             Text(
               '$monthAmount ${AppConstants.currencySymbol}',
               style: TextStyle(

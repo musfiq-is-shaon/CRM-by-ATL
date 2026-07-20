@@ -9,6 +9,7 @@ import '../../../data/models/lunch_model.dart';
 import '../../../data/repositories/lunch_repository.dart';
 import '../../providers/lunch_provider.dart';
 import '../../widgets/crm_text_field.dart';
+import '../../widgets/loading_widget.dart';
 import 'lunch_poll_option_row.dart';
 import 'lunch_ui_helpers.dart';
 
@@ -63,8 +64,11 @@ class _LunchPollFormSheetState extends ConsumerState<LunchPollFormSheet> {
   bool _allowVoteChange = true;
   bool _saving = false;
   bool _loadingPoll = false;
+  bool _statusChanging = false;
   String? _formError;
+  String _pollStatus = 'active';
   LunchPoll? _baselinePoll;
+  LunchPoll? _serverSnapshot;
   int? _selectedDurationMinutes = 60;
   final List<_OptionRow> _options = [];
 
@@ -129,13 +133,21 @@ class _LunchPollFormSheetState extends ConsumerState<LunchPollFormSheet> {
     LunchPoll poll, {
     List<LunchMenuBreakdownRow>? breakdown,
   }) {
+    _captureServerSnapshot(poll);
     _titleCtrl.text = poll.title;
     if (poll.endTime != null && poll.endTime!.isNotEmpty) {
-      _endTimeCtrl.text = formatLunchEndTimeDisplay(poll.endTime);
-      _selectedDurationMinutes = null;
+      if (isPollEndTimeViable(poll.endTime, poll.date)) {
+        _endTimeCtrl.text = formatLunchEndTimeDisplay(poll.endTime);
+        _selectedDurationMinutes = null;
+      } else {
+        _prefillFutureEndTime();
+      }
+    } else if (!poll.isVotingOpen && poll.isClosed) {
+      _prefillFutureEndTime();
     }
     _date = poll.date ?? _date;
     _allowVoteChange = poll.allowVoteChange;
+    _pollStatus = poll.status.toLowerCase();
     for (final o in _options) {
       o.labelCtrl.dispose();
     }
@@ -173,6 +185,23 @@ class _LunchPollFormSheetState extends ConsumerState<LunchPollFormSheet> {
     _syncBaseline();
   }
 
+  void _captureServerSnapshot(LunchPoll poll) {
+    _serverSnapshot = LunchPoll(
+      id: poll.id,
+      title: poll.title,
+      date: poll.date,
+      createdAt: poll.createdAt,
+      costAmount: poll.costAmount,
+      allowVoteChange: poll.allowVoteChange,
+      endTime: poll.endTime,
+      status: poll.status.toLowerCase(),
+      options: poll.options,
+      myVote: poll.myVote,
+      results: poll.results,
+      reportedTotalVotes: poll.reportedTotalVotes,
+    );
+  }
+
   void _syncBaseline() {
     final existing = widget.existing;
     if (existing == null) {
@@ -186,6 +215,7 @@ class _LunchPollFormSheetState extends ConsumerState<LunchPollFormSheet> {
       costAmount: existing.costAmount,
       allowVoteChange: _allowVoteChange,
       endTime: lunchEndTimeToApi(_endTimeCtrl.text.trim()),
+      status: _pollStatus,
       options: _buildPollOptions().where((o) => o.id.isNotEmpty).toList(),
     );
   }
@@ -193,6 +223,12 @@ class _LunchPollFormSheetState extends ConsumerState<LunchPollFormSheet> {
   static String _defaultEndTime() {
     final t = DateTime.now().add(const Duration(hours: 1));
     return DateFormat.jm().format(t);
+  }
+
+  void _prefillFutureEndTime({int minutes = 60}) {
+    final end = DateTime.now().add(Duration(minutes: minutes));
+    _endTimeCtrl.text = DateFormat.jm().format(end);
+    _selectedDurationMinutes = minutes;
   }
 
   @override
@@ -312,7 +348,7 @@ class _LunchPollFormSheetState extends ConsumerState<LunchPollFormSheet> {
           options.any((o) => o.optionType == lunchOptionKindApiValue(LunchOptionKind.officeMenu));
       if (hasOfficeMenu && cost == null && widget.existing == null) {
         _showFormError(
-          'Set a default meal cost in Lunch Settings before adding office menu items',
+          'Set a default meal cost in Lunch → Settings before adding office menu items',
         );
         return;
       }
@@ -332,6 +368,7 @@ class _LunchPollFormSheetState extends ConsumerState<LunchPollFormSheet> {
               widget.existing!.id,
               poll,
               original: _baselinePoll ?? widget.existing,
+              priorState: _serverSnapshot ?? widget.existing,
             );
       }
       if (mounted) Navigator.pop(context, true);
@@ -342,14 +379,78 @@ class _LunchPollFormSheetState extends ConsumerState<LunchPollFormSheet> {
     }
   }
 
+  Future<void> _closePoll() async {
+    final existing = widget.existing;
+    if (existing == null || existing.id.isEmpty || _statusChanging) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Close poll?'),
+        content: Text(
+          'Close "${existing.title}"? Employees will no longer be able to vote.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Close poll'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() {
+      _statusChanging = true;
+      _pollStatus = 'closed';
+    });
+    try {
+      await ref.read(lunchProvider.notifier).closePoll(existing.id);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Poll closed')),
+        );
+        Navigator.pop(context, true);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _pollStatus = existing.status.toLowerCase());
+        _showFormError(_formatSaveError(e));
+      }
+    } finally {
+      if (mounted) setState(() => _statusChanging = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final textPrimary = AppThemeColors.textPrimaryColor(context);
     final textSecondary = AppThemeColors.textSecondaryColor(context);
     final border = AppThemeColors.borderColor(context);
     final isEdit = widget.existing != null;
+    final isAdmin = ref.watch(lunchAdminProvider);
+    final lunchState = ref.watch(lunchProvider);
     final dateLabel = formatLunchPollDate(_date);
-    final settings = ref.watch(lunchProvider).settings;
+    final settings = lunchState.settings;
+    final existingPoll = widget.existing;
+    LunchPoll? livePoll;
+    if (existingPoll != null && existingPoll.id.isNotEmpty) {
+      for (final p in [...lunchState.todayPolls, ...lunchState.adminPolls]) {
+        if (p.id == existingPoll.id) {
+          livePoll = p;
+          break;
+        }
+      }
+    }
+    final actionPoll = livePoll ?? _serverSnapshot ?? existingPoll;
+    final canClosePoll =
+        isEdit && isAdmin && actionPoll != null && actionPoll.canAdminClosePoll;
+    final pollClosedForEdit =
+        isEdit && actionPoll != null && !actionPoll.isVotingOpen;
 
     return Form(
       key: _formKey,
@@ -465,10 +566,57 @@ class _LunchPollFormSheetState extends ConsumerState<LunchPollFormSheet> {
                     ),
                   ],
                 ),
+                if (pollClosedForEdit) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    'Set end time to later today and save to reopen voting.',
+                    style: TextStyle(fontSize: 12, color: textSecondary, height: 1.35),
+                  ),
+                ],
               ],
             ),
           ),
           const SizedBox(height: 16),
+          if (isEdit) ...[
+            _FormSection(
+              title: 'Poll status',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      lunchPollStatusBadge(
+                        actionPoll?.effectiveStatus ??
+                            (_pollStatus == 'active'
+                                ? (existingPoll?.effectiveStatus ?? _pollStatus)
+                                : _pollStatus),
+                      ),
+                      const Spacer(),
+                      if (_statusChanging)
+                        const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                    ],
+                  ),
+                  if (isAdmin && canClosePoll) ...[
+                    const SizedBox(height: 12),
+                    FilledButton.icon(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: Theme.of(context).colorScheme.error,
+                        foregroundColor: Theme.of(context).colorScheme.onError,
+                      ),
+                      onPressed: _saving || _statusChanging ? null : _closePoll,
+                      icon: const Icon(Icons.lock_outline, size: 18),
+                      label: const Text('Close poll'),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
           _FormSection(
             title: 'Voting rules',
             child: SwitchListTile(
@@ -482,28 +630,24 @@ class _LunchPollFormSheetState extends ConsumerState<LunchPollFormSheet> {
           ),
           const SizedBox(height: 16),
           if (_loadingPoll)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 24),
-              child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
-            )
+            const FormSkeleton(fieldCount: 3)
           else
             _FormSection(
             title: 'Menu options',
-            trailing: isEdit
-                ? null
-                : TextButton.icon(
-                    onPressed: () => setState(
-                      () => _options.add(
-                        _OptionRow(label: '', kind: LunchOptionKind.officeMenu),
-                      ),
-                    ),
-                    icon: const Icon(Icons.add, size: 18),
-                    label: const Text('Add option'),
-                  ),
+            trailing: TextButton.icon(
+              onPressed: () => setState(
+                () => _options.add(
+                  _OptionRow(label: '', kind: LunchOptionKind.officeMenu),
+                ),
+              ),
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('Add option'),
+            ),
             child: Column(
               children: _options.asMap().entries.map((entry) {
                 final i = entry.key;
                 final row = entry.value;
+                final canRemove = _options.length > 1 && row.voteCount == 0;
                 return Container(
                   key: row.key,
                   margin: const EdgeInsets.only(bottom: 10),
@@ -529,14 +673,12 @@ class _LunchPollFormSheetState extends ConsumerState<LunchPollFormSheet> {
                               textInputAction: TextInputAction.next,
                             ),
                           ),
-                          if (!isEdit)
+                          if (canRemove)
                             IconButton(
-                              onPressed: _options.length <= 1
-                                  ? null
-                                  : () => setState(() {
-                                      row.labelCtrl.dispose();
-                                      _options.removeAt(i);
-                                    }),
+                              onPressed: () => setState(() {
+                                row.labelCtrl.dispose();
+                                _options.removeAt(i);
+                              }),
                               icon: const Icon(Icons.delete_outline, size: 20),
                             ),
                         ],
@@ -546,10 +688,10 @@ class _LunchPollFormSheetState extends ConsumerState<LunchPollFormSheet> {
                         selected: row.kind,
                         onChanged: (k) => setState(() => row.kind = k),
                       ),
-                      if (isEdit) ...[
+                      if (isEdit && row.voteCount > 0) ...[
                         const SizedBox(height: 8),
                         Text(
-                          '${row.voteCount} vote${row.voteCount == 1 ? '' : 's'}',
+                          '${row.voteCount} vote${row.voteCount == 1 ? '' : 's'} · cannot remove',
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
@@ -724,6 +866,6 @@ class LunchPollFormPage extends ConsumerWidget {
       Navigator.pop(context);
       showLunchPollFormSheet(context, ref, existing: existing);
     });
-    return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    return const Scaffold(body: FormSkeleton(fieldCount: 4));
   }
 }

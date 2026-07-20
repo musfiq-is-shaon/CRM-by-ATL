@@ -165,10 +165,17 @@ class _TasksListPageState extends ConsumerState<TasksListPage>
     final textSecondary = AppThemeColors.textSecondaryColor(context);
     final textTertiary = AppThemeColors.textTertiaryColor(context);
 
-    if (state.isLoading) {
+    if (state.isLoading && state.tasks.isEmpty) {
       return const ListSkeletonLoader(
         itemCount: 8,
         padding: AppThemeColors.pagePaddingHorizontal,
+      );
+    }
+
+    if (state.error != null && state.tasks.isEmpty) {
+      return app_widgets.ErrorWidget(
+        message: state.error!,
+        onRetry: () => ref.read(tasksProvider.notifier).loadTasks(),
       );
     }
 
@@ -250,10 +257,11 @@ class _TasksListPageState extends ConsumerState<TasksListPage>
       );
     }
 
-    return RefreshIndicator(
+    Widget listBody = RefreshIndicator(
       onRefresh: () => ref.read(tasksProvider.notifier).loadTasks(),
       child: ListView.builder(
         padding: AppThemeColors.listPagePadding,
+        physics: const AlwaysScrollableScrollPhysics(),
         itemCount: tasks.length,
         itemBuilder: (context, index) {
           final task = tasks[index];
@@ -371,6 +379,21 @@ class _TasksListPageState extends ConsumerState<TasksListPage>
         },
       ),
     );
+
+    if (state.isRefreshing || (state.isLoading && state.tasks.isNotEmpty)) {
+      return Stack(
+        alignment: Alignment.topCenter,
+        children: [
+          listBody,
+          const Positioned(
+            top: AppSpacing.sm,
+            child: InlineRefreshIndicator(),
+          ),
+        ],
+      );
+    }
+
+    return listBody;
   }
 
   Color _getDueDateColor(BuildContext context, DateTime dueDate) {

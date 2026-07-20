@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme_colors.dart';
+import '../../../core/utils/async_load_helper.dart';
 import '../../../data/models/attendance_model.dart';
 import '../../../data/models/shift_model.dart';
 import '../../providers/attendance_provider.dart';
 import '../../providers/attendance_reconciliation_provider.dart';
 import '../../providers/shift_provider.dart';
+import '../../widgets/list_page_state.dart';
+import '../../widgets/loading_widget.dart';
 
 String _teamRowDisplayName(
   AttendanceReconciliation row,
@@ -93,7 +96,7 @@ class _AttendanceTeamReconciliationTabState
     ref.invalidate(userProfileShiftProvider);
     await ref
         .read(attendanceReconciliationProvider.notifier)
-        .loadTeamQueue(status: 'pending');
+        .loadTeamQueue(status: 'pending', refresh: true);
     await ref.read(attendanceProvider.notifier).loadToday();
     await ref.read(shiftProvider.notifier).loadShifts();
     ref.invalidate(userShiftTimingsProvider);
@@ -199,140 +202,136 @@ class _AttendanceTeamReconciliationTabState
     final cs = Theme.of(context).colorScheme;
 
     ref.listen(attendanceReconciliationProvider, (prev, next) {
-      if (next.error != null && prev?.error != next.error && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(next.error!),
-            backgroundColor: cs.error,
-          ),
-        );
+      if (next.error != null &&
+          prev?.error != next.error &&
+          next.items.isNotEmpty &&
+          mounted) {
+        showRefreshErrorSnackBar(context, next.error!);
         ref.read(attendanceReconciliationProvider.notifier).clearError();
       }
     });
 
-    return RefreshIndicator(
-      onRefresh: _refresh,
-      child: state.isLoading && state.items.isEmpty
-          ? const Center(child: CircularProgressIndicator())
-          : state.items.isEmpty
-              ? ListView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  children: [
-                    SizedBox(
-                      height: MediaQuery.sizeOf(context).height * 0.2,
-                    ),
-                    Center(
-                      child: Text(
-                        'No pending requests',
-                        style: TextStyle(color: textSecondary, fontSize: 16),
-                      ),
-                    ),
-                  ],
-                )
-              : ListView.builder(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: AppThemeColors.pagePaddingAll,
-                  itemCount: state.items.length,
-                  itemBuilder: (context, i) {
-                    final row = state.items[i];
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      _teamRowDisplayName(row, timings),
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w600,
-                                        color: textPrimary,
-                                      ),
-                                    ),
-                                  ),
-                                  Chip(
-                                    label: const Text('Pending'),
-                                    visualDensity: VisualDensity.compact,
-                                    backgroundColor: cs.secondaryContainer,
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 4),
-                              Row(
-                                children: [
-                                  Icon(
-                                    Icons.schedule_rounded,
-                                    size: 15,
-                                    color: cs.tertiary,
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Expanded(
-                                    child: Text(
-                                      _teamRowShiftLine(row, shifts, timings),
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w500,
-                                        color: textSecondary,
-                                        height: 1.3,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              if (row.attendanceDate != null &&
-                                  row.attendanceDate!.isNotEmpty) ...[
-                                const SizedBox(height: 4),
-                                Text(
-                                  'Date: ${row.attendanceDate}',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    color: textSecondary,
-                                  ),
-                                ),
-                              ],
-                              const SizedBox(height: 8),
-                              Text(
-                                row.reason,
+    return AsyncScreenView(
+      isLoading: state.isLoading && state.items.isEmpty,
+      isRefreshing: state.isRefreshing,
+      hasCachedData: state.items.isNotEmpty,
+      error: state.error,
+      isEmpty: state.items.isEmpty,
+      onRetry: () => ref
+          .read(attendanceReconciliationProvider.notifier)
+          .loadTeamQueue(status: 'pending'),
+      emptyTitle: 'No pending requests',
+      emptySubtitle: 'Late reconciliation requests will appear here',
+      emptyIcon: Icons.fact_check_outlined,
+      content: RefreshIndicator(
+        onRefresh: _refresh,
+        child: FadeInContent(
+          child: ListView.builder(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: AppThemeColors.pagePaddingAll,
+            itemCount: state.items.length,
+            itemBuilder: (context, i) {
+              final row = state.items[i];
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                _teamRowDisplayName(row, timings),
                                 style: TextStyle(
-                                  fontSize: 14,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
                                   color: textPrimary,
-                                  height: 1.35,
                                 ),
                               ),
-                              const SizedBox(height: 12),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: OutlinedButton(
-                                      onPressed: state.isLoading
-                                          ? null
-                                          : () => _review(row, 'rejected'),
-                                      child: const Text('Reject'),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: FilledButton(
-                                      onPressed: state.isLoading
-                                          ? null
-                                          : () => _review(row, 'approved'),
-                                      child: const Text('Approve'),
-                                    ),
-                                  ),
-                                ],
+                            ),
+                            Chip(
+                              label: const Text('Pending'),
+                              visualDensity: VisualDensity.compact,
+                              backgroundColor: cs.secondaryContainer,
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.schedule_rounded,
+                              size: 15,
+                              color: cs.tertiary,
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                _teamRowShiftLine(row, shifts, timings),
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: textSecondary,
+                                  height: 1.3,
+                                ),
                               ),
-                            ],
+                            ),
+                          ],
+                        ),
+                        if (row.attendanceDate != null &&
+                            row.attendanceDate!.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            'Date: ${row.attendanceDate}',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: textSecondary,
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 8),
+                        Text(
+                          row.reason,
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: textPrimary,
+                            height: 1.35,
                           ),
                         ),
-                      ),
-                    );
-                  },
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: state.isLoading || state.isRefreshing
+                                    ? null
+                                    : () => _review(row, 'rejected'),
+                                child: const Text('Reject'),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: FilledButton(
+                                onPressed: state.isLoading || state.isRefreshing
+                                    ? null
+                                    : () => _review(row, 'approved'),
+                                child: const Text('Approve'),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
+              );
+            },
+          ),
+        ),
+      ),
     );
   }
 }

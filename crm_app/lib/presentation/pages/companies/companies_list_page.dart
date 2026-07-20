@@ -6,8 +6,8 @@ import '../../providers/user_provider.dart';
 import '../../providers/currency_provider.dart';
 import '../../widgets/crm_card.dart';
 import '../../widgets/loading_widget.dart';
-import '../../widgets/error_widget.dart' as app_widgets;
 import '../../widgets/app_search_filter_bar.dart';
+import '../../widgets/list_page_state.dart';
 import '../../widgets/create_company_dialog.dart';
 import 'company_detail_page.dart';
 
@@ -84,37 +84,32 @@ class _CompaniesListPageState extends ConsumerState<CompaniesListPage> {
             onFilterTap: () => _showFilterDialog(context),
           ),
           Expanded(
-            child: companiesState.isLoading
-                ? const ListSkeletonLoader(
-                    itemCount: 8,
-                    padding: AppThemeColors.pagePaddingHorizontal,
-                  )
-                : companiesState.error != null
-                ? app_widgets.ErrorWidget(
-                    message: companiesState.error!,
-                    onRetry: () =>
-                        ref.read(companiesProvider.notifier).loadCompanies(),
-                  )
-                : companiesState.filteredCompanies.isEmpty
-                ? const app_widgets.EmptyStateWidget(
-                    title: 'No companies found',
-                    subtitle: 'Add your first company',
-                    icon: Icons.business_outlined,
-                  )
-                : RefreshIndicator(
-                    onRefresh: () async {
-                      await ref
-                          .read(companiesProvider.notifier)
-                          .loadCompanies();
-                    },
-                    child: ListView.builder(
-                      padding: AppThemeColors.listPagePadding,
-                      itemCount: companiesState.filteredCompanies.length,
-                      itemBuilder: (context, index) {
-                        final company = companiesState.filteredCompanies[index];
-                        return Padding(
-                          padding: AppThemeColors.cardListItemMargin,
-                          child: CRMCard(
+            child: AsyncScreenView(
+              isLoading: companiesState.isLoading,
+              isRefreshing: companiesState.isRefreshing,
+              hasCachedData: companiesState.companies.isNotEmpty,
+              error: companiesState.error,
+              isEmpty: companiesState.filteredCompanies.isEmpty,
+              onRetry: () => ref
+                  .read(companiesProvider.notifier)
+                  .loadCompanies(refresh: true),
+              emptyTitle: 'No companies found',
+              emptySubtitle: 'Add your first company to get started',
+              emptyIcon: Icons.business_outlined,
+              content: RefreshIndicator(
+                onRefresh: () => ref
+                    .read(companiesProvider.notifier)
+                    .loadCompanies(refresh: true),
+                child: FadeInContent(
+                  child: ListView.builder(
+                    padding: AppThemeColors.listPagePadding,
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    itemCount: companiesState.filteredCompanies.length,
+                    itemBuilder: (context, index) {
+                      final company = companiesState.filteredCompanies[index];
+                      return Padding(
+                        padding: AppThemeColors.cardListItemMargin,
+                        child: CRMCard(
                             onTap: () {
                               Navigator.push(
                                 context,
@@ -193,7 +188,9 @@ class _CompaniesListPageState extends ConsumerState<CompaniesListPage> {
                       },
                     ),
                   ),
-          ),
+                ),
+              ),
+            ),
         ],
       ),
     );

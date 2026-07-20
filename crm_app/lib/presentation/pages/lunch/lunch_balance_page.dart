@@ -35,7 +35,10 @@ class _LunchBalancePageState extends ConsumerState<LunchBalancePage> {
     final cs = Theme.of(context).colorScheme;
 
     if (state.status == LunchLoadStatus.loading && bal == null) {
-      return const LoadingWidget(message: 'Loading balance…');
+      return const ListSkeletonLoader(
+        padding: AppThemeColors.pagePaddingAll,
+        itemCount: 5,
+      );
     }
 
     return RefreshIndicator(
@@ -168,7 +171,7 @@ class _LunchHistoryPageState extends ConsumerState<LunchHistoryPage> {
           ),
           const SizedBox(height: 16),
           if (state.status == LunchLoadStatus.loading && state.voteHistory.isEmpty)
-            const LoadingWidget(message: 'Loading history…')
+            const ListSkeletonLoader(itemCount: 4, shrinkWrap: true)
           else if (state.voteHistory.isEmpty)
             CRMCard(child: Text('No history yet', style: TextStyle(color: textSecondary)))
           else

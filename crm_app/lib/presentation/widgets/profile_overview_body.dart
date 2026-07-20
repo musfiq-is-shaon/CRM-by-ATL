@@ -8,6 +8,7 @@ import '../providers/shift_provider.dart';
 import '../providers/rbac_provider.dart' show companyProfileEditAllowedProvider;
 import '../providers/company_profile_provider.dart';
 import 'crm_card.dart';
+import 'loading_widget.dart';
 
 /// User + company sections for the Profile screen.
 class ProfileOverviewBody extends ConsumerStatefulWidget {
@@ -54,6 +55,10 @@ class _ProfileOverviewBodyState extends ConsumerState<ProfileOverviewBody> {
     final email = _dash(user?.email);
     final role = (user?.role ?? 'user').toUpperCase();
     final shiftAsync = ref.watch(userProfileShiftProvider);
+
+    if (companyState.isLoading && company == null) {
+      return const ProfileSkeleton();
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,

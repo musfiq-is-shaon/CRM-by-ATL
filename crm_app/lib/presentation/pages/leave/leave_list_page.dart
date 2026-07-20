@@ -8,10 +8,13 @@ import '../../providers/rbac_provider.dart'
     show rbacMeProvider, leaveManagementElevatedProvider;
 import '../../providers/leave_provider.dart';
 import '../../../data/models/leave_model.dart';
+import '../../../core/utils/async_load_helper.dart';
 import '../../widgets/crm_card.dart';
 import '../../widgets/themed_panel.dart';
 import '../../widgets/app_semantic_pill.dart';
 import '../../widgets/status_badge.dart';
+import '../../widgets/list_page_state.dart';
+import '../../widgets/loading_widget.dart';
 import 'leave_apply_page.dart';
 import 'leave_balances_page.dart';
 import 'leave_detail_page.dart';
@@ -86,13 +89,11 @@ class _LeaveListPageState extends ConsumerState<LeaveListPage> {
         (state.scope == LeaveListScope.team && leaveElevated);
 
     ref.listen(leaveProvider, (prev, next) {
-      if (next.error != null && prev?.error != next.error && context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(next.error!),
-            backgroundColor: Theme.of(context).colorScheme.error,
-          ),
-        );
+      if (next.error != null &&
+          prev?.error != next.error &&
+          next.leaves.isNotEmpty &&
+          context.mounted) {
+        showRefreshErrorSnackBar(context, next.error!);
         ref.read(leaveProvider.notifier).clearError();
       }
     });
@@ -599,82 +600,75 @@ class _LeaveListPageState extends ConsumerState<LeaveListPage> {
               ),
             ),
           Expanded(
-            child: RefreshIndicator(
-              onRefresh: () async {
-                await ref.read(leaveProvider.notifier).loadReportingInfo();
-                await ref.read(leaveProvider.notifier).loadLeaves();
+            child: AsyncScreenView(
+              isLoading: state.isLoading,
+              isRefreshing: state.isRefreshing,
+              hasCachedData: state.leaves.isNotEmpty,
+              error: state.error,
+              isEmpty: state.leaves.isEmpty,
+              onRetry: () => ref.read(leaveProvider.notifier).loadLeaves(refresh: true),
+              emptyTitle: 'No leave requests here',
+              emptySubtitle: 'Try another tab or tap Apply',
+              emptyIcon: Icons.event_busy_outlined,
+              emptyButtonText: 'Apply for leave',
+              onEmptyAction: () {
+                Navigator.push<void>(
+                  context,
+                  MaterialPageRoute<void>(
+                    builder: (_) => const LeaveApplyPage(),
+                  ),
+                );
               },
-              child: state.isLoading && state.leaves.isEmpty
-                  ? const Center(child: CircularProgressIndicator())
-                  : state.leaves.isEmpty
-                  ? ListView(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      children: [
-                        SizedBox(
-                          height: MediaQuery.sizeOf(context).height * 0.3,
-                        ),
-                        Center(
-                          child: Column(
-                            children: [
-                              Icon(
-                                Icons.event_busy_outlined,
-                                size: 64,
-                                color: textSecondary,
-                              ),
-                              const SizedBox(height: AppSpacing.sm),
-                              Text(
-                                'No leave requests here',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  color: textSecondary,
-                                ),
-                              ),
-                              const SizedBox(height: AppSpacing.xs),
-                              Text(
-                                'Try another tab or tap Apply',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: textSecondary.withValues(alpha: 0.85),
-                                ),
-                              ),
-                            ],
+              content: RefreshIndicator(
+                onRefresh: () async {
+                  await ref.read(leaveProvider.notifier).loadReportingInfo();
+                  await ref.read(leaveProvider.notifier).loadLeaves(refresh: true);
+                },
+                child: state.leaves.isEmpty
+                    ? ListView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        children: [
+                          SizedBox(
+                            height: MediaQuery.sizeOf(context).height * 0.25,
                           ),
+                        ],
+                      )
+                    : FadeInContent(
+                        child: ListView.builder(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          padding: AppThemeColors.listPagePaddingFab,
+                          itemCount: state.leaves.length,
+                          itemBuilder: (context, i) {
+                            final entry = state.leaves[i];
+                            final isTeam = state.scope == LeaveListScope.team;
+                            final showTeamActions = isTeam && entry.isPending;
+                            return _LeaveTile(
+                              entry: entry,
+                              textPrimary: textPrimary,
+                              textSecondary: textSecondary,
+                              showApplicant: state.scope != LeaveListScope.mine,
+                              onTileTap: canOpenLeaveDetail
+                                  ? () {
+                                      Navigator.push<void>(
+                                        context,
+                                        MaterialPageRoute<void>(
+                                          builder: (_) =>
+                                              LeaveDetailPage(leaveId: entry.id),
+                                        ),
+                                      );
+                                    }
+                                  : null,
+                              onApprove: showTeamActions
+                                  ? () => _confirmApproveTeam(context, entry.id)
+                                  : null,
+                              onReject: showTeamActions
+                                  ? () => _confirmRejectTeam(context, entry.id)
+                                  : null,
+                            );
+                          },
                         ),
-                      ],
-                    )
-                  : ListView.builder(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      padding: AppThemeColors.listPagePaddingFab,
-                      itemCount: state.leaves.length,
-                      itemBuilder: (context, i) {
-                        final entry = state.leaves[i];
-                        final isTeam = state.scope == LeaveListScope.team;
-                        final showTeamActions = isTeam && entry.isPending;
-                        return _LeaveTile(
-                          entry: entry,
-                          textPrimary: textPrimary,
-                          textSecondary: textSecondary,
-                          showApplicant: state.scope != LeaveListScope.mine,
-                          onTileTap: canOpenLeaveDetail
-                              ? () {
-                                  Navigator.push<void>(
-                                    context,
-                                    MaterialPageRoute<void>(
-                                      builder: (_) =>
-                                          LeaveDetailPage(leaveId: entry.id),
-                                    ),
-                                  );
-                                }
-                              : null,
-                          onApprove: showTeamActions
-                              ? () => _confirmApproveTeam(context, entry.id)
-                              : null,
-                          onReject: showTeamActions
-                              ? () => _confirmRejectTeam(context, entry.id)
-                              : null,
-                        );
-                      },
-                    ),
+                      ),
+              ),
             ),
           ),
         ],

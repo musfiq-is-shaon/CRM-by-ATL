@@ -274,7 +274,7 @@ class ExpenseDetailPage extends ConsumerWidget {
             ],
           ),
         ),
-        loading: () => const LoadingWidget(),
+        loading: () => const DetailSkeleton(),
         error: (error, _) => app_widgets.ErrorWidget(
           message: error.toString(),
           onRetry: () => ref.refresh(expenseDetailProvider(expenseId)),

@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/utils/async_load_helper.dart';
 import '../../data/models/expense_model.dart';
 import '../../data/models/company_model.dart';
 import '../../data/models/user_model.dart';
@@ -39,6 +40,7 @@ class ExpenseListFilters {
 class ExpensesState {
   final List<Expense> expenses;
   final bool isLoading;
+  final bool isRefreshing;
   final String? error;
   final String? selectedStatus;
   final String? listSearch;
@@ -47,6 +49,7 @@ class ExpensesState {
   const ExpensesState({
     this.expenses = const [],
     this.isLoading = false,
+    this.isRefreshing = false,
     this.error,
     this.selectedStatus,
     this.listSearch,
@@ -56,6 +59,7 @@ class ExpensesState {
   ExpensesState copyWith({
     List<Expense>? expenses,
     bool? isLoading,
+    bool? isRefreshing,
     String? error,
     String? selectedStatus,
     bool clearStatus = false,
@@ -66,6 +70,7 @@ class ExpensesState {
     return ExpensesState(
       expenses: expenses ?? this.expenses,
       isLoading: isLoading ?? this.isLoading,
+      isRefreshing: isRefreshing ?? this.isRefreshing,
       error: error,
       selectedStatus: clearStatus
           ? null
@@ -170,7 +175,12 @@ class ExpensesNotifier extends StateNotifier<ExpensesState> {
   ) : super(const ExpensesState());
 
   Future<void> loadExpenses() async {
-    state = state.copyWith(isLoading: true, error: null);
+    final flags = beginAsyncLoad(hasCachedData: state.expenses.isNotEmpty);
+    state = state.copyWith(
+      isLoading: flags.isLoading,
+      isRefreshing: flags.isRefreshing,
+      error: null,
+    );
     try {
       final expenses = await _expenseRepository.getExpenses();
 
@@ -228,9 +238,17 @@ class ExpensesNotifier extends StateNotifier<ExpensesState> {
         }),
       );
 
-      state = state.copyWith(expenses: expensesWithData, isLoading: false);
+      state = state.copyWith(
+        expenses: expensesWithData,
+        isLoading: false,
+        isRefreshing: false,
+      );
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
+      state = state.copyWith(
+        isLoading: false,
+        isRefreshing: false,
+        error: asyncLoadError(e),
+      );
     }
   }
 

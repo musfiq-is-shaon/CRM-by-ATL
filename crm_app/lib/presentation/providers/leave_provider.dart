@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/utils/async_load_helper.dart';
 import '../../data/models/leave_model.dart';
 import '../../data/repositories/leave_repository.dart';
 import 'auth_provider.dart';
@@ -31,6 +32,7 @@ class LeaveState {
   final List<LeaveEntry> leaves;
   final List<LeaveTypeOption> types;
   final bool isLoading;
+  final bool isRefreshing;
   final bool typesLoading;
   final String? error;
   final LeaveListScope scope;
@@ -46,6 +48,7 @@ class LeaveState {
     this.leaves = const [],
     this.types = const [],
     this.isLoading = false,
+    this.isRefreshing = false,
     this.typesLoading = false,
     this.error,
     this.scope = LeaveListScope.mine,
@@ -61,6 +64,7 @@ class LeaveState {
     List<LeaveEntry>? leaves,
     List<LeaveTypeOption>? types,
     bool? isLoading,
+    bool? isRefreshing,
     bool? typesLoading,
     Object? error = _sentinel,
     LeaveListScope? scope,
@@ -75,6 +79,7 @@ class LeaveState {
       leaves: leaves ?? this.leaves,
       types: types ?? this.types,
       isLoading: isLoading ?? this.isLoading,
+      isRefreshing: isRefreshing ?? this.isRefreshing,
       typesLoading: typesLoading ?? this.typesLoading,
       error: identical(error, _sentinel) ? this.error : error as String?,
       scope: scope ?? this.scope,
@@ -144,13 +149,26 @@ class LeaveNotifier extends StateNotifier<LeaveState> {
     }
   }
 
-  Future<void> loadLeaves() async {
+  Future<void> loadLeaves({bool refresh = false}) async {
     final userId = ref.read(currentUserIdProvider);
     if (userId == null) {
-      state = state.copyWith(isLoading: false, error: 'User not authenticated');
+      state = state.copyWith(
+        isLoading: false,
+        isRefreshing: false,
+        error: 'User not authenticated',
+      );
       return;
     }
-    state = state.copyWith(isLoading: true, error: null);
+    final flags = beginAsyncLoad(hasCachedData: state.leaves.isNotEmpty);
+    if (refresh || state.leaves.isNotEmpty) {
+      state = state.copyWith(isRefreshing: true, error: null);
+    } else {
+      state = state.copyWith(
+        isLoading: flags.isLoading,
+        isRefreshing: flags.isRefreshing,
+        error: null,
+      );
+    }
     try {
       final leaveElevated = ref.read(leaveManagementElevatedProvider);
       var scope = state.scope;
@@ -179,12 +197,18 @@ class LeaveNotifier extends StateNotifier<LeaveState> {
                 : state.adminAllFilters.userIds.trim(),
           ),
       };
-      state = state.copyWith(leaves: list, isLoading: false, error: null);
+      state = state.copyWith(
+        leaves: list,
+        isLoading: false,
+        isRefreshing: false,
+        error: null,
+      );
       // Always sync "your remaining leave" after leaves refresh (approve deducts on server).
       await loadMyBalances();
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
+        isRefreshing: false,
         error: e.toString().replaceFirst('Exception: ', ''),
       );
     }

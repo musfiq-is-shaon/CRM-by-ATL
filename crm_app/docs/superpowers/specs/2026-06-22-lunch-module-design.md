@@ -2,7 +2,7 @@
 
 **Date:** 2026-06-22  
 **Scope:** Option A — full module (user + admin)  
-**API base:** `https://be-crm-production-a948.up.railway.app`  
+**API base:** `https://crm.apptriangle.com`  
 **Lunch prefix:** `/api/lunch`  
 **RBAC pageKey:** `lunch`
 

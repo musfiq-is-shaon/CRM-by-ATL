@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/utils/async_load_helper.dart';
 import '../../data/models/company_model.dart';
 import '../../data/models/order_model.dart';
 import '../../data/models/user_model.dart';
@@ -38,6 +39,7 @@ class OrderListFilters {
 class OrdersState {
   final List<Order> orders;
   final bool isLoading;
+  final bool isRefreshing;
   final String? error;
   final String? listSearch;
   final OrderListFilters listFilters;
@@ -45,6 +47,7 @@ class OrdersState {
   const OrdersState({
     this.orders = const [],
     this.isLoading = false,
+    this.isRefreshing = false,
     this.error,
     this.listSearch,
     this.listFilters = OrderListFilters.empty,
@@ -53,6 +56,7 @@ class OrdersState {
   OrdersState copyWith({
     List<Order>? orders,
     bool? isLoading,
+    bool? isRefreshing,
     String? error,
     String? listSearch,
     bool clearListSearch = false,
@@ -61,6 +65,7 @@ class OrdersState {
     return OrdersState(
       orders: orders ?? this.orders,
       isLoading: isLoading ?? this.isLoading,
+      isRefreshing: isRefreshing ?? this.isRefreshing,
       error: error,
       listSearch: clearListSearch ? null : (listSearch ?? this.listSearch),
       listFilters: listFilters ?? this.listFilters,
@@ -132,8 +137,20 @@ class OrdersNotifier extends StateNotifier<OrdersState> {
     this._userRepository,
   ) : super(const OrdersState());
 
-  Future<void> loadOrders() async {
-    state = state.copyWith(isLoading: true, error: null);
+  Future<void> loadOrders({bool refresh = false}) async {
+    final hadCache = state.orders.isNotEmpty;
+    if (!hadCache) {
+      state = state.copyWith(isLoading: true, isRefreshing: false, error: null);
+    } else if (refresh) {
+      state = state.copyWith(isRefreshing: true, error: null);
+    } else {
+      final flags = beginAsyncLoad(hasCachedData: true);
+      state = state.copyWith(
+        isLoading: flags.isLoading,
+        isRefreshing: flags.isRefreshing,
+        error: null,
+      );
+    }
     try {
       final orders = await _orderRepository.getOrders();
 
@@ -180,9 +197,17 @@ class OrdersNotifier extends StateNotifier<OrdersState> {
         );
       }).toList();
 
-      state = state.copyWith(orders: List<Order>.from(enriched), isLoading: false);
+      state = state.copyWith(
+        orders: List<Order>.from(enriched),
+        isLoading: false,
+        isRefreshing: false,
+      );
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
+      state = state.copyWith(
+        isLoading: false,
+        isRefreshing: false,
+        error: asyncLoadError(e),
+      );
     }
   }
 

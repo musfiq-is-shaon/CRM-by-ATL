@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shimmer/shimmer.dart';
 
+import '../../core/theme/app_theme_colors.dart';
 import '../../core/theme/design_tokens.dart';
 
 class LoadingWidget extends StatelessWidget {
@@ -174,3 +175,346 @@ class DashboardHeroSkeleton extends StatelessWidget {
     );
   }
 }
+
+// --- Global loading UX aliases & variants ---
+
+typedef PageSkeleton = DashboardHeroSkeleton;
+typedef CardSkeleton = ShimmerCard;
+typedef ListSkeleton = ListSkeletonLoader;
+
+/// Full dashboard page placeholder.
+class DashboardSkeleton extends StatelessWidget {
+  const DashboardSkeleton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: AppThemeColors.pagePaddingAll,
+      physics: const NeverScrollableScrollPhysics(),
+      children: const [
+        DashboardHeroSkeleton(),
+        SizedBox(height: AppSpacing.lg),
+        ShimmerLoading(width: 140, height: 18),
+        SizedBox(height: AppSpacing.sm),
+        Row(
+          children: [
+            Expanded(child: ShimmerCard(height: 100)),
+            SizedBox(width: AppSpacing.sm),
+            Expanded(child: ShimmerCard(height: 100)),
+          ],
+        ),
+        SizedBox(height: AppSpacing.lg),
+        ShimmerLoading(width: 160, height: 18),
+        SizedBox(height: AppSpacing.sm),
+        ShimmerCard(height: 72),
+        SizedBox(height: AppSpacing.sm),
+        ShimmerCard(height: 72),
+        SizedBox(height: AppSpacing.sm),
+        ShimmerCard(height: 72),
+      ],
+    );
+  }
+}
+
+/// Detail / form page placeholder (title, hero, metadata, actions).
+class DetailSkeleton extends StatelessWidget {
+  const DetailSkeleton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: AppThemeColors.pagePaddingAll,
+      physics: const NeverScrollableScrollPhysics(),
+      children: const [
+        ShimmerLoading(width: 200, height: 24),
+        SizedBox(height: AppSpacing.lg),
+        ShimmerCard(height: 160),
+        SizedBox(height: AppSpacing.lg),
+        ShimmerCard(height: 56),
+        SizedBox(height: AppSpacing.sm),
+        ShimmerCard(height: 56),
+        SizedBox(height: AppSpacing.sm),
+        ShimmerCard(height: 56),
+        SizedBox(height: AppSpacing.lg),
+        ShimmerLoading(width: 140, height: 14),
+        SizedBox(height: AppSpacing.sm),
+        ShimmerCard(height: 100),
+        SizedBox(height: AppSpacing.xl),
+        ShimmerLoading(height: AppSizes.buttonHeight),
+      ],
+    );
+  }
+}
+
+/// Profile / settings header skeleton.
+class ProfileSkeleton extends StatelessWidget {
+  const ProfileSkeleton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: AppThemeColors.pagePaddingAll,
+      child: Column(
+        children: [
+          const ImageSkeleton(width: 88, height: 88, borderRadius: 44),
+          const SizedBox(height: AppSpacing.md),
+          const ShimmerLoading(width: 180, height: 22),
+          const SizedBox(height: AppSpacing.xs),
+          const ShimmerLoading(width: 140, height: 14),
+          const SizedBox(height: AppSpacing.xl),
+          for (var i = 0; i < 4; i++) ...[
+            const ShimmerCard(height: 52),
+            if (i < 3) const SizedBox(height: AppSpacing.sm),
+          ],
+          const SizedBox(height: AppSpacing.lg),
+          const ShimmerLoading(
+            width: double.infinity,
+            height: AppSizes.buttonHeight,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Table / admin list rows.
+class TableSkeleton extends StatelessWidget {
+  const TableSkeleton({super.key, this.rowCount = 8});
+
+  final int rowCount;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView.separated(
+      padding: AppThemeColors.pagePaddingHorizontal,
+      physics: const NeverScrollableScrollPhysics(),
+      shrinkWrap: true,
+      itemCount: rowCount,
+      separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.xs),
+      itemBuilder: (_, _) => const ShimmerCard(height: 48),
+    );
+  }
+}
+
+/// Form field placeholders while config loads.
+class FormSkeleton extends StatelessWidget {
+  const FormSkeleton({super.key, this.fieldCount = 4});
+
+  final int fieldCount;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: AppThemeColors.pagePaddingAll,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (var i = 0; i < fieldCount; i++) ...[
+            ShimmerLoading(width: 80 + (i * 12).toDouble(), height: 12),
+            const SizedBox(height: AppSpacing.xs),
+            const ShimmerLoading(height: AppSizes.textFieldHeight),
+            const SizedBox(height: AppSpacing.md),
+          ],
+          const SizedBox(height: AppSpacing.sm),
+          const ShimmerLoading(height: AppSizes.buttonHeight),
+        ],
+      ),
+    );
+  }
+}
+
+/// Fixed-size image placeholder — prevents layout shift.
+class ImageSkeleton extends StatelessWidget {
+  const ImageSkeleton({
+    super.key,
+    required this.width,
+    required this.height,
+    this.borderRadius = AppRadius.md,
+  });
+
+  final double width;
+  final double height;
+  final double borderRadius;
+
+  @override
+  Widget build(BuildContext context) {
+    return ShimmerLoading(
+      width: width,
+      height: height,
+      borderRadius: borderRadius,
+    );
+  }
+}
+
+/// Inline refresh bar shown over cached content.
+class InlineRefreshIndicator extends StatelessWidget {
+  const InlineRefreshIndicator({super.key, this.message = 'Updating…'});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Material(
+      elevation: 2,
+      borderRadius: BorderRadius.circular(AppRadius.full),
+      color: cs.surfaceContainerHigh,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.xs,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: 14,
+              height: 14,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: cs.primary,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Text(
+              message,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: cs.onSurfaceVariant,
+                  ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Bottom-of-list pagination loader.
+class LoadMoreIndicator extends StatelessWidget {
+  const LoadMoreIndicator({
+    super.key,
+    this.hasMore = true,
+    this.isLoading = false,
+    this.onRetry,
+  });
+
+  final bool hasMore;
+  final bool isLoading;
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    if (!hasMore) {
+      return Padding(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        child: Center(
+          child: Text(
+            'You\'re all caught up',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: cs.onSurfaceVariant,
+                ),
+          ),
+        ),
+      );
+    }
+    if (isLoading) {
+      return const Padding(
+        padding: EdgeInsets.all(AppSpacing.lg),
+        child: Center(
+          child: SizedBox(
+            width: 24,
+            height: 24,
+            child: CircularProgressIndicator(strokeWidth: 2.5),
+          ),
+        ),
+      );
+    }
+    if (onRetry != null) {
+      return Padding(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        child: Center(
+          child: TextButton(onPressed: onRetry, child: const Text('Load more')),
+        ),
+      );
+    }
+    return const SizedBox(height: AppSpacing.lg);
+  }
+}
+
+/// Stable-size button loading row (spinner + label).
+class ButtonLoadingState extends StatelessWidget {
+  const ButtonLoadingState({
+    super.key,
+    required this.label,
+    this.color,
+  });
+
+  final String label;
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) {
+    final fg = color ?? Theme.of(context).colorScheme.onPrimary;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        SizedBox(
+          width: 18,
+          height: 18,
+          child: CircularProgressIndicator(
+            strokeWidth: 2.5,
+            valueColor: AlwaysStoppedAnimation<Color>(fg),
+          ),
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        Text(
+          label,
+          style: AppTypography.button(context)?.copyWith(color: fg),
+        ),
+      ],
+    );
+  }
+}
+
+/// Fade-in wrapper for loaded content.
+class FadeInContent extends StatefulWidget {
+  const FadeInContent({
+    super.key,
+    required this.child,
+    this.duration = const Duration(milliseconds: 220),
+  });
+
+  final Widget child;
+  final Duration duration;
+
+  @override
+  State<FadeInContent> createState() => _FadeInContentState();
+}
+
+class _FadeInContentState extends State<FadeInContent>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _opacity;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this, duration: widget.duration);
+    _opacity = CurvedAnimation(parent: _controller, curve: Curves.easeOut);
+    _controller.forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(opacity: _opacity, child: widget.child);
+  }
+}
+

@@ -79,16 +79,7 @@ class ContactDetailPage extends ConsumerWidget {
         ],
       ),
       body: contact == null
-          ? ListView(
-              padding: AppThemeColors.pagePaddingAll,
-              children: const [
-                ShimmerCard(height: 160),
-                SizedBox(height: AppSpacing.lg),
-                ShimmerCard(height: 56),
-                SizedBox(height: AppSpacing.lg),
-                ShimmerCard(height: 180),
-              ],
-            )
+          ? const DetailSkeleton()
           : SingleChildScrollView(
               padding: AppThemeColors.pagePaddingAll,
               child: Column(

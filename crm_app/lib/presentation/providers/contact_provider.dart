@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/utils/async_load_helper.dart';
 import '../../data/models/contact_model.dart';
 import '../../data/models/company_model.dart';
 import '../../data/repositories/contact_repository.dart';
@@ -7,6 +8,7 @@ import '../../data/repositories/company_repository.dart';
 class ContactsState {
   final List<Contact> contacts;
   final bool isLoading;
+  final bool isRefreshing;
   final String? error;
   final String? searchQuery;
   final String? companyIdFilter;
@@ -14,6 +16,7 @@ class ContactsState {
   const ContactsState({
     this.contacts = const [],
     this.isLoading = false,
+    this.isRefreshing = false,
     this.error,
     this.searchQuery,
     this.companyIdFilter,
@@ -22,6 +25,7 @@ class ContactsState {
   ContactsState copyWith({
     List<Contact>? contacts,
     bool? isLoading,
+    bool? isRefreshing,
     String? error,
     String? searchQuery,
     String? companyIdFilter,
@@ -29,6 +33,7 @@ class ContactsState {
     return ContactsState(
       contacts: contacts ?? this.contacts,
       isLoading: isLoading ?? this.isLoading,
+      isRefreshing: isRefreshing ?? this.isRefreshing,
       error: error,
       searchQuery: searchQuery ?? this.searchQuery,
       companyIdFilter: companyIdFilter ?? this.companyIdFilter,
@@ -54,12 +59,29 @@ class ContactsState {
 class ContactsNotifier extends StateNotifier<ContactsState> {
   final ContactRepository _contactRepository;
   final CompanyRepository _companyRepository;
+  DateTime? _lastLoadedAt;
+  static const _backgroundRefreshAfter = Duration(minutes: 2);
 
   ContactsNotifier(this._contactRepository, this._companyRepository)
     : super(const ContactsState());
 
-  Future<void> loadContacts() async {
-    state = state.copyWith(isLoading: true, error: null);
+  /// [refresh] true for pull-to-refresh — shows the inline updating indicator.
+  /// When data is already cached, default loads refresh silently in the background.
+  Future<void> loadContacts({bool refresh = false}) async {
+    final hadCache = state.contacts.isNotEmpty;
+
+    if (!hadCache) {
+      state = state.copyWith(isLoading: true, isRefreshing: false, error: null);
+    } else if (refresh) {
+      state = state.copyWith(isRefreshing: true, error: null);
+    } else {
+      final last = _lastLoadedAt;
+      if (last != null &&
+          DateTime.now().difference(last) < _backgroundRefreshAfter) {
+        return;
+      }
+      // Silent background refresh — keep list visible, no updating pill.
+    }
     try {
       final contacts = await _contactRepository.getContacts();
 
@@ -100,9 +122,18 @@ class ContactsNotifier extends StateNotifier<ContactsState> {
         );
       }).toList();
 
-      state = state.copyWith(contacts: contactsWithCompany, isLoading: false);
+      state = state.copyWith(
+        contacts: contactsWithCompany,
+        isLoading: false,
+        isRefreshing: false,
+      );
+      _lastLoadedAt = DateTime.now();
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
+      state = state.copyWith(
+        isLoading: false,
+        isRefreshing: false,
+        error: asyncLoadError(e),
+      );
     }
   }
 

@@ -22,6 +22,7 @@ import '../../widgets/crm_card.dart';
 import '../../widgets/loading_widget.dart';
 import '../../widgets/error_widget.dart' as app_widgets;
 import '../../widgets/app_section_header.dart';
+import '../../widgets/dashboard_weather_banner.dart';
 import '../../widgets/status_badge.dart';
 import '../sales/sale_detail_page.dart';
 import '../tasks/task_detail_page.dart';
@@ -30,6 +31,7 @@ import '../expenses/expense_form_page.dart';
 import '../attendance/widgets/today_attendance_card.dart';
 import '../../providers/attendance_provider.dart';
 import '../../providers/notifications_provider.dart';
+import '../../providers/dashboard_weather_provider.dart';
 import '../main/notifications_page.dart';
 
 class DashboardPage extends ConsumerStatefulWidget {
@@ -57,6 +59,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     final me = ref.read(rbacMeProvider);
     final futures = <Future<void>>[
       ref.read(notificationsProvider.notifier).load(silent: true),
+      ref.read(dashboardWeatherProvider.notifier).refresh(),
     ];
     if (me != null) {
       futures.add(prefetchCrmLookupData(ref, me));
@@ -157,7 +160,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                                   Padding(
                                     padding: const EdgeInsets.only(top: AppSpacing.sm),
                                     child: Text(
-                                      dailyQuote,
+                                      '\u201C $dailyQuote \u201D',
                                       style: Theme.of(context)
                                           .textTheme
                                           .bodySmall
@@ -195,6 +198,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                             ),
                           ],
                         ),
+                        const DashboardWeatherBanner(),
                       ],
                     ),
                   ),
@@ -321,11 +325,19 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                 ),
 
                 // Tasks List - Use filtered tasks based on user role
-                if (tasksState.isLoading)
+                if (tasksState.isLoading && userFilteredTasks.isEmpty)
                   const SliverToBoxAdapter(
                     child: Padding(
-                      padding: AppThemeColors.pagePaddingAll,
-                      child: LoadingWidget(),
+                      padding: AppThemeColors.pagePaddingHorizontal,
+                      child: Column(
+                        children: [
+                          ShimmerCard(height: 72),
+                          SizedBox(height: AppSpacing.sm),
+                          ShimmerCard(height: 72),
+                          SizedBox(height: AppSpacing.sm),
+                          ShimmerCard(height: 72),
+                        ],
+                      ),
                     ),
                   )
                 else if (userFilteredTasks.isEmpty)
@@ -339,7 +351,14 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                       ),
                     ),
                   )
-                else
+                else ...[
+                  if (tasksState.isRefreshing)
+                    const SliverToBoxAdapter(
+                      child: Padding(
+                        padding: EdgeInsets.only(bottom: AppSpacing.sm),
+                        child: Center(child: InlineRefreshIndicator()),
+                      ),
+                    ),
                   SliverList(
                     delegate: SliverChildBuilderDelegate(
                       (context, index) {
@@ -420,6 +439,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                           : userFilteredTasks.length,
                     ),
                   ),
+                ],
               ],
               const SliverToBoxAdapter(child: SizedBox(height: 32)),
             ],
@@ -550,23 +570,26 @@ class _QuickActionButton extends StatelessWidget {
         splashColor: tonal.foreground.withValues(alpha: 0.12),
         highlightColor: tonal.foreground.withValues(alpha: 0.06),
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 8),
-          child: Column(
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, color: tonal.foreground, size: 28),
-              const SizedBox(height: 10),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  height: 1.25,
-                  color: tonal.foreground,
+              Icon(icon, color: tonal.foreground, size: 22),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    height: 1.2,
+                    color: tonal.foreground,
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
               ),
             ],
           ),

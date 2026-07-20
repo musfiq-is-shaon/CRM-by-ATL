@@ -1250,7 +1250,7 @@ class HoldToAttendanceAction extends StatefulWidget {
 class _HoldToAttendanceActionState extends State<HoldToAttendanceAction>
     with SingleTickerProviderStateMixin {
   static const double _ringSize = 148;
-  static const Duration _holdDuration = Duration(milliseconds: 1600);
+  static const Duration _holdDuration = Duration(milliseconds: 900);
 
   late AnimationController _controller;
   bool _fingerDown = false;

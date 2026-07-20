@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_theme_colors.dart';
 import '../../../core/theme/design_tokens.dart';
+import '../../../core/utils/async_load_helper.dart';
 import '../../../data/models/company_model.dart';
 import '../../../data/models/order_model.dart';
 import '../../../data/models/renewal_model.dart';
@@ -16,8 +17,8 @@ import '../../providers/user_provider.dart';
 import '../../widgets/app_search_filter_bar.dart';
 import '../../widgets/searchable_dropdown.dart';
 import '../../widgets/crm_card.dart';
-import '../../widgets/error_widget.dart' as app_widgets;
 import '../../widgets/loading_widget.dart';
+import '../../widgets/list_page_state.dart';
 import '../../widgets/status_badge.dart';
 import 'order_detail_page.dart';
 import 'order_form_page.dart';
@@ -100,6 +101,24 @@ class _DealsPageState extends ConsumerState<DealsPage>
     final ordersState = ref.watch(ordersProvider);
     final renewalsState = ref.watch(renewalsProvider);
 
+    ref.listen<OrdersState>(ordersProvider, (prev, next) {
+      if (next.error != null &&
+          prev?.error != next.error &&
+          next.orders.isNotEmpty &&
+          context.mounted) {
+        showRefreshErrorSnackBar(context, next.error!);
+      }
+    });
+
+    ref.listen<RenewalsState>(renewalsProvider, (prev, next) {
+      if (next.error != null &&
+          prev?.error != next.error &&
+          next.renewals.isNotEmpty &&
+          context.mounted) {
+        showRefreshErrorSnackBar(context, next.error!);
+      }
+    });
+
     return Scaffold(
       backgroundColor: bgColor,
       appBar: AppThemeColors.appBarTitle(context, 'Deals'),
@@ -150,7 +169,7 @@ class _DealsPageState extends ConsumerState<DealsPage>
                   },
                   onFilterTap: () => _showOrdersFilterSheet(context),
                   onRefresh: () =>
-                      ref.read(ordersProvider.notifier).loadOrders(),
+                      ref.read(ordersProvider.notifier).loadOrders(refresh: true),
                   onOpenDetail: (id) {
                     Navigator.push(
                       context,
@@ -186,8 +205,9 @@ class _DealsPageState extends ConsumerState<DealsPage>
                         .setListSearchAndReload(null);
                   },
                   onFilterTap: () => _showRenewalsFilterSheet(context),
-                  onRefresh: () =>
-                      ref.read(renewalsProvider.notifier).loadRenewals(),
+                  onRefresh: () => ref
+                      .read(renewalsProvider.notifier)
+                      .loadRenewals(refresh: true),
                   onOpenRenewal: (renewal) {
                     Navigator.push(
                       context,
@@ -705,7 +725,7 @@ Widget _dealsDateFilterButton({
   );
 }
 
-class _OrdersPane extends StatelessWidget {
+class _OrdersPane extends ConsumerWidget {
   final OrdersState ordersState;
   final TextEditingController searchController;
   final int activeFilterCount;
@@ -727,7 +747,7 @@ class _OrdersPane extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final textPrimary = AppThemeColors.textPrimaryColor(context);
     final textSecondary = AppThemeColors.textSecondaryColor(context);
     final textTertiary = AppThemeColors.textTertiaryColor(context);
@@ -777,106 +797,103 @@ class _OrdersPane extends StatelessWidget {
     Color textTertiary,
     Color primaryColor,
   ) {
-    if (state.isLoading && state.orders.isEmpty) {
-      return const LoadingWidget();
-    }
-    if (state.error != null && state.orders.isEmpty) {
-      return app_widgets.ErrorWidget(
-        message: state.error!,
-        onRetry: onRefresh,
-      );
-    }
-    if (rows.isEmpty) {
-      return app_widgets.EmptyStateWidget(
-        title: 'No orders',
-        subtitle: 'Create an order from a deal or here',
-        icon: Icons.shopping_cart_outlined,
-        buttonText: 'Add order',
-        onButtonPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const OrderFormPage()),
-          ).then((created) {
-            if (created == true) onRefresh();
-          });
-        },
-      );
-    }
-
-    return RefreshIndicator(
-      onRefresh: onRefresh,
-      child: ListView.builder(
-        padding: AppThemeColors.listPagePadding,
-        itemCount: rows.length,
-        itemBuilder: (context, index) {
-          final o = rows[index];
-          return Padding(
-            padding: AppThemeColors.cardListItemMargin,
-            child: CRMCard(
-              onTap: () => onOpenDetail(o.id),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
+    return AsyncScreenView(
+      isLoading: state.isLoading,
+      isRefreshing: state.isRefreshing,
+      hasCachedData: state.orders.isNotEmpty,
+      error: state.error,
+      isEmpty: rows.isEmpty,
+      onRetry: () => onRefresh(),
+      emptyTitle: 'No orders',
+      emptySubtitle: 'Create an order from a deal or here',
+      emptyIcon: Icons.shopping_cart_outlined,
+      emptyButtonText: 'Add order',
+      onEmptyAction: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const OrderFormPage()),
+        ).then((created) {
+          if (created == true) onRefresh();
+        });
+      },
+      content: RefreshIndicator(
+        onRefresh: onRefresh,
+        child: FadeInContent(
+          child: ListView.builder(
+            padding: AppThemeColors.listPagePadding,
+            physics: const AlwaysScrollableScrollPhysics(),
+            itemCount: rows.length,
+            itemBuilder: (context, index) {
+              final o = rows[index];
+              return Padding(
+                padding: AppThemeColors.cardListItemMargin,
+                child: CRMCard(
+                  onTap: () => onOpenDetail(o.id),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              o.company?.name ?? 'Order',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: textPrimary,
-                              ),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  o.company?.name ?? 'Order',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: textPrimary,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  o.orderDetails ?? '—',
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: textSecondary,
+                                  ),
+                                ),
+                              ],
                             ),
-                            const SizedBox(height: 4),
-                            Text(
-                              o.orderDetails ?? '—',
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: textSecondary,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Text(
-                        o.formattedRevenue,
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: primaryColor,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      if (o.status != null)
-                        StatusBadge(status: o.status!, type: 'sale')
-                      else
-                        const SizedBox.shrink(),
-                      const Spacer(),
-                      if (o.deliveryDate != null)
-                        Text(
-                          'Delivery: ${_fmt(o.deliveryDate!)}',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: textTertiary,
                           ),
-                        ),
+                          Text(
+                            o.formattedRevenue,
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: primaryColor,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          if (o.status != null)
+                            StatusBadge(status: o.status!, type: 'sale')
+                          else
+                            const SizedBox.shrink(),
+                          const Spacer(),
+                          if (o.deliveryDate != null)
+                            Text(
+                              'Delivery: ${_fmt(o.deliveryDate!)}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: textTertiary,
+                              ),
+                            ),
+                        ],
+                      ),
                     ],
                   ),
-                ],
-              ),
-            ),
-          );
-        },
+                ),
+              );
+            },
+          ),
+        ),
       ),
     );
   }
@@ -884,7 +901,7 @@ class _OrdersPane extends StatelessWidget {
   String _fmt(DateTime d) => '${d.day}/${d.month}/${d.year}';
 }
 
-class _RenewalsPane extends StatelessWidget {
+class _RenewalsPane extends ConsumerWidget {
   final RenewalsState renewalsState;
   final TextEditingController searchController;
   final int activeFilterCount;
@@ -906,7 +923,7 @@ class _RenewalsPane extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final textPrimary = AppThemeColors.textPrimaryColor(context);
     final textSecondary = AppThemeColors.textSecondaryColor(context);
     final primaryColor = Theme.of(context).colorScheme.primary;
@@ -953,105 +970,102 @@ class _RenewalsPane extends StatelessWidget {
     Color textSecondary,
     Color primaryColor,
   ) {
-    if (state.isLoading && state.renewals.isEmpty) {
-      return const LoadingWidget();
-    }
-    if (state.error != null && state.renewals.isEmpty) {
-      return app_widgets.ErrorWidget(
-        message: state.error!,
-        onRetry: onRefresh,
-      );
-    }
-    if (rows.isEmpty) {
-      return app_widgets.EmptyStateWidget(
-        title: 'No renewals',
-        subtitle: 'Track contract renewals here',
-        icon: Icons.autorenew,
-        buttonText: 'Add renewal',
-        onButtonPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const RenewalFormPage()),
-          ).then((created) {
-            if (created == true) onRefresh();
-          });
-        },
-      );
-    }
-
-    return RefreshIndicator(
-      onRefresh: onRefresh,
-      child: ListView.builder(
-        padding: AppThemeColors.listPagePadding,
-        itemCount: rows.length,
-        itemBuilder: (context, index) {
-          final r = rows[index];
-          return Padding(
-            padding: AppThemeColors.cardListItemMargin,
-            child: CRMCard(
-              onTap: () => onOpenRenewal(r),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
+    return AsyncScreenView(
+      isLoading: state.isLoading,
+      isRefreshing: state.isRefreshing,
+      hasCachedData: state.renewals.isNotEmpty,
+      error: state.error,
+      isEmpty: rows.isEmpty,
+      onRetry: () => onRefresh(),
+      emptyTitle: 'No renewals',
+      emptySubtitle: 'Track contract renewals here',
+      emptyIcon: Icons.autorenew,
+      emptyButtonText: 'Add renewal',
+      onEmptyAction: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const RenewalFormPage()),
+        ).then((created) {
+          if (created == true) onRefresh();
+        });
+      },
+      content: RefreshIndicator(
+        onRefresh: onRefresh,
+        child: FadeInContent(
+          child: ListView.builder(
+            padding: AppThemeColors.listPagePadding,
+            physics: const AlwaysScrollableScrollPhysics(),
+            itemCount: rows.length,
+            itemBuilder: (context, index) {
+              final r = rows[index];
+              return Padding(
+                padding: AppThemeColors.cardListItemMargin,
+                child: CRMCard(
+                  onTap: () => onOpenRenewal(r),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              r.company?.name ?? 'Renewal',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: textPrimary,
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  r.company?.name ?? 'Renewal',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: textPrimary,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  r.productDetails ?? '—',
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: textSecondary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (r.renewalType != null)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: primaryColor.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                r.renewalType!,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: primaryColor,
+                                ),
                               ),
                             ),
-                            const SizedBox(height: 4),
-                            Text(
-                              r.productDetails ?? '—',
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: textSecondary,
-                              ),
-                            ),
-                          ],
-                        ),
+                        ],
                       ),
-                      if (r.renewalType != null)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: primaryColor.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            r.renewalType!,
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: primaryColor,
-                            ),
-                          ),
+                      const SizedBox(height: AppSpacing.xs),
+                      if (r.renewalDate != null)
+                        Text(
+                          'Renewal: ${_fmt(r.renewalDate!)}',
+                          style: TextStyle(fontSize: 12, color: textSecondary),
                         ),
                     ],
                   ),
-                  const SizedBox(height: AppSpacing.xs),
-                  if (r.renewalDate != null)
-                    Text(
-                      'Renewal: ${_fmt(r.renewalDate!)}',
-                      style: TextStyle(fontSize: 12, color: textSecondary),
-                    ),
-                ],
-              ),
-            ),
-          );
-        },
+                ),
+              );
+            },
+          ),
+        ),
       ),
     );
   }

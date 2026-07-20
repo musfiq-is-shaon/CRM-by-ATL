@@ -6,7 +6,7 @@ Flutter-based CRM application for managing sales, contacts, tasks, attendance, l
 
 This project is a mobile CRM client connected to the production backend:
 
-- Base URL: `https://be-crm-production-a948.up.railway.app`
+- Base URL: `https://crm.apptriangle.com`
 - API docs/source collection: `../CRM_API_Postman_Collection (2).json`
 
 The app uses Riverpod for state management and Dio for API communication.

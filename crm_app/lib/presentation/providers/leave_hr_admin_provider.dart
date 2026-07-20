@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/utils/async_load_helper.dart';
 import '../../data/models/leave_model.dart';
 import '../../data/repositories/leave_repository.dart';
 
@@ -10,6 +11,9 @@ class LeaveHrAdminState {
     this.loadingTypes = false,
     this.loadingWeekends = false,
     this.loadingHolidays = false,
+    this.refreshingTypes = false,
+    this.refreshingWeekends = false,
+    this.refreshingHolidays = false,
     this.error,
   });
 
@@ -19,6 +23,9 @@ class LeaveHrAdminState {
   final bool loadingTypes;
   final bool loadingWeekends;
   final bool loadingHolidays;
+  final bool refreshingTypes;
+  final bool refreshingWeekends;
+  final bool refreshingHolidays;
   final String? error;
 
   LeaveHrAdminState copyWith({
@@ -28,6 +35,9 @@ class LeaveHrAdminState {
     bool? loadingTypes,
     bool? loadingWeekends,
     bool? loadingHolidays,
+    bool? refreshingTypes,
+    bool? refreshingWeekends,
+    bool? refreshingHolidays,
     Object? error = _sentinel,
   }) {
     return LeaveHrAdminState(
@@ -37,6 +47,9 @@ class LeaveHrAdminState {
       loadingTypes: loadingTypes ?? this.loadingTypes,
       loadingWeekends: loadingWeekends ?? this.loadingWeekends,
       loadingHolidays: loadingHolidays ?? this.loadingHolidays,
+      refreshingTypes: refreshingTypes ?? this.refreshingTypes,
+      refreshingWeekends: refreshingWeekends ?? this.refreshingWeekends,
+      refreshingHolidays: refreshingHolidays ?? this.refreshingHolidays,
       error: identical(error, _sentinel) ? this.error : error as String?,
     );
   }
@@ -49,41 +62,104 @@ class LeaveHrAdminNotifier extends StateNotifier<LeaveHrAdminState> {
 
   final LeaveRepository _repository;
 
-  Future<void> loadTypes() async {
-    state = state.copyWith(loadingTypes: true, error: null);
+  Future<void> loadTypes({bool refresh = false}) async {
+    final hadCache = state.types.isNotEmpty;
+    if (!hadCache) {
+      state = state.copyWith(
+        loadingTypes: true,
+        refreshingTypes: false,
+        error: null,
+      );
+    } else if (refresh) {
+      state = state.copyWith(refreshingTypes: true, error: null);
+    } else {
+      final flags = beginAsyncLoad(hasCachedData: true);
+      state = state.copyWith(
+        loadingTypes: flags.isLoading,
+        refreshingTypes: flags.isRefreshing,
+        error: null,
+      );
+    }
     try {
       final list = await _repository.getAllLeaveTypesAdmin();
-      state = state.copyWith(types: list, loadingTypes: false);
+      state = state.copyWith(
+        types: list,
+        loadingTypes: false,
+        refreshingTypes: false,
+      );
     } catch (e) {
       state = state.copyWith(
         loadingTypes: false,
-        error: e.toString().replaceFirst('Exception: ', ''),
+        refreshingTypes: false,
+        error: asyncLoadError(e).replaceFirst('Exception: ', ''),
       );
     }
   }
 
-  Future<void> loadWeekends() async {
-    state = state.copyWith(loadingWeekends: true, error: null);
+  Future<void> loadWeekends({bool refresh = false}) async {
+    final hadCache = state.weekends.isNotEmpty;
+    if (!hadCache) {
+      state = state.copyWith(
+        loadingWeekends: true,
+        refreshingWeekends: false,
+        error: null,
+      );
+    } else if (refresh) {
+      state = state.copyWith(refreshingWeekends: true, error: null);
+    } else {
+      final flags = beginAsyncLoad(hasCachedData: true);
+      state = state.copyWith(
+        loadingWeekends: flags.isLoading,
+        refreshingWeekends: flags.isRefreshing,
+        error: null,
+      );
+    }
     try {
       final list = await _repository.getWeekends();
-      state = state.copyWith(weekends: list, loadingWeekends: false);
+      state = state.copyWith(
+        weekends: list,
+        loadingWeekends: false,
+        refreshingWeekends: false,
+      );
     } catch (e) {
       state = state.copyWith(
         loadingWeekends: false,
-        error: e.toString().replaceFirst('Exception: ', ''),
+        refreshingWeekends: false,
+        error: asyncLoadError(e).replaceFirst('Exception: ', ''),
       );
     }
   }
 
-  Future<void> loadHolidays() async {
-    state = state.copyWith(loadingHolidays: true, error: null);
+  Future<void> loadHolidays({bool refresh = false}) async {
+    final hadCache = state.holidays.isNotEmpty;
+    if (!hadCache) {
+      state = state.copyWith(
+        loadingHolidays: true,
+        refreshingHolidays: false,
+        error: null,
+      );
+    } else if (refresh) {
+      state = state.copyWith(refreshingHolidays: true, error: null);
+    } else {
+      final flags = beginAsyncLoad(hasCachedData: true);
+      state = state.copyWith(
+        loadingHolidays: flags.isLoading,
+        refreshingHolidays: flags.isRefreshing,
+        error: null,
+      );
+    }
     try {
       final list = await _repository.getHolidays();
-      state = state.copyWith(holidays: list, loadingHolidays: false);
+      state = state.copyWith(
+        holidays: list,
+        loadingHolidays: false,
+        refreshingHolidays: false,
+      );
     } catch (e) {
       state = state.copyWith(
         loadingHolidays: false,
-        error: e.toString().replaceFirst('Exception: ', ''),
+        refreshingHolidays: false,
+        error: asyncLoadError(e).replaceFirst('Exception: ', ''),
       );
     }
   }

@@ -24,6 +24,7 @@ import '../attendance/attendance_hub_page.dart';
 import '../dashboard/dashboard_page.dart';
 import '../expenses/expenses_list_page.dart';
 import '../lunch/lunch_hub_page.dart';
+import '../../widgets/offline_banner.dart';
 import 'more_page.dart';
 
 final selectedTabProvider = StateProvider<int>((ref) => 0);
@@ -481,16 +482,23 @@ class _ShellPageState extends ConsumerState<ShellPage>
 
     return Scaffold(
       backgroundColor: AppThemeColors.backgroundColor(context),
-      body: RepaintBoundary(
-        child: PageView(
-          key: ValueKey<String>(tabIds.join('|')),
-          controller: _pageController,
-          physics: _tabSwipePhysics,
-          onPageChanged: (index) {
-            _commitTab(tabIds, index);
-          },
-          children: pages,
-        ),
+      body: Column(
+        children: [
+          const OfflineBanner(),
+          Expanded(
+            child: RepaintBoundary(
+              child: PageView(
+                key: ValueKey<String>(tabIds.join('|')),
+                controller: _pageController,
+                physics: _tabSwipePhysics,
+                onPageChanged: (index) {
+                  _commitTab(tabIds, index);
+                },
+                children: pages,
+              ),
+            ),
+          ),
+        ],
       ),
       bottomNavigationBar: GestureDetector(
         behavior: HitTestBehavior.translucent,

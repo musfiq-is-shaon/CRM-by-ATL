@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme_colors.dart';
 import '../../../core/theme/design_tokens.dart';
+import '../../../core/utils/async_load_helper.dart';
 import '../../../data/models/company_model.dart';
 import '../../../data/models/sale_model.dart';
 import '../../../data/models/status_config_model.dart';
@@ -19,7 +20,7 @@ import '../../providers/rbac_provider.dart'
 import '../../widgets/crm_card.dart';
 import '../../widgets/status_badge.dart';
 import '../../widgets/loading_widget.dart';
-import '../../widgets/error_widget.dart' as app_widgets;
+import '../../widgets/list_page_state.dart';
 import '../../widgets/searchable_dropdown.dart';
 import '../../widgets/app_search_filter_bar.dart';
 import 'sale_detail_page.dart';
@@ -146,6 +147,16 @@ class _SalesFunnelTabState extends ConsumerState<SalesFunnelTab>
     ref.watch(rbacModuleAdminProvider(RbacPageKey.sales));
     ref.watch(statusConfigProvider);
     final salesState = ref.watch(salesProvider);
+
+    ref.listen<SalesState>(salesProvider, (prev, next) {
+      if (next.error != null &&
+          prev?.error != next.error &&
+          next.sales.isNotEmpty &&
+          context.mounted) {
+        showRefreshErrorSnackBar(context, next.error!);
+      }
+    });
+
     final companiesState = ref.watch(companiesProvider);
     final usersState = ref.watch(usersProvider);
     final surfaceColor = AppThemeColors.surfaceColor(context);
@@ -255,10 +266,6 @@ class _SalesFunnelTabState extends ConsumerState<SalesFunnelTab>
     final textTertiary = AppThemeColors.textTertiaryColor(context);
     final primaryColor = Theme.of(context).colorScheme.primary;
 
-    if (state.isLoading) {
-      return const LoadingWidget();
-    }
-
     // Always copy: provider may hold an unmodifiable list; we sort in place below.
     var sales = List<Sale>.from(state.sales);
     if (status != null) {
@@ -340,93 +347,97 @@ class _SalesFunnelTabState extends ConsumerState<SalesFunnelTab>
       return _sortAscending ? comparison : -comparison;
     });
 
-    if (sales.isEmpty) {
-      return app_widgets.EmptyStateWidget(
-        title: 'No deals found',
-        subtitle: status != null
-            ? 'No ${status.replaceAll('_', ' ')} deals yet'
-            : 'Create your first deal',
-        icon: Icons.trending_up,
-        buttonText: 'Add Deal',
-        onButtonPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const SaleFormPage()),
-          );
-        },
-      );
-    }
-
-    return RefreshIndicator(
-      onRefresh: () async {
-        ref.invalidate(statusConfigProvider);
-        await ref.read(salesProvider.notifier).loadSales();
+    return AsyncScreenView(
+      isLoading: state.isLoading && state.sales.isEmpty,
+      isRefreshing: state.isRefreshing,
+      hasCachedData: state.sales.isNotEmpty,
+      error: state.error,
+      isEmpty: sales.isEmpty,
+      onRetry: () => ref.read(salesProvider.notifier).loadSales(),
+      emptyTitle: 'No deals found',
+      emptySubtitle: status != null
+          ? 'No ${status.replaceAll('_', ' ')} deals yet'
+          : 'Create your first deal',
+      emptyIcon: Icons.trending_up,
+      emptyButtonText: 'Add Deal',
+      onEmptyAction: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const SaleFormPage()),
+        );
       },
-      child: ListView.builder(
-        padding: AppThemeColors.pagePaddingAll,
-        itemCount: sales.length,
-        itemBuilder: (context, index) {
-          final sale = sales[index];
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: CRMCard(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => SaleDetailPage(saleId: sale.id),
-                  ),
-                );
-              },
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
+      content: RefreshIndicator(
+        onRefresh: () async {
+          ref.invalidate(statusConfigProvider);
+          await ref.read(salesProvider.notifier).loadSales(refresh: true);
+        },
+        child: FadeInContent(
+          child: ListView.builder(
+            padding: AppThemeColors.pagePaddingAll,
+            physics: const AlwaysScrollableScrollPhysics(),
+            itemCount: sales.length,
+            itemBuilder: (context, index) {
+              final sale = sales[index];
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: CRMCard(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => SaleDetailPage(saleId: sale.id),
+                      ),
+                    );
+                  },
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              sale.prospect,
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: textPrimary,
-                              ),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  sale.prospect,
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: textPrimary,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  sale.company?.name ?? 'No company',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: textSecondary,
+                                  ),
+                                ),
+                                if (sale.company?.kamUser != null) ...[
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    'KAM: ${sale.company!.kamUser!.name}',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: primaryColor,
+                                    ),
+                                  ),
+                                ],
+                              ],
                             ),
-                            const SizedBox(height: 4),
-                            Text(
-                              sale.company?.name ?? 'No company',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: textSecondary,
-                              ),
-                            ),
-                            if (sale.company?.kamUser != null) ...[
-                              const SizedBox(height: 2),
+                          ),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
                               Text(
-                                'KAM: ${sale.company!.kamUser!.name}',
+                                sale.formattedRevenue,
                                 style: TextStyle(
-                                  fontSize: 12,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
                                   color: primaryColor,
                                 ),
                               ),
-                            ],
-                          ],
-                        ),
-                      ),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(
-                            sale.formattedRevenue,
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: primaryColor,
-                            ),
-                          ),
                           const SizedBox(height: 4),
                           if (sale.category != null)
                             StatusBadge(
@@ -454,6 +465,8 @@ class _SalesFunnelTabState extends ConsumerState<SalesFunnelTab>
             ),
           );
         },
+      ),
+        ),
       ),
     );
   }

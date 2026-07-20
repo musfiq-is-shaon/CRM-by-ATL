@@ -116,16 +116,7 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
           ],
         ),
         body: task == null
-            ? ListView(
-                padding: AppThemeColors.pagePaddingAll,
-                children: const [
-                  ShimmerCard(height: 200),
-                  SizedBox(height: AppSpacing.lg),
-                  ShimmerCard(height: 120),
-                  SizedBox(height: AppSpacing.lg),
-                  ShimmerCard(height: 160),
-                ],
-              )
+            ? const DetailSkeleton()
             : SingleChildScrollView(
                 padding: AppThemeColors.pagePaddingAll,
                 child: Column(

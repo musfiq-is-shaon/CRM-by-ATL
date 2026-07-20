@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/constants/app_constants.dart';
 import '../../core/network/api_client.dart';
+import '../../core/utils/lunch_poll_schedule.dart';
 import '../models/lunch_model.dart';
 
 class LunchRepository {
@@ -55,30 +56,297 @@ class LunchRepository {
     return LunchTodayBundle.fromJson(response.data);
   }
 
-  Future<List<LunchPoll>> getTodayPollsHydrated() async {
+  /// Walks the `/polls/today` payload for poll-shaped maps the bundle parser missed.
+  List<LunchPoll> _extractPollsFromTodayRaw(dynamic raw) {
+    final found = <String, LunchPoll>{};
+    void walk(dynamic node) {
+      if (node is Map) {
+        final map = Map<String, dynamic>.from(node);
+        final id = (map['id'] ?? map['_id'])?.toString().trim() ?? '';
+        final title = (map['title'] ?? map['name'] ?? '').toString().trim();
+        final status = (map['status'] ?? '').toString().trim();
+        if (id.isNotEmpty && title.isNotEmpty && status.isNotEmpty) {
+          try {
+            final poll = LunchPoll.fromJson(map).resolvedForMyLunch();
+            if (poll.showOnMyLunch) found[poll.id] = poll;
+          } catch (_) {}
+        }
+        for (final value in map.values) {
+          walk(value);
+        }
+      } else if (node is List) {
+        for (final value in node) {
+          walk(value);
+        }
+      }
+    }
+
+    walk(raw);
+    return found.values.toList();
+  }
+
+  Future<List<LunchPoll>> getTodayPollsHydrated({String? currentUserId}) async {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    final bundle = await getTodayPolls();
+
+    final todayResponse = await _api.get(AppConstants.lunchPollsToday);
+    final bundle = LunchTodayBundle.fromJson(todayResponse.data);
 
     final byId = <String, LunchPoll>{};
+    void upsertRaw(LunchPoll poll) {
+      if (poll.id.isEmpty) return;
+      _upsertTodayPollById(byId, poll.resolvedForMyLunch().withoutMyVote());
+    }
+
     for (final poll in bundle.items) {
-      _upsertTodayPollById(byId, poll);
+      upsertRaw(poll);
+    }
+    final legacy = bundle.legacyPoll;
+    if (legacy != null && legacy.id.isNotEmpty) {
+      upsertRaw(legacy);
+    }
+    for (final poll in _extractPollsFromTodayRaw(todayResponse.data)) {
+      upsertRaw(poll);
     }
 
-    // `/api/lunch/polls` is admin-only — enrich when allowed, never block users.
-    try {
-      final listed = await listPolls(from: today, to: today);
-      for (final poll in listed) {
-        _upsertTodayPollById(byId, poll);
+    // Admin list endpoints may 403 for regular users — never block /today.
+    final listResults = await Future.wait<List<LunchPoll>>([
+      listPolls(from: today, to: today).catchError((_) => <LunchPoll>[]),
+      listPolls(
+        from: today.subtract(const Duration(days: 60)),
+        to: today,
+        status: 'active',
+      ).catchError((_) => <LunchPoll>[]),
+      listPolls(status: 'active').catchError((_) => <LunchPoll>[]),
+    ]);
+
+    void upsertIfOpen(LunchPoll poll) {
+      final resolved = poll.resolvedForMyLunch();
+      if (resolved.showOnMyLunch) {
+        _upsertTodayPollById(byId, resolved.withoutMyVote());
       }
-    } catch (_) {}
-
-    final ordered = sortTodayPollsNewestFirst(byId.values.toList());
-    final out = <LunchPoll>[];
-    for (final poll in ordered) {
-      out.add(await _hydratePollForToday(poll));
     }
-    return sortTodayPollsNewestFirst(dedupeTodayPolls(out));
+
+    for (final poll in listResults[0]) {
+      upsertRaw(poll);
+    }
+    for (final poll in [...listResults[1], ...listResults[2]]) {
+      upsertIfOpen(poll);
+    }
+
+    await _enrichOpenPollsForMyLunch(
+      byId: byId,
+      today: today,
+      currentUserId: currentUserId,
+      seedPollIds: byId.keys,
+    );
+
+    var polls = sortTodayPollsNewestFirst(
+      byId.values
+          .map((p) => p.resolvedForMyLunch())
+          .where((p) => p.appearsOnMyLunchCard)
+          .toList(),
+    );
+    if (polls.isEmpty) return polls;
+
+    if (!_pollNeedsHydration(polls)) {
+      return sortTodayPollsNewestFirst(
+        dedupeTodayPolls(
+          polls.map((p) => p.withPollScopedVotes()).toList(),
+        ),
+      );
+    }
+
+    final historyRange = _voteHistoryRangeForPolls(polls, today);
+    var historyVotes = const <LunchVoteHistoryRow>[];
+    if (polls.any((p) => p.scopedMyVote == null)) {
+      try {
+        historyVotes = await getVoteHistory(
+          from: historyRange.$1,
+          to: historyRange.$2,
+          userId: currentUserId,
+        );
+      } catch (_) {}
+      if (historyVotes.isEmpty && currentUserId != null && currentUserId.isNotEmpty) {
+        try {
+          final all = await getVoteHistory(
+            from: historyRange.$1,
+            to: historyRange.$2,
+            userId: 'all',
+          );
+          historyVotes = all
+              .where((r) => r.userId != null && r.userId == currentUserId)
+              .toList();
+        } catch (_) {}
+      }
+    }
+
+    final hydrated = await Future.wait(
+      polls.map(
+        (poll) => _hydratePollForTodayFast(
+          poll,
+          historyVotes: historyVotes,
+          currentUserId: currentUserId,
+        ),
+      ),
+    );
+    return sortTodayPollsNewestFirst(dedupeTodayPolls(hydrated));
+  }
+
+  static bool _pollNeedsHydration(List<LunchPoll> polls) {
+    return polls.any((p) {
+      if (p.id.isEmpty || p.mergedOptions.isEmpty) return true;
+      if (p.scopedMyVote == null) return true;
+      if (!p.hasPerOptionVotes &&
+          (p.reportedTotalVotes ?? 0) <= 0 &&
+          p.totalVoteCount <= 0) {
+        return true;
+      }
+      return false;
+    });
+  }
+
+  static (DateTime, DateTime) _voteHistoryRangeForPolls(
+    List<LunchPoll> polls,
+    DateTime today,
+  ) {
+    var from = today;
+    for (final poll in polls) {
+      final d = poll.date;
+      if (d == null) continue;
+      final day = DateTime(d.year, d.month, d.day);
+      if (day.isBefore(from)) from = day;
+    }
+    final floor = today.subtract(const Duration(days: 90));
+    if (from.isBefore(floor)) from = floor;
+    return (from, today);
+  }
+
+  Future<LunchPoll> _hydratePollForTodayFast(
+    LunchPoll poll, {
+    List<LunchVoteHistoryRow> historyVotes = const [],
+    String? currentUserId,
+  }) async {
+    var hydrated = poll.withPollScopedVotes();
+    if (hydrated.mergedOptions.isEmpty && hydrated.id.isNotEmpty) {
+      hydrated = await _hydratePoll(hydrated);
+    }
+
+    LunchMyVote? myVote = hydrated.scopedMyVote;
+    if (myVote == null && historyVotes.isNotEmpty) {
+      myVote = _myVoteFromHistory(
+        hydrated.id,
+        hydrated,
+        historyVotes,
+        currentUserId: currentUserId,
+      );
+    }
+
+    if (hydrated.id.isNotEmpty &&
+        (myVote == null ||
+            !hydrated.hasPerOptionVotes ||
+            hydrated.totalVoteCount <= 0)) {
+      final needsFull = myVote == null || hydrated.mergedOptions.isEmpty;
+      final needsSummary =
+          !hydrated.hasPerOptionVotes || hydrated.totalVoteCount <= 0;
+      try {
+        if (needsFull && needsSummary) {
+          final results = await Future.wait<Object?>([
+            getPoll(hydrated.id),
+            getPollSummary(hydrated.id, poll: hydrated),
+          ]);
+          final full = results[0] as LunchPoll;
+          final summary = results[1] as LunchOrderSummary;
+          hydrated = LunchPoll.merge(hydrated, full);
+          hydrated = LunchPoll.merge(summary.poll, hydrated).withVoteSummary(
+            breakdown: summary.menuBreakdown,
+            totalVotes: summary.totalVotes,
+          );
+          myVote ??= hydrated.scopedMyVote;
+        } else if (needsFull) {
+          final full = await getPoll(hydrated.id);
+          hydrated = LunchPoll.merge(hydrated, full);
+          myVote ??= hydrated.scopedMyVote;
+        } else if (needsSummary) {
+          final summary = await getPollSummary(hydrated.id, poll: hydrated);
+          hydrated = LunchPoll.merge(summary.poll, hydrated).withVoteSummary(
+            breakdown: summary.menuBreakdown,
+            totalVotes: summary.totalVotes,
+          );
+        }
+      } catch (_) {}
+    }
+
+    if (myVote != null && myVote.optionId != hydrated.scopedMyVote?.optionId) {
+      return LunchPoll(
+        id: hydrated.id,
+        title: hydrated.title,
+        date: hydrated.date,
+        createdAt: hydrated.createdAt,
+        costAmount: hydrated.costAmount,
+        allowVoteChange: hydrated.allowVoteChange,
+        endTime: hydrated.endTime,
+        status: hydrated.status,
+        options: hydrated.options,
+        results: hydrated.results,
+        myVote: myVote,
+        reportedTotalVotes: hydrated.reportedTotalVotes,
+      ).withPollScopedVotes();
+    }
+
+    return hydrated;
+  }
+
+  LunchMyVote? _myVoteFromHistory(
+    String pollId,
+    LunchPoll poll,
+    List<LunchVoteHistoryRow> rows, {
+    String? currentUserId,
+  }) {
+    LunchVoteHistoryRow? bestRow;
+    DateTime? bestAt;
+
+    for (final row in rows) {
+      if (row.pollId != pollId) continue;
+      if (currentUserId != null &&
+          currentUserId.isNotEmpty &&
+          row.userId != null &&
+          row.userId!.isNotEmpty &&
+          row.userId != currentUserId) {
+        continue;
+      }
+      final at = row.votedAt;
+      if (bestRow == null ||
+          (at != null && (bestAt == null || at.isAfter(bestAt)))) {
+        bestRow = row;
+        bestAt = at;
+      }
+    }
+
+    if (bestRow == null) return null;
+    final choice = bestRow.menuItem?.trim().toLowerCase() ?? '';
+    if (choice.isNotEmpty) {
+      for (final opt in poll.mergedOptions) {
+        if (opt.label.trim().toLowerCase() == choice) {
+          return LunchMyVote(optionId: opt.id, votedAt: bestRow.votedAt);
+        }
+      }
+    }
+    for (final opt in poll.mergedOptions) {
+      if (lunchOptionKindFrom(bestRow.optionType ?? '') == opt.kind) {
+        return LunchMyVote(optionId: opt.id, votedAt: bestRow.votedAt);
+      }
+    }
+    return null;
+  }
+
+  static (DateTime from, DateTime to) _myVoteHistoryRange(LunchPoll poll) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final pollDate = poll.date ?? today;
+    final pollDay = DateTime(pollDate.year, pollDate.month, pollDate.day);
+    final from = pollDay.isBefore(today) ? pollDay : today;
+    return (from, today);
   }
 
   static void _upsertTodayPollById(Map<String, LunchPoll> byId, LunchPoll poll) {
@@ -87,64 +355,115 @@ class LunchRepository {
     final existing = byId[poll.id];
     byId[poll.id] = existing == null
         ? clean
-        : LunchPoll.merge(clean, existing).withoutMyVote();
+        : existing.applyServerSnapshot(clean).withoutMyVote();
   }
 
-  Future<LunchPoll> _hydratePollForToday(LunchPoll poll) async {
-    var hydrated = await _hydratePoll(poll);
-    if (hydrated.id.isEmpty) return hydrated;
-    final myVote =
-        await _myVoteForPoll(hydrated.id, hydrated) ?? hydrated.scopedMyVote;
-    if (!hydrated.hasPerOptionVotes) {
-      try {
-        final summary = await getPollSummary(hydrated.id, poll: hydrated);
-        hydrated = LunchPoll.merge(summary.poll.withoutMyVote(), hydrated)
-            .withVoteSummary(
-          breakdown: summary.menuBreakdown,
-          totalVotes: summary.totalVotes,
-        );
-      } catch (_) {}
+  /// Discover and refresh open polls for My Lunch (works for non-admins too).
+  Future<void> _enrichOpenPollsForMyLunch({
+    required Map<String, LunchPoll> byId,
+    required DateTime today,
+    String? currentUserId,
+    Iterable<String> seedPollIds = const [],
+  }) async {
+    final candidateIds = <String>{...seedPollIds};
+
+    for (final poll in byId.values) {
+      if (poll.id.isEmpty) continue;
+      final resolved = poll.resolvedForMyLunch();
+      if (resolved.showOnMyLunch) candidateIds.add(poll.id);
     }
-    hydrated = LunchPoll(
-      id: hydrated.id,
-      title: hydrated.title,
-      date: hydrated.date,
-      createdAt: hydrated.createdAt,
-      costAmount: hydrated.costAmount,
-      allowVoteChange: hydrated.allowVoteChange,
-      endTime: hydrated.endTime,
-      status: hydrated.status,
-      options: hydrated.options,
-      results: hydrated.results,
-      myVote: myVote,
-      reportedTotalVotes: hydrated.reportedTotalVotes,
-    );
-    return hydrated.withPollScopedVotes();
-  }
 
-  /// Authoritative per-poll vote — avoids global myVote bleed across same-day polls.
-  Future<LunchMyVote?> _myVoteForPoll(String pollId, LunchPoll poll) async {
     try {
-      final date = poll.date ?? DateTime.now();
-      final day = DateTime(date.year, date.month, date.day);
-      final rows = await getVoteHistory(from: day, to: day);
-      for (final row in rows) {
-        if (row.pollId != pollId) continue;
-        final choice = row.menuItem?.trim().toLowerCase() ?? '';
-        if (choice.isEmpty) continue;
-        for (final opt in poll.mergedOptions) {
-          if (opt.label.trim().toLowerCase() == choice) {
-            return LunchMyVote(optionId: opt.id, votedAt: row.votedAt);
-          }
-        }
-        for (final opt in poll.mergedOptions) {
-          if (lunchOptionKindFrom(row.optionType ?? '') == opt.kind) {
-            return LunchMyVote(optionId: opt.id, votedAt: row.votedAt);
-          }
-        }
+      final from = today.subtract(const Duration(days: 60));
+      final history = await getVoteHistory(
+        from: from,
+        to: today,
+        userId: currentUserId,
+      );
+      for (final row in history) {
+        final id = row.pollId;
+        if (id != null && id.isNotEmpty) candidateIds.add(id);
       }
     } catch (_) {}
-    return null;
+
+    for (final id in await _pollIdsFromRecentNotifications()) {
+      candidateIds.add(id);
+    }
+
+    if (candidateIds.isEmpty) return;
+
+    final fetched = await Future.wait<LunchPoll?>(
+      candidateIds.map((id) async {
+        try {
+          return await getPoll(id);
+        } catch (_) {
+          return byId[id];
+        }
+      }),
+    );
+
+    for (final poll in fetched) {
+      if (poll == null || poll.id.isEmpty) continue;
+      final resolved = poll.resolvedForMyLunch();
+      if (resolved.showOnMyLunch) {
+        _upsertTodayPollById(byId, resolved.withoutMyVote());
+      }
+    }
+  }
+
+  Future<Set<String>> _pollIdsFromRecentNotifications() async {
+    try {
+      final response = await _api.get(
+        AppConstants.notifications,
+        queryParameters: const {'limit': '50', 'offset': '0'},
+      );
+      final items = _asMapList(
+        response.data,
+        const ['items', 'notifications', 'data'],
+      );
+      final ids = <String>{};
+      for (final item in items) {
+        _collectPollIdsFromNotification(item, ids);
+      }
+      return ids;
+    } catch (_) {
+      return {};
+    }
+  }
+
+  void _collectPollIdsFromNotification(
+    Map<String, dynamic> json,
+    Set<String> out,
+  ) {
+    for (final key in const [
+      'pollId',
+      'poll_id',
+      'entityId',
+      'entity_id',
+      'resourceId',
+      'referenceId',
+      'linkId',
+    ]) {
+      final v = json[key]?.toString().trim();
+      if (v != null && v.isNotEmpty) out.add(v);
+    }
+
+    for (final value in json.values) {
+      if (value is String && value.contains('/polls/')) {
+        final match = RegExp(r'/polls/([a-fA-F0-9]{24})').firstMatch(value);
+        if (match != null) out.add(match.group(1)!);
+      }
+    }
+
+    for (final metaKey in const ['metadata', 'data', 'payload', 'extra']) {
+      final nested = json[metaKey];
+      if (nested is Map) {
+        _collectPollIdsFromNotification(
+          Map<String, dynamic>.from(nested),
+          out,
+        );
+      }
+    }
   }
 
   Future<LunchPoll> _hydratePoll(LunchPoll poll) async {
@@ -161,19 +480,34 @@ class LunchRepository {
     DateTime? from,
     DateTime? to,
     String? status,
+    String? currentUserId,
+    bool includeMyVote = true,
   }) async {
     final polls = await listPolls(from: from, to: to, status: status);
-    final out = <LunchPoll>[];
-    for (final poll in polls) {
-      out.add(await _hydratePollWithVoteTotal(poll));
-    }
-    return out;
+    if (polls.isEmpty) return polls;
+    return Future.wait(
+      polls.map(
+        (poll) => includeMyVote
+            ? _hydratePollWithVoteTotal(
+                poll,
+                currentUserId: currentUserId,
+              )
+            : _hydratePollForAdminList(poll),
+      ),
+    );
   }
 
-  Future<LunchPoll> _hydratePollWithVoteTotal(LunchPoll poll) async {
-    var hydrated = await _hydratePoll(poll);
-    if (hydrated.id.isEmpty) return hydrated;
-    if (hydrated.hasPerOptionVotes) return hydrated;
+  /// Admin list — vote totals only, no per-user vote history N+1.
+  Future<LunchPoll> _hydratePollForAdminList(LunchPoll poll) async {
+    var hydrated = poll.mergedOptions.isEmpty && poll.id.isNotEmpty
+        ? await _hydratePoll(poll)
+        : poll;
+    if (hydrated.id.isEmpty) return hydrated.withoutMyVote();
+
+    if (hydrated.hasPerOptionVotes && hydrated.totalVoteCount > 0) {
+      return hydrated.withoutMyVote();
+    }
+
     try {
       final summary = await getPollSummary(hydrated.id, poll: hydrated);
       hydrated = LunchPoll.merge(summary.poll, hydrated).withVoteSummary(
@@ -181,6 +515,90 @@ class LunchRepository {
         totalVotes: summary.totalVotes,
       );
     } catch (_) {}
+
+    return hydrated.withoutMyVote();
+  }
+
+  Future<LunchPoll> _hydratePollWithVoteTotal(
+    LunchPoll poll, {
+    String? currentUserId,
+  }) async {
+    var hydrated = poll.mergedOptions.isEmpty && poll.id.isNotEmpty
+        ? await _hydratePoll(poll)
+        : poll.withPollScopedVotes();
+    if (hydrated.id.isEmpty) return hydrated;
+
+    final hasCounts =
+        hydrated.hasPerOptionVotes && hydrated.totalVoteCount > 0;
+    if (!hasCounts) {
+      try {
+        final summary = await getPollSummary(hydrated.id, poll: hydrated);
+        hydrated = LunchPoll.merge(summary.poll, hydrated).withVoteSummary(
+          breakdown: summary.menuBreakdown,
+          totalVotes: summary.totalVotes,
+        );
+      } catch (_) {}
+    }
+
+    LunchMyVote? myVote = hydrated.scopedMyVote;
+    if (myVote == null) {
+      try {
+        final full = await getPoll(hydrated.id);
+        hydrated = LunchPoll.merge(hydrated, full);
+        myVote = hydrated.scopedMyVote;
+      } catch (_) {}
+    }
+
+    if (myVote == null && currentUserId != null && currentUserId.isNotEmpty) {
+      final range = _myVoteHistoryRange(hydrated);
+      try {
+        var history = await getVoteHistory(
+          from: range.$1,
+          to: range.$2,
+          userId: currentUserId,
+        );
+        if (history.isEmpty) {
+          final all = await getVoteHistory(
+            from: range.$1,
+            to: range.$2,
+            userId: 'all',
+          );
+          history = all
+              .where((r) => r.userId != null && r.userId == currentUserId)
+              .toList();
+        }
+        myVote = _myVoteFromHistory(
+          hydrated.id,
+          hydrated,
+          history,
+          currentUserId: currentUserId,
+        );
+      } catch (_) {}
+    }
+
+    if (myVote != null && myVote.optionId != hydrated.scopedMyVote?.optionId) {
+      final existing = hydrated.scopedMyVote;
+      if (existing != null &&
+          hydrated.isReactivatedPoll &&
+          _myVoteIsNewer(existing, myVote)) {
+        return hydrated.withPollScopedVotes();
+      }
+      return LunchPoll(
+        id: hydrated.id,
+        title: hydrated.title,
+        date: hydrated.date,
+        createdAt: hydrated.createdAt,
+        costAmount: hydrated.costAmount,
+        allowVoteChange: hydrated.allowVoteChange,
+        endTime: hydrated.endTime,
+        status: hydrated.status,
+        options: hydrated.options,
+        results: hydrated.results,
+        myVote: myVote,
+        reportedTotalVotes: hydrated.reportedTotalVotes,
+      ).withPollScopedVotes();
+    }
+
     return hydrated.withPollScopedVotes();
   }
 
@@ -233,8 +651,14 @@ class LunchRepository {
     return LunchPoll.fromJson(_unwrapPollMap(response.data));
   }
 
-  Future<LunchPoll> refreshPollHydrated(String pollId) async {
-    return _hydratePollWithVoteTotal(await getPoll(pollId));
+  Future<LunchPoll> refreshPollHydrated(
+    String pollId, {
+    String? currentUserId,
+  }) async {
+    return _hydratePollWithVoteTotal(
+      await getPoll(pollId),
+      currentUserId: currentUserId,
+    );
   }
 
   Future<LunchPoll> createPoll(LunchPoll poll) async {
@@ -421,18 +845,183 @@ class LunchRepository {
   }
 
   Future<LunchPoll> setPollStatus(String pollId, String status) async {
-    final response = await _api.patch(
-      AppConstants.lunchPollStatus(pollId),
-      data: {'status': status},
-    );
-    return LunchPoll.fromJson(_unwrapPollMap(response.data));
+    final normalized = status.trim().toLowerCase();
+    try {
+      final response = await _api.patch(
+        AppConstants.lunchPollStatus(pollId),
+        data: {'status': normalized},
+      );
+      final parsed = _tryParsePoll(response.data);
+      if (parsed != null) return parsed;
+    } catch (_) {}
+
+    try {
+      final response = await _api.put(
+        AppConstants.lunchPollById(pollId),
+        data: {'status': normalized},
+      );
+      final parsed = _tryParsePoll(response.data);
+      if (parsed != null) return parsed;
+    } catch (_) {}
+
+    return getPoll(pollId);
+  }
+
+  /// Reopen a closed poll — backend requires PATCH `/status` (not PUT `status`).
+  Future<LunchPoll> reopenPoll(
+    String pollId, {
+    required String endTimeApi,
+    bool allowVoteChange = false,
+  }) async {
+    final endTime = endTimeApi.trim();
+    if (endTime.isEmpty) {
+      throw ArgumentError('End time is required to reopen a poll');
+    }
+
+    final extendMinutes = lunchExtendMinutesUntil(endTime);
+
+    // 1) Activate — authoritative status endpoint per Postman/API contract.
+    var poll = await setPollStatus(pollId, 'active');
+
+    // 2) Extend window — prior-day reopens: no vote changes on server either.
+    final payloads = [
+      {
+        'allowVoteChange': allowVoteChange,
+        'allow_vote_change': allowVoteChange,
+        'extendMinutes': extendMinutes,
+        'endTime': endTime,
+        'end_time': endTime,
+      },
+      {
+        'allowVoteChange': allowVoteChange,
+        'allow_vote_change': allowVoteChange,
+        'extendMinutes': extendMinutes,
+      },
+      {
+        'allowVoteChange': allowVoteChange,
+        'allow_vote_change': allowVoteChange,
+        'endTime': endTime,
+        'end_time': endTime,
+      },
+    ];
+
+    for (final payload in payloads) {
+      try {
+        poll = await updatePoll(pollId, payload);
+        break;
+      } catch (_) {}
+    }
+
+    poll = await getPoll(pollId);
+    if (poll.status.toLowerCase() != 'active') {
+      poll = await setPollStatus(pollId, 'active');
+    }
+
+    if (poll.status.toLowerCase() != 'active') {
+      throw Exception(
+        'Could not reactivate poll on server — status is still ${poll.status}.',
+      );
+    }
+
+    return LunchPoll(
+      id: poll.id,
+      title: poll.title,
+      date: poll.date,
+      createdAt: poll.createdAt,
+      costAmount: poll.costAmount,
+      allowVoteChange: allowVoteChange,
+      endTime: endTime,
+      status: 'active',
+      options: poll.options,
+      results: poll.results,
+      myVote: poll.myVote,
+      reportedTotalVotes: poll.reportedTotalVotes,
+    ).withPollScopedVotes();
+  }
+
+  /// Ensures a prior-day/reopened poll accepts votes on the server.
+  Future<void> ensurePollOpenForVoting(
+    String pollId, {
+    LunchPoll? poll,
+  }) async {
+    await setPollStatus(pollId, 'active');
+
+    final endTime = poll?.endTime?.trim();
+    final allowChanges = poll?.isPriorDayPoll == true ? false : true;
+    final payload = <String, dynamic>{
+      'allowVoteChange': allowChanges,
+      'allow_vote_change': allowChanges,
+      'extendMinutes': endTime != null && endTime.isNotEmpty
+          ? lunchExtendMinutesUntil(endTime)
+          : 60,
+    };
+    if (endTime != null && endTime.isNotEmpty) {
+      payload['endTime'] = endTime;
+      payload['end_time'] = endTime;
+    }
+
+    try {
+      await updatePoll(pollId, payload);
+    } catch (_) {
+      try {
+        await updatePoll(pollId, {
+          'allowVoteChange': allowChanges,
+          'allow_vote_change': allowChanges,
+          'extendMinutes': payload['extendMinutes'],
+        });
+      } catch (_) {}
+    }
+  }
+
+  LunchPoll? _tryParsePoll(dynamic raw) {
+    try {
+      final poll = LunchPoll.fromJson(_unwrapPollMap(raw));
+      return poll.id.isNotEmpty ? poll : null;
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<void> deletePoll(String pollId) async {
     await _api.delete(AppConstants.lunchPollById(pollId));
   }
 
-  Future<void> castVote(String pollId, String optionId) async {
+  static bool _myVoteIsNewer(LunchMyVote current, LunchMyVote candidate) {
+    final currentAt = current.votedAt;
+    final candidateAt = candidate.votedAt;
+    if (currentAt == null || candidateAt == null) return false;
+    return currentAt.isAfter(candidateAt);
+  }
+
+  Future<void> castVote(
+    String pollId,
+    String optionId, {
+    LunchPoll? poll,
+  }) async {
+    if (poll != null &&
+        poll.isPriorDayPoll &&
+        poll.scopedMyVote != null &&
+        poll.scopedMyVote!.optionId.isNotEmpty &&
+        poll.scopedMyVote!.optionId != optionId) {
+      throw Exception('Vote changes are not allowed on reopened polls.');
+    }
+
+    try {
+      await _postVote(pollId, optionId);
+      return;
+    } catch (e) {
+      final canRetry = poll != null &&
+          (poll.isPriorDayPoll ||
+              poll.isReactivatedPoll ||
+              poll.isClosed);
+      if (!canRetry) rethrow;
+    }
+
+    await ensurePollOpenForVoting(pollId, poll: poll);
+    await _postVote(pollId, optionId);
+  }
+
+  Future<void> _postVote(String pollId, String optionId) async {
     await _api.post(
       AppConstants.lunchPollVote(pollId),
       data: {'optionId': optionId},

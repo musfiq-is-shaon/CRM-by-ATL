@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../../core/utils/async_load_helper.dart';
 import '../../../core/constants/rbac_page_keys.dart';
 import '../../../core/theme/app_theme_colors.dart';
 import '../../../core/theme/design_tokens.dart';
@@ -12,9 +15,9 @@ import '../../providers/company_provider.dart';
 import '../../widgets/crm_card.dart';
 import '../../widgets/avatar_widget.dart';
 import '../../widgets/loading_widget.dart';
-import '../../widgets/error_widget.dart' as app_widgets;
 import '../../widgets/searchable_dropdown.dart';
 import '../../widgets/app_search_filter_bar.dart';
+import '../../widgets/list_page_state.dart';
 import 'business_card_scan_flow.dart';
 import 'contact_detail_page.dart';
 
@@ -27,6 +30,7 @@ class ContactsListPage extends ConsumerStatefulWidget {
 
 class _ContactsListPageState extends ConsumerState<ContactsListPage> {
   final TextEditingController _searchController = TextEditingController();
+  Timer? _searchDebounce;
 
   @override
   void initState() {
@@ -39,6 +43,7 @@ class _ContactsListPageState extends ConsumerState<ContactsListPage> {
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -49,6 +54,17 @@ class _ContactsListPageState extends ConsumerState<ContactsListPage> {
     ref.watch(rbacModuleAdminProvider(RbacPageKey.contacts));
     final contactsState = ref.watch(contactsProvider);
     final companiesState = ref.watch(companiesProvider);
+
+    ref.listen<String?>(
+      contactsProvider.select((s) => s.error),
+      (previous, next) {
+        if (next != null &&
+            next != previous &&
+            contactsState.contacts.isNotEmpty) {
+          showRefreshErrorSnackBar(context, next);
+        }
+      },
+    );
 
     final bgColor = AppThemeColors.backgroundColor(context);
     final textPrimary = AppThemeColors.textPrimaryColor(context);
@@ -81,7 +97,13 @@ class _ContactsListPageState extends ConsumerState<ContactsListPage> {
             hintText: 'Search contacts...',
             padding: AppThemeColors.listHeaderPadding,
             onChanged: (value) {
-              ref.read(contactsProvider.notifier).setSearchQuery(value);
+              setState(() {});
+              _searchDebounce?.cancel();
+              _searchDebounce = Timer(const Duration(milliseconds: 350), () {
+                ref.read(contactsProvider.notifier).setSearchQuery(
+                      value.trim().isEmpty ? null : value.trim(),
+                    );
+              });
             },
             onClear: () {
               _searchController.clear();
@@ -91,33 +113,49 @@ class _ContactsListPageState extends ConsumerState<ContactsListPage> {
             onFilterTap: () => _showFilterDialog(context),
           ),
           Expanded(
-            child: contactsState.isLoading
-                ? const ListSkeletonLoader(
-                    itemCount: 8,
-                    padding: AppThemeColors.pagePaddingHorizontal,
-                  )
-                : contactsState.filteredContacts.isEmpty
-                ? app_widgets.EmptyStateWidget(
-                    title: 'No contacts found',
-                    subtitle: 'Add your first contact',
-                    icon: Icons.people_outline,
-                    buttonText: 'Add Contact',
-                    onButtonPressed: _openAddContact,
-                  )
-                : RefreshIndicator(
-                    onRefresh: () =>
-                        ref.read(contactsProvider.notifier).loadContacts(),
-                    child: ListView.builder(
-                      padding: AppThemeColors.listPagePadding,
-                      itemCount: contactsState.filteredContacts.length,
-                      itemBuilder: (context, index) {
-                        final contact = contactsState.filteredContacts[index];
-                        final companyName = contact.companyDisplayName(
-                          companiesState.companies,
-                        );
-                        return Padding(
-                          padding: AppThemeColors.cardListItemMargin,
-                          child: CRMCard(
+            child: AsyncScreenView(
+              isLoading: contactsState.isLoading,
+              isRefreshing: contactsState.isRefreshing,
+              hasCachedData: contactsState.contacts.isNotEmpty,
+              error: contactsState.error,
+              isEmpty: contactsState.filteredContacts.isEmpty,
+              onRetry: () => ref
+                  .read(contactsProvider.notifier)
+                  .loadContacts(refresh: true),
+              emptyTitle: contactsState.searchQuery != null &&
+                      contactsState.searchQuery!.isNotEmpty
+                  ? 'No results found'
+                  : 'No contacts yet',
+              emptySubtitle: contactsState.searchQuery != null &&
+                      contactsState.searchQuery!.isNotEmpty
+                  ? 'Try a different search or clear filters'
+                  : 'Add your first contact to get started',
+              emptyIcon: Icons.people_outline,
+              emptyButtonText: contactsState.searchQuery == null ||
+                      contactsState.searchQuery!.isEmpty
+                  ? 'Add Contact'
+                  : null,
+              onEmptyAction: contactsState.searchQuery == null ||
+                      contactsState.searchQuery!.isEmpty
+                  ? _openAddContact
+                  : null,
+              content: RefreshIndicator(
+                onRefresh: () => ref
+                    .read(contactsProvider.notifier)
+                    .loadContacts(refresh: true),
+                child: FadeInContent(
+                  child: ListView.builder(
+                    padding: AppThemeColors.listPagePadding,
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    itemCount: contactsState.filteredContacts.length,
+                    itemBuilder: (context, index) {
+                      final contact = contactsState.filteredContacts[index];
+                      final companyName = contact.companyDisplayName(
+                        companiesState.companies,
+                      );
+                      return Padding(
+                        padding: AppThemeColors.cardListItemMargin,
+                        child: CRMCard(
                             padding: const EdgeInsets.symmetric(
                               horizontal: AppSpacing.cardPadding,
                               vertical: AppSpacing.md,
@@ -206,7 +244,9 @@ class _ContactsListPageState extends ConsumerState<ContactsListPage> {
                       },
                     ),
                   ),
-          ),
+                ),
+              ),
+            ),
         ],
       ),
     );

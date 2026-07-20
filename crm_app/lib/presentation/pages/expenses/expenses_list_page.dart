@@ -10,12 +10,13 @@ import '../../providers/expense_provider.dart';
 import '../../providers/company_provider.dart';
 import '../../providers/rbac_provider.dart'
     show rbacAccessDigestProvider, rbacModuleAdminProvider;
+import '../../../core/utils/async_load_helper.dart';
 import '../../widgets/app_search_filter_bar.dart';
 import '../../widgets/crm_card.dart';
 import '../../widgets/searchable_dropdown.dart';
 import '../../widgets/status_badge.dart';
 import '../../widgets/loading_widget.dart';
-import '../../widgets/error_widget.dart' as app_widgets;
+import '../../widgets/list_page_state.dart';
 import 'expense_detail_page.dart';
 import 'expense_form_page.dart';
 
@@ -55,6 +56,17 @@ class _ExpensesListPageState extends ConsumerState<ExpensesListPage>
     ref.watch(rbacAccessDigestProvider);
     ref.watch(rbacModuleAdminProvider(RbacPageKey.expenses));
     final expensesState = ref.watch(expensesProvider);
+
+    ref.listen<String?>(
+      expensesProvider.select((s) => s.error),
+      (previous, next) {
+        if (next != null &&
+            next != previous &&
+            expensesState.expenses.isNotEmpty) {
+          showRefreshErrorSnackBar(context, next);
+        }
+      },
+    );
 
     final bgColor = AppThemeColors.backgroundColor(context);
     final textSecondary = AppThemeColors.textSecondaryColor(context);
@@ -443,60 +455,56 @@ class _ExpensesListPageState extends ConsumerState<ExpensesListPage>
     final cs = Theme.of(context).colorScheme;
     final primaryColor = cs.primary;
     final expenseIconTonal = AppThemeColors.tonalForAccent(context, primaryColor);
-
-    if (state.isLoading) {
-      return const ListSkeletonLoader(
-        itemCount: 8,
-        padding: AppThemeColors.pagePaddingHorizontal,
-      );
-    }
-
-    if (state.error != null) {
-      return app_widgets.ErrorWidget(
-        message: state.error!,
-        onRetry: () => ref.read(expensesProvider.notifier).loadExpenses(),
-      );
-    }
-
     final expenses = state.visibleForTab(status);
 
-    if (expenses.isEmpty) {
-      return app_widgets.EmptyStateWidget(
-        title: 'No expenses found',
-        subtitle: status != null
-            ? 'No $status expenses match your search or filters'
-            : 'Create your first expense or adjust filters',
-        icon: Icons.receipt_long,
-        buttonText: 'Add Expense',
-        onButtonPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const ExpenseFormPage()),
-          );
-        },
-      );
-    }
-
-    return RefreshIndicator(
-      onRefresh: () => ref.read(expensesProvider.notifier).loadExpenses(),
-      child: ListView.builder(
-        padding: AppThemeColors.listPagePadding,
-        itemCount: expenses.length,
-        itemBuilder: (context, index) {
-          final expense = expenses[index];
-          return Padding(
-            padding: AppThemeColors.cardListItemMargin,
-            child: CRMCard(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) =>
-                        ExpenseDetailPage(expenseId: expense.id),
-                  ),
-                );
-              },
-              child: Column(
+    return AsyncScreenView(
+      isLoading: state.isLoading,
+      isRefreshing: state.isRefreshing,
+      hasCachedData: state.expenses.isNotEmpty,
+      error: state.error,
+      isEmpty: expenses.isEmpty,
+      onRetry: () => ref.read(expensesProvider.notifier).loadExpenses(),
+      emptyTitle: 'No expenses found',
+      emptySubtitle: status != null
+          ? 'No $status expenses match your search or filters'
+          : 'Create your first expense or adjust filters',
+      emptyIcon: Icons.receipt_long,
+      emptyButtonText: 'Add Expense',
+      onEmptyAction: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const ExpenseFormPage()),
+        );
+      },
+      content: RefreshIndicator(
+        onRefresh: () => ref.read(expensesProvider.notifier).loadExpenses(),
+        child: expenses.isEmpty
+            ? ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                children: [
+                  SizedBox(height: MediaQuery.sizeOf(context).height * 0.2),
+                ],
+              )
+            : FadeInContent(
+                child: ListView.builder(
+                  padding: AppThemeColors.listPagePadding,
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  itemCount: expenses.length,
+                  itemBuilder: (context, index) {
+                    final expense = expenses[index];
+                    return Padding(
+                      padding: AppThemeColors.cardListItemMargin,
+                      child: CRMCard(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) =>
+                                  ExpenseDetailPage(expenseId: expense.id),
+                            ),
+                          );
+                        },
+                        child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
@@ -615,7 +623,9 @@ class _ExpensesListPageState extends ConsumerState<ExpensesListPage>
               ),
             ),
           );
-        },
+                  },
+                ),
+              ),
       ),
     );
   }

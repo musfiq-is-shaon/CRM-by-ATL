@@ -32,12 +32,15 @@ class _LunchSettingsPageState extends ConsumerState<LunchSettingsPage> {
   Future<void> _load() async {
     await ref.read(lunchProvider.notifier).loadSettings();
     final s = ref.read(lunchProvider).settings;
-    if (s != null && mounted) {
+    if (!mounted) return;
+    if (s != null) {
       setState(() {
         _costCtrl.text = s.defaultCostAmount?.toString() ?? '';
         _allowVoteChange = s.allowVoteChange;
         _loaded = true;
       });
+    } else {
+      setState(() => _loaded = true);
     }
   }
 
@@ -80,9 +83,12 @@ class _LunchSettingsPageState extends ConsumerState<LunchSettingsPage> {
       return const LoadingWidget(message: 'Loading settings…');
     }
 
-    return ListView(
-      padding: AppThemeColors.pagePaddingAll,
-      children: [
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: AppThemeColors.pagePaddingAll,
+        children: [
         Text(
           'Settings',
           style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: textPrimary),
@@ -119,7 +125,8 @@ class _LunchSettingsPageState extends ConsumerState<LunchSettingsPage> {
           icon: Icons.save_outlined,
           onPressed: _saving ? null : _save,
         ),
-      ],
+        ],
+      ),
     );
   }
 }

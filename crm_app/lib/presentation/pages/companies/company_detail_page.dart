@@ -58,14 +58,7 @@ class CompanyDetailPage extends ConsumerWidget {
         ],
       ),
       body: company == null
-          ? ListView(
-              padding: AppThemeColors.pagePaddingAll,
-              children: const [
-                ShimmerCard(height: 160),
-                SizedBox(height: AppSpacing.lg),
-                ShimmerCard(height: 200),
-              ],
-            )
+          ? const DetailSkeleton()
           : SingleChildScrollView(
               padding: AppThemeColors.pagePaddingAll,
               child: Column(

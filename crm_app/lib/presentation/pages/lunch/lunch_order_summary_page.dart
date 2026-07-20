@@ -122,7 +122,10 @@ class _LunchOrderSummaryPageState extends ConsumerState<LunchOrderSummaryPage> {
     if ((state.orderSummaryLoading || !_initialLoadComplete) &&
         summary == null &&
         state.error == null) {
-      return const LoadingWidget(message: 'Loading order summary…');
+      return const ListSkeletonLoader(
+        padding: AppThemeColors.pagePaddingAll,
+        itemCount: 6,
+      );
     }
 
     if (summary == null &&
@@ -405,9 +408,10 @@ class _PollPickerSheetState extends State<_PollPickerSheet> {
 
     if (_loading && _polls.isEmpty) {
       return const SafeArea(
-        child: SizedBox(
-          height: 160,
-          child: Center(child: CircularProgressIndicator()),
+        child: ListSkeletonLoader(
+          itemCount: 4,
+          shrinkWrap: true,
+          padding: EdgeInsets.all(AppSpacing.md),
         ),
       );
     }

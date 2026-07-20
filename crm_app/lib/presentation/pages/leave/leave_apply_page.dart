@@ -11,6 +11,7 @@ import '../../../data/models/leave_model.dart';
 import '../../../data/repositories/leave_repository.dart';
 import '../../providers/leave_provider.dart';
 import '../../widgets/celebration_shell.dart';
+import '../../widgets/loading_widget.dart';
 
 class LeaveApplyPage extends ConsumerStatefulWidget {
   const LeaveApplyPage({super.key});
@@ -627,10 +628,7 @@ class _LeaveApplyPageState extends ConsumerState<LeaveApplyPage> {
                 ),
               ),
             if (typesLoading && types.isEmpty)
-              const Padding(
-                padding: EdgeInsets.all(16),
-                child: Center(child: CircularProgressIndicator()),
-              )
+              const FormSkeleton(fieldCount: 4)
             else if (types.isEmpty)
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,

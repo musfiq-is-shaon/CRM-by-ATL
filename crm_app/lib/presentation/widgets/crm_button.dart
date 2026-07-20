@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/design_tokens.dart';
+import 'loading_widget.dart';
 
 enum CRMButtonType { primary, secondary, text, danger }
 
@@ -12,6 +13,7 @@ class CRMButton extends StatelessWidget {
   final CRMButtonType type;
   final CRMButtonSize size;
   final bool isLoading;
+  final String? loadingText;
   final bool isFullWidth;
   final IconData? icon;
   final double? width;
@@ -23,6 +25,7 @@ class CRMButton extends StatelessWidget {
     this.type = CRMButtonType.primary,
     this.size = CRMButtonSize.normal,
     this.isLoading = false,
+    this.loadingText,
     this.isFullWidth = false,
     this.icon,
     this.width,
@@ -107,13 +110,9 @@ class CRMButton extends StatelessWidget {
 
   Widget _buildChild(BuildContext context, Color foreground) {
     if (isLoading) {
-      return SizedBox(
-        width: 22,
-        height: 22,
-        child: CircularProgressIndicator(
-          strokeWidth: 2.5,
-          valueColor: AlwaysStoppedAnimation<Color>(foreground),
-        ),
+      return ButtonLoadingState(
+        label: loadingText ?? text,
+        color: foreground,
       );
     }
 

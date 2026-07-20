@@ -7,6 +7,7 @@ import '../../../core/theme/app_theme_colors.dart';
 import '../../../data/models/leave_model.dart';
 import '../../../data/repositories/leave_repository.dart';
 import '../../providers/leave_provider.dart';
+import '../../widgets/loading_widget.dart';
 
 class LeaveEditPage extends ConsumerStatefulWidget {
   const LeaveEditPage({super.key, required this.leaveId});
@@ -261,7 +262,7 @@ class _LeaveEditPageState extends ConsumerState<LeaveEditPage> {
       return Scaffold(
         backgroundColor: bg,
         appBar: AppThemeColors.appBarTitle(context, 'Edit leave'),
-        body: const Center(child: CircularProgressIndicator()),
+        body: const FormSkeleton(fieldCount: 5),
       );
     }
 

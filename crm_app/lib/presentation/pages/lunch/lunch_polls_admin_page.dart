@@ -29,7 +29,7 @@ class _LunchPollsAdminPageState extends ConsumerState<LunchPollsAdminPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
   }
 
-  Future<void> _load({bool hydrate = true}) async {
+  Future<void> _load({bool hydrate = false}) async {
     final hadPolls = ref.read(lunchProvider).adminPolls.isNotEmpty;
     if (!hadPolls && mounted) setState(() => _loading = true);
     final now = DateTime.now();
@@ -49,12 +49,50 @@ class _LunchPollsAdminPageState extends ConsumerState<LunchPollsAdminPage> {
 
   Future<void> _openCreatePoll() async {
     final saved = await showLunchPollFormSheet(context, ref);
-    if (saved && mounted) await _load(hydrate: false);
+    if (saved && mounted) await _load();
   }
 
   Future<void> _openEditPoll(LunchPoll poll) async {
     final saved = await showLunchPollFormSheet(context, ref, existing: poll);
     if (saved && mounted) await _load();
+  }
+
+  bool _canClosePoll(LunchPoll poll) => poll.canAdminClosePoll;
+
+  Future<void> _closePollCard(LunchPoll poll) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Close poll?'),
+        content: Text(
+          'Close "${poll.title}"? Employees will no longer be able to vote.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Close poll'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    try {
+      await ref.read(lunchProvider.notifier).closePoll(poll.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Poll closed')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not close poll: $e')),
+      );
+    }
   }
 
   Future<void> _confirmDeletePoll(LunchPoll poll) async {
@@ -134,37 +172,46 @@ class _LunchPollsAdminPageState extends ConsumerState<LunchPollsAdminPage> {
               (poll) => Padding(
                 padding: AppThemeColors.cardListItemMargin,
                 child: CRMCard(
-                  onTap: () => _openEditPoll(poll),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  poll.title,
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    color: textPrimary,
-                                    fontSize: 15,
-                                  ),
+                      Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: () => _openEditPoll(poll),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      poll.title,
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                        color: textPrimary,
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                                    if (poll.date != null) ...[
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        DateFormat('EEE, MMM d, yyyy')
+                                            .format(poll.date!.toLocal()),
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: textSecondary,
+                                        ),
+                                      ),
+                                    ],
+                                  ],
                                 ),
-                                if (poll.date != null) ...[
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    DateFormat('EEE, MMM d, yyyy').format(poll.date!.toLocal()),
-                                    style: TextStyle(fontSize: 12, color: textSecondary),
-                                  ),
-                                ],
-                              ],
-                            ),
+                              ),
+                              lunchPollStatusBadge(poll.effectiveStatus),
+                            ],
                           ),
-                          lunchPollStatusBadge(poll.effectiveStatus),
-                        ],
+                        ),
                       ),
                       const SizedBox(height: 12),
                       Row(
@@ -182,14 +229,30 @@ class _LunchPollsAdminPageState extends ConsumerState<LunchPollsAdminPage> {
                               color: textSecondary,
                             ),
                           const Spacer(),
+                          if (_canClosePoll(poll))
+                            TextButton(
+                              onPressed: () => _closePollCard(poll),
+                              style: TextButton.styleFrom(
+                                foregroundColor:
+                                    Theme.of(context).colorScheme.error,
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 8),
+                                minimumSize: Size.zero,
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              ),
+                              child: const Text('Close'),
+                            ),
                           PopupMenuButton<String>(
-                            icon: Icon(Icons.more_vert, color: textSecondary, size: 20),
+                            icon: Icon(
+                              Icons.more_vert,
+                              color: textSecondary,
+                              size: 20,
+                            ),
                             onSelected: (v) async {
                               if (v == 'edit') {
                                 await _openEditPoll(poll);
-                              } else if (v == 'close' && poll.isVotingOpen) {
-                                await ref.read(lunchProvider.notifier).closePoll(poll.id);
-                                await _load();
+                              } else if (v == 'close') {
+                                await _closePollCard(poll);
                               } else if (v == 'votes') {
                                 showLunchPollVotesSheet(context, poll);
                               } else if (v == 'delete') {
@@ -197,38 +260,33 @@ class _LunchPollsAdminPageState extends ConsumerState<LunchPollsAdminPage> {
                               }
                             },
                             itemBuilder: (ctx) => [
-                              const PopupMenuItem(value: 'edit', child: Text('Edit')),
+                              const PopupMenuItem(
+                                value: 'edit',
+                                child: Text('Edit'),
+                              ),
                               if (poll.totalVoteCount > 0)
-                                const PopupMenuItem(value: 'votes', child: Text('View votes')),
-                              if (poll.isVotingOpen)
-                                const PopupMenuItem(value: 'close', child: Text('Close poll')),
+                                const PopupMenuItem(
+                                  value: 'votes',
+                                  child: Text('View votes'),
+                                ),
+                              if (_canClosePoll(poll))
+                                const PopupMenuItem(
+                                  value: 'close',
+                                  child: Text('Close poll'),
+                                ),
                               PopupMenuItem(
                                 value: 'delete',
                                 child: Text(
                                   'Delete poll',
-                                  style: TextStyle(color: Theme.of(ctx).colorScheme.error),
+                                  style: TextStyle(
+                                    color: Theme.of(ctx).colorScheme.error,
+                                  ),
                                 ),
                               ),
                             ],
                           ),
                         ],
                       ),
-                      if (poll.mergedOptions.isNotEmpty) ...[
-                        const SizedBox(height: 12),
-                        LunchPollVoteBreakdown(poll: poll),
-                        if (poll.totalVoteCount > 0)
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: TextButton.icon(
-                              onPressed: () => showLunchPollVotesSheet(context, poll),
-                              icon: Icon(Icons.people_outline, size: 16, color: primary),
-                              label: Text(
-                                'View all votes',
-                                style: TextStyle(color: primary, fontSize: 13),
-                              ),
-                            ),
-                          ),
-                      ],
                     ],
                   ),
                 ),

@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/utils/async_load_helper.dart';
 import '../../data/models/company_model.dart';
 import '../../data/models/user_model.dart';
 import '../../data/repositories/company_repository.dart';
@@ -7,6 +8,7 @@ import '../../data/repositories/user_repository.dart';
 class CompaniesState {
   final List<Company> companies;
   final bool isLoading;
+  final bool isRefreshing;
   final String? error;
   final String? searchQuery;
   final String? countryFilter;
@@ -15,6 +17,7 @@ class CompaniesState {
   const CompaniesState({
     this.companies = const [],
     this.isLoading = false,
+    this.isRefreshing = false,
     this.error,
     this.searchQuery,
     this.countryFilter,
@@ -24,6 +27,7 @@ class CompaniesState {
   CompaniesState copyWith({
     List<Company>? companies,
     bool? isLoading,
+    bool? isRefreshing,
     String? error,
     String? searchQuery,
     String? countryFilter,
@@ -32,6 +36,7 @@ class CompaniesState {
     return CompaniesState(
       companies: companies ?? this.companies,
       isLoading: isLoading ?? this.isLoading,
+      isRefreshing: isRefreshing ?? this.isRefreshing,
       error: error,
       searchQuery: searchQuery ?? this.searchQuery,
       countryFilter: countryFilter,
@@ -81,16 +86,34 @@ class CompaniesNotifier extends StateNotifier<CompaniesState> {
   final CompanyRepository _companyRepository;
   final UserRepository _userRepository;
   int _loadGeneration = 0;
+  DateTime? _lastLoadedAt;
+  static const _backgroundRefreshAfter = Duration(minutes: 2);
 
   CompaniesNotifier(this._companyRepository, this._userRepository)
     : super(const CompaniesState());
 
-  Future<void> loadCompanies() async {
+  /// [refresh] true for pull-to-refresh — shows the inline updating indicator.
+  Future<void> loadCompanies({bool refresh = false}) async {
+    final hadCache = state.companies.isNotEmpty;
+
+    if (hadCache && !refresh) {
+      final last = _lastLoadedAt;
+      if (last != null &&
+          DateTime.now().difference(last) < _backgroundRefreshAfter) {
+        return;
+      }
+    }
+
     final generation = ++_loadGeneration;
-    state = state.copyWith(isLoading: true, error: null);
+
+    if (!hadCache) {
+      state = state.copyWith(isLoading: true, isRefreshing: false, error: null);
+    } else if (refresh) {
+      state = state.copyWith(isRefreshing: true, error: null);
+    }
     try {
       final companies = await _companyRepository.getCompanies(
-        forceRefresh: true,
+        forceRefresh: refresh || !hadCache,
       );
 
       if (generation != _loadGeneration) return;
@@ -130,10 +153,16 @@ class CompaniesNotifier extends StateNotifier<CompaniesState> {
       state = state.copyWith(
         companies: _mergeFetchedCompanies(companiesWithKam),
         isLoading: false,
+        isRefreshing: false,
       );
+      _lastLoadedAt = DateTime.now();
     } catch (e) {
       if (generation != _loadGeneration) return;
-      state = state.copyWith(isLoading: false, error: e.toString());
+      state = state.copyWith(
+        isLoading: false,
+        isRefreshing: false,
+        error: asyncLoadError(e),
+      );
     }
   }
 

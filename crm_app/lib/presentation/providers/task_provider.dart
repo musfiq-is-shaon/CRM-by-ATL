@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/services/attendance_reminder_controller.dart';
+import '../../core/utils/async_load_helper.dart';
 import '../../data/models/task_model.dart';
 import '../../data/models/company_model.dart';
 import '../../data/models/user_model.dart';
@@ -16,6 +17,7 @@ import 'rbac_provider.dart';
 class TasksState {
   final List<Task> tasks;
   final bool isLoading;
+  final bool isRefreshing;
   final String? error;
   final String? statusFilter;
   final String? assignToUserIdFilter;
@@ -26,6 +28,7 @@ class TasksState {
   const TasksState({
     this.tasks = const [],
     this.isLoading = false,
+    this.isRefreshing = false,
     this.error,
     this.statusFilter,
     this.assignToUserIdFilter,
@@ -37,6 +40,7 @@ class TasksState {
   TasksState copyWith({
     List<Task>? tasks,
     bool? isLoading,
+    bool? isRefreshing,
     String? error,
     String? statusFilter,
     String? assignToUserIdFilter,
@@ -50,6 +54,7 @@ class TasksState {
     return TasksState(
       tasks: tasks ?? this.tasks,
       isLoading: isLoading ?? this.isLoading,
+      isRefreshing: isRefreshing ?? this.isRefreshing,
       error: error,
       statusFilter: statusFilter ?? this.statusFilter,
       assignToUserIdFilter: assignToUserIdFilter ?? this.assignToUserIdFilter,
@@ -174,7 +179,12 @@ class TasksNotifier extends StateNotifier<TasksState> {
   ) : super(const TasksState());
 
   Future<void> loadTasks() async {
-    state = state.copyWith(isLoading: true, error: null);
+    final flags = beginAsyncLoad(hasCachedData: state.tasks.isNotEmpty);
+    state = state.copyWith(
+      isLoading: flags.isLoading,
+      isRefreshing: flags.isRefreshing,
+      error: null,
+    );
     try {
       final tasks = await _taskRepository.getTasks();
 
@@ -252,12 +262,20 @@ class TasksNotifier extends StateNotifier<TasksState> {
         );
       }).toList();
 
-      state = state.copyWith(tasks: tasksWithDetails, isLoading: false);
+      state = state.copyWith(
+        tasks: tasksWithDetails,
+        isLoading: false,
+        isRefreshing: false,
+      );
 
       // Schedule notifications for tasks with upcoming deadlines
       _scheduleTaskNotifications(tasksWithDetails);
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
+      state = state.copyWith(
+        isLoading: false,
+        isRefreshing: false,
+        error: asyncLoadError(e),
+      );
     }
   }
 

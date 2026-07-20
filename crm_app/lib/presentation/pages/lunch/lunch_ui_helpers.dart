@@ -6,11 +6,23 @@ import 'package:printing/printing.dart';
 
 import '../../../core/theme/app_theme_colors.dart';
 import '../../../core/theme/design_tokens.dart';
+import '../../../core/utils/lunch_poll_schedule.dart';
 import '../../../data/models/lunch_model.dart';
+
+export '../../../core/utils/lunch_poll_schedule.dart'
+    show
+        isPollEndTimeViable,
+        lunchDefaultEndTimeApi,
+        lunchEndTimeOfDay,
+        lunchEndTimeToApi,
+        lunchExtendMinutesUntil,
+        lunchPollEndDateTime,
+        preferPollEndTime;
 
 /// Web lunch module accent colors.
 const Color lunchBrandGreen = Color(0xFF22C55E);
 const Color lunchBrandPurple = Color(0xFF6366F1);
+const Color lunchBrandOrange = Color(0xFFF97316);
 
 /// API option types: `office` (menu), `personal`, `off` (see production polls).
 /// Legacy reads also accept `office_menu` / `yes` — see [lunchOptionKindFrom].
@@ -176,55 +188,15 @@ String formatLunchEndTimeDisplay(String? raw) {
   return t;
 }
 
-/// Parse 12h or 24h display to API `HH:mm` (24-hour).
-String lunchEndTimeToApi(String display) {
-  final t = display.trim();
-  if (t.isEmpty) return t;
-  try {
-    final parsed = DateFormat.jm().parse(t);
-    return '${parsed.hour.toString().padLeft(2, '0')}:${parsed.minute.toString().padLeft(2, '0')}';
-  } catch (_) {
-    // Already 24h
-    final parts = t.split(':');
-    if (parts.length >= 2) {
-      final h = int.tryParse(parts[0]) ?? 0;
-      final m = int.tryParse(parts[1]) ?? 0;
-      return '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}';
-    }
-  }
-  return t;
-}
-
-TimeOfDay lunchEndTimeOfDay(String? raw) {
-  if (raw == null || raw.trim().isEmpty) return const TimeOfDay(hour: 18, minute: 0);
-  final t = raw.trim();
-  try {
-    final parsed = DateFormat.jm().parse(t);
-    return TimeOfDay(hour: parsed.hour, minute: parsed.minute);
-  } catch (_) {
-    final parts = t.split(':');
-    return TimeOfDay(
-      hour: int.tryParse(parts.first) ?? 18,
-      minute: int.tryParse(parts.length > 1 ? parts[1] : '0') ?? 0,
-    );
-  }
-}
-
-/// Poll voting deadline on the poll date (local time).
-DateTime? lunchPollEndDateTime(DateTime? pollDate, String? endTime) {
-  if (endTime == null || endTime.trim().isEmpty) return null;
-  final base = (pollDate ?? DateTime.now()).toLocal();
-  final day = DateTime(base.year, base.month, base.day);
-  final tod = lunchEndTimeOfDay(endTime);
-  return DateTime(day.year, day.month, day.day, tod.hour, tod.minute);
-}
-
 extension LunchPollVoting on LunchPoll {
-  bool get isPastEndTime {
-    final deadline = lunchPollEndDateTime(date, endTime);
-    if (deadline == null) return false;
-    return DateTime.now().isAfter(deadline);
-  }
+  bool get isPastEndTime => lunchPollIsPastEndTime(
+        endTime: endTime,
+        pollDate: date,
+        status: status,
+      );
+
+  /// Prior-day reactivated polls: first vote only — no changing an existing choice.
+  bool get allowsVoteChanges => allowVoteChange && !isPriorDayPoll;
 
   String get effectiveStatus {
     if (isCancelled) return 'cancelled';
@@ -234,6 +206,9 @@ extension LunchPollVoting on LunchPoll {
 
   bool get isVotingOpen =>
       !isCancelled && status.toLowerCase() == 'active' && !isPastEndTime;
+
+  /// Admin poll list / edit actions.
+  bool get canAdminClosePoll => !isCancelled && isVotingOpen;
 }
 
 String formatLunchPollDate(DateTime? dt) {
@@ -261,6 +236,107 @@ Color lunchOptionKindColor(LunchOptionKind kind, ColorScheme cs) {
 
 Color lunchOptionKindBg(LunchOptionKind kind, ColorScheme cs) {
   return lunchOptionKindColor(kind, cs).withValues(alpha: 0.12);
+}
+
+IconData lunchOptionKindIcon(LunchOptionKind kind) {
+  switch (kind) {
+    case LunchOptionKind.officeMenu:
+      return Icons.restaurant_rounded;
+    case LunchOptionKind.personal:
+      return Icons.person_rounded;
+    case LunchOptionKind.offAbsent:
+      return Icons.home_rounded;
+    case LunchOptionKind.other:
+      return Icons.more_horiz_rounded;
+  }
+}
+
+/// Pill chip for poll meta (status, votes, end time).
+Widget lunchPollMetaChip({
+  required IconData icon,
+  required String label,
+  Color? foreground,
+  Color? background,
+  Color? border,
+  bool compact = false,
+}) {
+  return Builder(
+    builder: (context) {
+      final cs = Theme.of(context).colorScheme;
+      final fg = foreground ?? cs.onSurfaceVariant;
+      final bg = background ?? cs.surfaceContainerHighest.withValues(alpha: 0.7);
+      return Container(
+        padding: EdgeInsets.symmetric(
+          horizontal: compact ? 7 : 10,
+          vertical: compact ? 3 : 5,
+        ),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(compact ? 14 : 20),
+          border: Border.all(color: border ?? cs.outline.withValues(alpha: 0.25)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: compact ? 11 : 13, color: fg),
+            SizedBox(width: compact ? 3 : 5),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: compact ? 10 : 11,
+                fontWeight: FontWeight.w600,
+                color: fg,
+                letterSpacing: 0.15,
+              ),
+            ),
+          ],
+        ),
+      );
+    },
+  );
+}
+
+Widget lunchPollStatusMetaChip(String status, {bool compact = false}) {
+  return Builder(
+    builder: (context) {
+      final cs = Theme.of(context).colorScheme;
+      final s = status.toLowerCase();
+      Color fg;
+      Color bg;
+      IconData icon;
+      String label;
+      switch (s) {
+        case 'active':
+          fg = lunchBrandGreen;
+          bg = fg.withValues(alpha: 0.12);
+          icon = Icons.bolt_rounded;
+          label = 'POLL OPEN';
+        case 'closed':
+          fg = lunchBrandOrange;
+          bg = fg.withValues(alpha: 0.1);
+          icon = Icons.auto_awesome;
+          label = 'POLL CLOSED';
+        case 'cancelled':
+          fg = cs.error;
+          bg = cs.errorContainer.withValues(alpha: 0.4);
+          icon = Icons.block;
+          label = 'CANCELLED';
+        default:
+          fg = cs.onSurfaceVariant;
+          bg = cs.surfaceContainerHighest;
+          icon = Icons.info_outline;
+          label = s.toUpperCase();
+      }
+      return lunchPollMetaChip(
+        icon: icon,
+        label: label,
+        foreground: fg,
+        background: bg,
+        border: fg.withValues(alpha: 0.25),
+        compact: compact,
+      );
+    },
+  );
 }
 
 Widget lunchOptionTypeBadge(String optionType, {double fontSize = 10, bool shortLabel = false}) {
@@ -424,7 +500,7 @@ class LunchPollVoteBreakdown extends StatelessWidget {
       children: options.map((opt) {
         final count = opt.effectiveVoteCount;
         final fraction = total > 0 ? count / total : 0.0;
-        final accent = lunchOptionKindColor(opt.kind, cs);
+        final accent = lunchBrandPurple;
         return Padding(
           padding: const EdgeInsets.only(bottom: 8),
           child: Column(
@@ -483,18 +559,29 @@ void showLunchPollVotesSheet(BuildContext context, LunchPoll poll) {
       final textSecondary = AppThemeColors.textSecondaryColor(ctx);
       return SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          padding: const EdgeInsets.fromLTRB(8, 0, 16, 16),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(
-                'All votes — ${poll.title}',
-                style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
+              Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back),
+                    tooltip: 'Back',
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                  Expanded(
+                    child: Text(
+                      'All votes — ${poll.title}',
+                      style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 4),
               Flexible(
                 child: ListView(
                   shrinkWrap: true,

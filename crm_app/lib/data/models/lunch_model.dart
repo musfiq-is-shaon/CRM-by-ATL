@@ -1,4 +1,5 @@
 import '../../core/json_parse.dart';
+import '../../core/utils/lunch_poll_schedule.dart';
 
 Map<String, dynamic> _map(dynamic raw) {
   if (raw is Map<String, dynamic>) return raw;
@@ -321,6 +322,86 @@ class LunchPoll {
   bool get isClosed => status.toLowerCase() == 'closed';
   bool get isCancelled => status.toLowerCase() == 'cancelled';
 
+  bool get isPriorDayPoll {
+    final d = date;
+    if (d == null) return false;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final pollDay = DateTime(d.year, d.month, d.day);
+    return pollDay.isBefore(today);
+  }
+
+  /// Active poll from a previous day that was reopened for voting today.
+  bool get isReactivatedPoll =>
+      isPriorDayPoll &&
+      isActive &&
+      !isCancelled &&
+      !lunchPollIsPastEndTime(
+        endTime: endTime,
+        pollDate: date,
+        status: status,
+      );
+
+  /// Promote stale `closed` snapshots when the end time is still viable today.
+  LunchPoll resolvedForMyLunch() {
+    if (isCancelled || id.isEmpty) return this;
+    if (status.toLowerCase() == 'active') return this;
+    if (!isPollEndTimeViable(endTime, date)) return this;
+    return LunchPoll(
+      id: id,
+      title: title,
+      date: date,
+      createdAt: createdAt,
+      costAmount: costAmount,
+      allowVoteChange: allowVoteChange,
+      endTime: endTime,
+      status: 'active',
+      options: options,
+      results: results,
+      myVote: myVote,
+      reportedTotalVotes: reportedTotalVotes,
+    );
+  }
+
+  bool get showOnMyLunch {
+    final resolved = resolvedForMyLunch();
+    return lunchPollShowOnMyLunch(
+      id: resolved.id,
+      status: resolved.status,
+      date: resolved.date,
+      endTime: resolved.endTime,
+      isCancelled: resolved.isCancelled,
+    );
+  }
+
+  /// Open/reactivated polls plus same-day closed polls (greyed out).
+  bool get appearsOnMyLunchCard {
+    if (showOnMyLunch) return true;
+    final d = date;
+    if (d == null) return false;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final pollDay = DateTime(d.year, d.month, d.day);
+    return !pollDay.isBefore(today);
+  }
+
+  static bool _dateIsBeforeToday(DateTime? d) {
+    if (d == null) return false;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final day = DateTime(d.year, d.month, d.day);
+    return day.isBefore(today);
+  }
+
+  static bool _allowVoteChangeForPollDate({
+    required DateTime? pollDate,
+    required bool prior,
+    required bool incoming,
+  }) {
+    if (_dateIsBeforeToday(pollDate)) return false;
+    return prior || incoming;
+  }
+
   /// Best-effort timestamp for newest-first ordering.
   DateTime get recencyInstant =>
       createdAt?.toLocal() ??
@@ -407,6 +488,50 @@ class LunchPoll {
     );
   }
 
+  static LunchMyVote? _resolveMyVoteAfterSnapshot({
+    required List<LunchPollOption> options,
+    LunchMyVote? prior,
+    LunchMyVote? incoming,
+  }) {
+    if (prior == null) {
+      return _resolveScopedMyVote(
+        options: options,
+        preferred: incoming,
+        fallback: null,
+      );
+    }
+    if (incoming == null) {
+      return _resolveScopedMyVote(
+        options: options,
+        preferred: prior,
+        fallback: null,
+      );
+    }
+    if (prior.optionId == incoming.optionId) {
+      return _resolveScopedMyVote(
+        options: options,
+        preferred: incoming,
+        fallback: prior,
+      );
+    }
+
+    final priorAt = prior.votedAt;
+    final incomingAt = incoming.votedAt;
+    if (priorAt != null &&
+        (incomingAt == null || priorAt.isAfter(incomingAt))) {
+      return _resolveScopedMyVote(
+        options: options,
+        preferred: prior,
+        fallback: incoming,
+      );
+    }
+    return _resolveScopedMyVote(
+      options: options,
+      preferred: incoming,
+      fallback: prior,
+    );
+  }
+
   static LunchMyVote? _resolveScopedMyVote({
     required List<LunchPollOption> options,
     LunchMyVote? preferred,
@@ -490,15 +615,32 @@ class LunchPoll {
     if (secondary == null) return primary.withPollScopedVotes();
     final options =
         primary.options.isNotEmpty ? primary.options : secondary.options;
+    final pollDate = primary.date ?? secondary.date;
+    final endTime = preferPollEndTime(
+      prior: primary.endTime,
+      incoming: secondary.endTime,
+      pollDate: pollDate,
+    );
     final merged = LunchPoll(
       id: primary.id.isNotEmpty ? primary.id : secondary.id,
       title: primary.title.isNotEmpty ? primary.title : secondary.title,
-      date: primary.date ?? secondary.date,
+      date: pollDate,
       createdAt: _newerDateTime(primary.createdAt, secondary.createdAt),
       costAmount: primary.costAmount ?? secondary.costAmount,
-      allowVoteChange: primary.allowVoteChange,
-      endTime: primary.endTime ?? secondary.endTime,
-      status: _pickStatus(primary.status, secondary.status),
+      allowVoteChange: _allowVoteChangeForPollDate(
+        pollDate: pollDate,
+        prior: primary.allowVoteChange,
+        incoming: secondary.allowVoteChange,
+      ),
+      endTime: endTime,
+      status: _resolveMergedStatus(
+        priorStatus: primary.status,
+        incomingStatus: secondary.status,
+        priorEndTime: primary.endTime,
+        incomingEndTime: secondary.endTime,
+        resolvedEndTime: endTime,
+        pollDate: pollDate,
+      ),
       options: options,
       results: _pickRicherResults(primary.results, secondary.results),
       myVote: _resolveScopedMyVote(
@@ -556,6 +698,114 @@ class LunchPoll {
     return al.isNotEmpty ? al : bl;
   }
 
+  static bool _isViableActiveStatus({
+    required String status,
+    required String? endTime,
+    required DateTime? pollDate,
+  }) {
+    if (status.toLowerCase() != 'active') return false;
+    if (endTime == null || endTime.trim().isEmpty) return true;
+    return !lunchPollIsPastEndTime(
+      endTime: endTime,
+      pollDate: pollDate,
+      status: 'active',
+    );
+  }
+
+  /// Keep reactivated polls open when the API still returns a stale closed snapshot.
+  static String _resolveMergedStatus({
+    required String priorStatus,
+    required String incomingStatus,
+    required String? priorEndTime,
+    required String? incomingEndTime,
+    required String? resolvedEndTime,
+    required DateTime? pollDate,
+  }) {
+    final priorActive = _isViableActiveStatus(
+      status: priorStatus,
+      endTime: priorEndTime ?? resolvedEndTime,
+      pollDate: pollDate,
+    );
+    final incomingActive = _isViableActiveStatus(
+      status: incomingStatus,
+      endTime: incomingEndTime ?? resolvedEndTime,
+      pollDate: pollDate,
+    );
+    final resolvedStillOpen = resolvedEndTime != null &&
+        resolvedEndTime.trim().isNotEmpty &&
+        !lunchPollIsPastEndTime(
+          endTime: resolvedEndTime,
+          pollDate: pollDate,
+          status: 'active',
+        );
+
+    if (priorActive || incomingActive || resolvedStillOpen) {
+      if (priorStatus.toLowerCase() == 'active' ||
+          incomingStatus.toLowerCase() == 'active') {
+        return 'active';
+      }
+    }
+
+    return _pickStatus(priorStatus, incomingStatus);
+  }
+
+  LunchPoll applyServerSnapshot(LunchPoll fresh) {
+    final pollDate = _preferredPollDate(fresh.date, date);
+    final resolvedEnd = preferPollEndTime(
+      prior: endTime,
+      incoming: fresh.endTime,
+      pollDate: pollDate,
+    );
+    final mergedOptions =
+        fresh.mergedOptions.isNotEmpty ? fresh.options : options;
+    return LunchPoll(
+      id: fresh.id.isNotEmpty ? fresh.id : id,
+      title: fresh.title.isNotEmpty ? fresh.title : title,
+      date: pollDate,
+      createdAt: fresh.createdAt ?? createdAt,
+      costAmount: fresh.costAmount ?? costAmount,
+      allowVoteChange: _allowVoteChangeForPollDate(
+        pollDate: pollDate,
+        prior: allowVoteChange,
+        incoming: fresh.allowVoteChange,
+      ),
+      endTime: resolvedEnd,
+      status: _resolveMergedStatus(
+        priorStatus: status,
+        incomingStatus: fresh.status.isNotEmpty ? fresh.status : status,
+        priorEndTime: endTime,
+        incomingEndTime: fresh.endTime,
+        resolvedEndTime: resolvedEnd,
+        pollDate: pollDate,
+      ),
+      options: mergedOptions,
+      results: _pickRicherResults(results, fresh.results),
+      myVote: _resolveMyVoteAfterSnapshot(
+        options: mergedOptions,
+        prior: myVote,
+        incoming: fresh.myVote,
+      ),
+      reportedTotalVotes: _pickHigherVoteTotal(
+        reportedTotalVotes,
+        fresh.reportedTotalVotes,
+      ),
+    ).withPollScopedVotes();
+  }
+
+  static int? _pickHigherVoteTotal(int? prior, int? fresh) {
+    if (prior == null || prior <= 0) return fresh;
+    if (fresh == null || fresh <= 0) return prior;
+    return fresh > prior ? fresh : prior;
+  }
+
+  static DateTime? _preferredPollDate(DateTime? fresh, DateTime? prior) {
+    if (fresh == null) return prior;
+    if (prior == null) return fresh;
+    final fd = DateTime(fresh.year, fresh.month, fresh.day);
+    final pd = DateTime(prior.year, prior.month, prior.day);
+    return fd.isAfter(pd) ? fresh : prior;
+  }
+
   LunchPoll withReportedTotalVotes(int total) {
     return LunchPoll(
       id: id,
@@ -598,7 +848,7 @@ class LunchPoll {
     );
   }
 
-  LunchPoll withMyVote(String optionId) {
+  LunchPoll withMyVote(String optionId, {bool? allowVoteChangeOverride}) {
     final previousId = myVote?.optionId ?? '';
     LunchPollOption adjustCounts(LunchPollOption o) {
       var count = o.effectiveVoteCount;
@@ -616,6 +866,7 @@ class LunchPoll {
 
     final adjustedResults = results.map(adjustCounts).toList();
     final adjustedOptions = options.map(adjustCounts).toList();
+    final allowChanges = allowVoteChangeOverride ?? allowVoteChange;
 
     return LunchPoll(
       id: id,
@@ -623,7 +874,7 @@ class LunchPoll {
       date: date,
       createdAt: createdAt,
       costAmount: costAmount,
-      allowVoteChange: allowVoteChange,
+      allowVoteChange: allowChanges,
       endTime: endTime,
       status: status,
       options: adjustedOptions,
@@ -944,7 +1195,7 @@ void _upsertTodayPoll(Map<String, LunchPoll> byId, LunchPoll poll) {
   final existing = byId[poll.id];
   byId[poll.id] = existing == null
       ? clean
-      : LunchPoll.merge(clean, existing).withoutMyVote();
+      : existing.applyServerSnapshot(clean).withoutMyVote();
 }
 
 class LunchTodayBundle {
@@ -993,8 +1244,19 @@ class LunchTodayBundle {
     }
 
     final byId = <String, LunchPoll>{};
-    for (final poll
-        in _mapList(root, const ['items', 'polls']).map(LunchPoll.fromJson)) {
+    for (final poll in _mapList(
+      root,
+      const [
+        'items',
+        'polls',
+        'activePolls',
+        'active_polls',
+        'openPolls',
+        'open_polls',
+        'reactivatedPolls',
+        'reactivated_polls',
+      ],
+    ).map(LunchPoll.fromJson)) {
       _upsertTodayPoll(byId, poll);
     }
     if (featured != null) {

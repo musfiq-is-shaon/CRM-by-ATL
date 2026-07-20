@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/utils/async_load_helper.dart';
 import '../../data/models/sale_model.dart';
 import '../../data/models/company_model.dart';
 import '../../data/models/user_model.dart';
@@ -9,6 +10,7 @@ import '../../data/repositories/user_repository.dart';
 class SalesState {
   final List<Sale> sales;
   final bool isLoading;
+  final bool isRefreshing;
   final String? error;
   final String? selectedStatus;
   final String? selectedCategory;
@@ -22,6 +24,7 @@ class SalesState {
   const SalesState({
     this.sales = const [],
     this.isLoading = false,
+    this.isRefreshing = false,
     this.error,
     this.selectedStatus,
     this.selectedCategory,
@@ -33,6 +36,7 @@ class SalesState {
   SalesState copyWith({
     List<Sale>? sales,
     bool? isLoading,
+    bool? isRefreshing,
     String? error,
     String? selectedStatus,
     String? selectedCategory,
@@ -48,6 +52,7 @@ class SalesState {
     return SalesState(
       sales: sales ?? this.sales,
       isLoading: isLoading ?? this.isLoading,
+      isRefreshing: isRefreshing ?? this.isRefreshing,
       error: error,
       selectedStatus: clearStatus
           ? null
@@ -141,8 +146,20 @@ class SalesNotifier extends StateNotifier<SalesState> {
     this._userRepository,
   ) : super(const SalesState());
 
-  Future<void> loadSales() async {
-    state = state.copyWith(isLoading: true, error: null);
+  Future<void> loadSales({bool refresh = false}) async {
+    final hadCache = state.sales.isNotEmpty;
+    if (!hadCache) {
+      state = state.copyWith(isLoading: true, isRefreshing: false, error: null);
+    } else if (refresh) {
+      state = state.copyWith(isRefreshing: true, error: null);
+    } else {
+      final flags = beginAsyncLoad(hasCachedData: true);
+      state = state.copyWith(
+        isLoading: flags.isLoading,
+        isRefreshing: flags.isRefreshing,
+        error: null,
+      );
+    }
     try {
       final sales = await _saleRepository.getSales(
         search: state.listSearch,
@@ -197,9 +214,14 @@ class SalesNotifier extends StateNotifier<SalesState> {
       state = state.copyWith(
         sales: List<Sale>.from(salesWithData),
         isLoading: false,
+        isRefreshing: false,
       );
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
+      state = state.copyWith(
+        isLoading: false,
+        isRefreshing: false,
+        error: asyncLoadError(e),
+      );
     }
   }
 

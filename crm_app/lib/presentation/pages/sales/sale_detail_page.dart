@@ -64,7 +64,7 @@ class _SaleDetailPageState extends ConsumerState<SaleDetailPage> {
       loading: () => Scaffold(
         backgroundColor: bgColor,
         appBar: AppThemeColors.appBarTitle(context, 'Deal Details'),
-        body: const Center(child: LoadingWidget()),
+        body: const DetailSkeleton(),
       ),
       error: (error, stack) => Scaffold(
         backgroundColor: bgColor,
@@ -370,7 +370,7 @@ class _SaleDetailPageState extends ConsumerState<SaleDetailPage> {
     final activitiesAsync = ref.watch(saleActivitiesProvider(saleId));
 
     return activitiesAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () => const ListSkeletonLoader(itemCount: 3, shrinkWrap: true),
       error: (error, stack) => Text(
         'Error loading activities',
         style: TextStyle(color: textSecondary),

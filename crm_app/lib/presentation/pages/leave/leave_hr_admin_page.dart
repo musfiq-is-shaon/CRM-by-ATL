@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme_colors.dart';
+import '../../../core/utils/async_load_helper.dart';
 import '../../../data/models/leave_model.dart';
 import '../../providers/leave_hr_admin_provider.dart';
+import '../../widgets/list_page_state.dart';
+import '../../widgets/loading_widget.dart';
 
 class LeaveHrAdminPage extends ConsumerStatefulWidget {
   const LeaveHrAdminPage({super.key});
@@ -59,12 +62,12 @@ class _LeaveHrAdminPageState extends ConsumerState<LeaveHrAdminPage>
       if (next.error != null &&
           prev?.error != next.error &&
           context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(next.error!),
-            backgroundColor: Theme.of(context).colorScheme.error,
-          ),
-        );
+        final hasCached = next.types.isNotEmpty ||
+            next.weekends.isNotEmpty ||
+            next.holidays.isNotEmpty;
+        if (hasCached) {
+          showRefreshErrorSnackBar(context, next.error!);
+        }
         ref.read(leaveHrAdminProvider.notifier).clearError();
       }
     });
@@ -126,80 +129,88 @@ class _TypesTab extends ConsumerWidget {
     final s = ref.watch(leaveHrAdminProvider);
     final n = ref.read(leaveHrAdminProvider.notifier);
 
-    return Stack(
-      children: [
-        if (s.loadingTypes)
-          const Center(child: CircularProgressIndicator())
-        else
-          RefreshIndicator(
-            onRefresh: n.loadTypes,
-            child: ListView.builder(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: AppThemeColors.pagePaddingAll,
-              itemCount: s.types.length + 1,
-              itemBuilder: (context, i) {
-                if (i == 0) {
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: Align(
-                      alignment: Alignment.centerRight,
-                      child: FilledButton.icon(
-                        onPressed: () => _addType(context, ref),
-                        icon: const Icon(Icons.add),
-                        label: const Text('Add type'),
-                      ),
-                    ),
-                  );
-                }
-                final t = s.types[i - 1];
-                final inactive = t.isActive == false;
-                final cs = Theme.of(context).colorScheme;
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  decoration: BoxDecoration(
-                    color: AppThemeColors.cardColor(context),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppThemeColors.borderColor(context)),
-                  ),
-                  child: ListTile(
-                    title: Text(t.name, style: TextStyle(color: textPrimary)),
-                    subtitle: Text(
-                      inactive ? 'Inactive' : 'Active',
-                      style: TextStyle(
-                        color: inactive ? cs.secondary : cs.tertiary,
-                      ),
-                    ),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          tooltip: 'Toggle active',
-                          icon: const Icon(Icons.toggle_on_outlined),
-                          onPressed: () async {
-                            await n.updateLeaveType(
-                              t.id,
-                              isActive: inactive ? true : false,
-                            );
-                          },
-                        ),
-                        IconButton(
-                          tooltip: 'Rename',
-                          icon: const Icon(Icons.edit_outlined),
-                          onPressed: () => _renameType(context, ref, t),
-                        ),
-                        IconButton(
-                          tooltip: 'Delete',
-                          icon: Icon(Icons.delete_outline, color: cs.error),
-                          onPressed: () => _confirmDeleteType(context, ref, t),
-                        ),
-                      ],
+    return ListPageState(
+      isLoading: s.loadingTypes,
+      isRefreshing: s.refreshingTypes,
+      hasCachedData: s.types.isNotEmpty,
+      error: s.error,
+      isEmpty: s.types.isEmpty,
+      onRetry: () => n.loadTypes(),
+      emptyTitle: 'No leave types',
+      emptySubtitle: 'Add your first leave type to get started',
+      emptyIcon: Icons.category_outlined,
+      emptyButtonText: 'Add type',
+      onEmptyAction: () => _addType(context, ref),
+      content: RefreshIndicator(
+        onRefresh: () => n.loadTypes(refresh: true),
+        child: FadeInContent(
+          child: ListView.builder(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: AppThemeColors.pagePaddingAll,
+            itemCount: s.types.length + 1,
+            itemBuilder: (context, i) {
+              if (i == 0) {
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: FilledButton.icon(
+                      onPressed: () => _addType(context, ref),
+                      icon: const Icon(Icons.add),
+                      label: const Text('Add type'),
                     ),
                   ),
                 );
-              },
-            ),
+              }
+              final t = s.types[i - 1];
+              final inactive = t.isActive == false;
+              final cs = Theme.of(context).colorScheme;
+              return Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                decoration: BoxDecoration(
+                  color: AppThemeColors.cardColor(context),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppThemeColors.borderColor(context)),
+                ),
+                child: ListTile(
+                  title: Text(t.name, style: TextStyle(color: textPrimary)),
+                  subtitle: Text(
+                    inactive ? 'Inactive' : 'Active',
+                    style: TextStyle(
+                      color: inactive ? cs.secondary : cs.tertiary,
+                    ),
+                  ),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        tooltip: 'Toggle active',
+                        icon: const Icon(Icons.toggle_on_outlined),
+                        onPressed: () async {
+                          await n.updateLeaveType(
+                            t.id,
+                            isActive: inactive ? true : false,
+                          );
+                        },
+                      ),
+                      IconButton(
+                        tooltip: 'Rename',
+                        icon: const Icon(Icons.edit_outlined),
+                        onPressed: () => _renameType(context, ref, t),
+                      ),
+                      IconButton(
+                        tooltip: 'Delete',
+                        icon: Icon(Icons.delete_outline, color: cs.error),
+                        onPressed: () => _confirmDeleteType(context, ref, t),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
           ),
-      ],
+        ),
+      ),
     );
   }
 
@@ -289,65 +300,73 @@ class _WeekendsTab extends ConsumerWidget {
     final s = ref.watch(leaveHrAdminProvider);
     final n = ref.read(leaveHrAdminProvider.notifier);
 
-    return Stack(
-      children: [
-        if (s.loadingWeekends)
-          const Center(child: CircularProgressIndicator())
-        else
-          RefreshIndicator(
-            onRefresh: n.loadWeekends,
-            child: ListView.builder(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: AppThemeColors.pagePaddingAll,
-              itemCount: s.weekends.length + 1,
-              itemBuilder: (context, i) {
-                if (i == 0) {
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: Align(
-                      alignment: Alignment.centerRight,
-                      child: FilledButton.icon(
-                        onPressed: () => _addWeekend(context, ref),
-                        icon: const Icon(Icons.add),
-                        label: const Text('Add weekend day'),
-                      ),
-                    ),
-                  );
-                }
-                final w = s.weekends[i - 1];
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  decoration: BoxDecoration(
-                    color: AppThemeColors.cardColor(context),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppThemeColors.borderColor(context)),
-                  ),
-                  child: ListTile(
-                    title: Text(
-                      LeaveWeekend.weekdayLabel(w.dayOfWeek),
-                      style: TextStyle(color: textPrimary),
-                    ),
-                    subtitle: Text(
-                      'dayOfWeek: ${w.dayOfWeek} (0=Mon … 6=Sun)',
-                      style: TextStyle(
-                        color: AppThemeColors.textSecondaryColor(context),
-                      ),
-                    ),
-                    trailing: IconButton(
-                      icon: Icon(
-                        Icons.delete_outline,
-                        color: Theme.of(context).colorScheme.error,
-                      ),
-                      onPressed: () async {
-                        await n.deleteWeekend(w.id);
-                      },
+    return ListPageState(
+      isLoading: s.loadingWeekends,
+      isRefreshing: s.refreshingWeekends,
+      hasCachedData: s.weekends.isNotEmpty,
+      error: s.error,
+      isEmpty: s.weekends.isEmpty,
+      onRetry: () => n.loadWeekends(),
+      emptyTitle: 'No weekend days',
+      emptySubtitle: 'Add weekend days for your leave calendar',
+      emptyIcon: Icons.weekend_outlined,
+      emptyButtonText: 'Add weekend day',
+      onEmptyAction: () => _addWeekend(context, ref),
+      content: RefreshIndicator(
+        onRefresh: () => n.loadWeekends(refresh: true),
+        child: FadeInContent(
+          child: ListView.builder(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: AppThemeColors.pagePaddingAll,
+            itemCount: s.weekends.length + 1,
+            itemBuilder: (context, i) {
+              if (i == 0) {
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: FilledButton.icon(
+                      onPressed: () => _addWeekend(context, ref),
+                      icon: const Icon(Icons.add),
+                      label: const Text('Add weekend day'),
                     ),
                   ),
                 );
-              },
-            ),
+              }
+              final w = s.weekends[i - 1];
+              return Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                decoration: BoxDecoration(
+                  color: AppThemeColors.cardColor(context),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppThemeColors.borderColor(context)),
+                ),
+                child: ListTile(
+                  title: Text(
+                    LeaveWeekend.weekdayLabel(w.dayOfWeek),
+                    style: TextStyle(color: textPrimary),
+                  ),
+                  subtitle: Text(
+                    'dayOfWeek: ${w.dayOfWeek} (0=Mon … 6=Sun)',
+                    style: TextStyle(
+                      color: AppThemeColors.textSecondaryColor(context),
+                    ),
+                  ),
+                  trailing: IconButton(
+                    icon: Icon(
+                      Icons.delete_outline,
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                    onPressed: () async {
+                      await n.deleteWeekend(w.id);
+                    },
+                  ),
+                ),
+              );
+            },
           ),
-      ],
+        ),
+      ),
     );
   }
 
@@ -400,71 +419,79 @@ class _HolidaysTab extends ConsumerWidget {
     final s = ref.watch(leaveHrAdminProvider);
     final n = ref.read(leaveHrAdminProvider.notifier);
 
-    return Stack(
-      children: [
-        if (s.loadingHolidays)
-          const Center(child: CircularProgressIndicator())
-        else
-          RefreshIndicator(
-            onRefresh: n.loadHolidays,
-            child: ListView.builder(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: AppThemeColors.pagePaddingAll,
-              itemCount: s.holidays.length + 1,
-              itemBuilder: (context, i) {
-                if (i == 0) {
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: Align(
-                      alignment: Alignment.centerRight,
-                      child: FilledButton.icon(
-                        onPressed: () => _addHoliday(context, ref),
-                        icon: const Icon(Icons.add),
-                        label: const Text('Add holiday'),
-                      ),
-                    ),
-                  );
-                }
-                final h = s.holidays[i - 1];
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  decoration: BoxDecoration(
-                    color: AppThemeColors.cardColor(context),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppThemeColors.borderColor(context)),
-                  ),
-                  child: ListTile(
-                    title: Text(h.name, style: TextStyle(color: textPrimary)),
-                    subtitle: Text(
-                      '${_fmt(h.startDate)} → ${_fmt(h.endDate)}',
-                      style: TextStyle(
-                        color: AppThemeColors.textSecondaryColor(context),
-                      ),
-                    ),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.edit_outlined),
-                          onPressed: () => _editHoliday(context, ref, h),
-                        ),
-                        IconButton(
-                          icon: Icon(
-                            Icons.delete_outline,
-                            color: Theme.of(context).colorScheme.error,
-                          ),
-                          onPressed: () async {
-                            await n.deleteHoliday(h.id);
-                          },
-                        ),
-                      ],
+    return ListPageState(
+      isLoading: s.loadingHolidays,
+      isRefreshing: s.refreshingHolidays,
+      hasCachedData: s.holidays.isNotEmpty,
+      error: s.error,
+      isEmpty: s.holidays.isEmpty,
+      onRetry: () => n.loadHolidays(),
+      emptyTitle: 'No holidays',
+      emptySubtitle: 'Add public holidays for leave planning',
+      emptyIcon: Icons.celebration_outlined,
+      emptyButtonText: 'Add holiday',
+      onEmptyAction: () => _addHoliday(context, ref),
+      content: RefreshIndicator(
+        onRefresh: () => n.loadHolidays(refresh: true),
+        child: FadeInContent(
+          child: ListView.builder(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: AppThemeColors.pagePaddingAll,
+            itemCount: s.holidays.length + 1,
+            itemBuilder: (context, i) {
+              if (i == 0) {
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: FilledButton.icon(
+                      onPressed: () => _addHoliday(context, ref),
+                      icon: const Icon(Icons.add),
+                      label: const Text('Add holiday'),
                     ),
                   ),
                 );
-              },
-            ),
+              }
+              final h = s.holidays[i - 1];
+              return Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                decoration: BoxDecoration(
+                  color: AppThemeColors.cardColor(context),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppThemeColors.borderColor(context)),
+                ),
+                child: ListTile(
+                  title: Text(h.name, style: TextStyle(color: textPrimary)),
+                  subtitle: Text(
+                    '${_fmt(h.startDate)} → ${_fmt(h.endDate)}',
+                    style: TextStyle(
+                      color: AppThemeColors.textSecondaryColor(context),
+                    ),
+                  ),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.edit_outlined),
+                        onPressed: () => _editHoliday(context, ref, h),
+                      ),
+                      IconButton(
+                        icon: Icon(
+                          Icons.delete_outline,
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                        onPressed: () async {
+                          await n.deleteHoliday(h.id);
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
           ),
-      ],
+        ),
+      ),
     );
   }
 

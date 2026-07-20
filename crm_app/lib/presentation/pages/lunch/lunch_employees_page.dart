@@ -240,7 +240,7 @@ class _LunchEmployeesPageState extends ConsumerState<LunchEmployeesPage> {
             onRemove: _isDefaultRange ? null : (_) => _resetToDefaultRange(),
           ),
           if (loading)
-            const LoadingWidget(message: 'Loading balances…')
+            const TableSkeleton(rowCount: 6)
           else if (rows.isEmpty)
             CRMCard(
               child: Text(

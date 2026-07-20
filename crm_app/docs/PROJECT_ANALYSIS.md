@@ -3,7 +3,7 @@
 **Generated:** June 2026  
 **App version:** `1.2.5+3` (`pubspec.yaml`)  
 **Package path:** `CRM-Mobile-App/crm_app`  
-**Backend:** `https://be-crm-production-a948.up.railway.app`
+**Backend:** `https://crm.apptriangle.com`
 
 ---
 

@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:crm/data/models/lunch_model.dart';
+import 'package:crm/core/utils/lunch_poll_schedule.dart';
 import 'package:crm/presentation/pages/lunch/lunch_ui_helpers.dart';
 
 void main() {
@@ -668,6 +669,174 @@ void main() {
       expect(payloads[0]['title'], 'Updated Lunch');
       expect(payloads[0].containsKey('options'), isFalse);
       expect(payloads[0].containsKey('optionUpdates'), isFalse);
+    });
+
+    test('applyServerSnapshot keeps reactivated poll active over stale closed API', () {
+      final tomorrow = DateTime.now().add(const Duration(hours: 2));
+      final endTime =
+          '${tomorrow.hour.toString().padLeft(2, '0')}:${tomorrow.minute.toString().padLeft(2, '0')}';
+      final local = LunchPoll(
+        id: 'p1',
+        title: 'Yesterday Lunch',
+        date: DateTime.now().subtract(const Duration(days: 1)),
+        status: 'active',
+        endTime: endTime,
+        options: [
+          LunchPollOption(id: 'o1', label: 'Chicken', optionType: 'office'),
+        ],
+        myVote: LunchMyVote(optionId: 'o1'),
+      );
+      final stale = LunchPoll(
+        id: 'p1',
+        title: 'Yesterday Lunch',
+        date: local.date,
+        status: 'closed',
+        endTime: '11:30',
+        options: local.options,
+      );
+
+      final merged = local.applyServerSnapshot(stale);
+      expect(merged.status, 'active');
+      expect(merged.endTime, endTime);
+      expect(merged.scopedMyVote?.optionId, 'o1');
+    });
+
+    test('merge prefers active poll with viable end time over stale closed snapshot', () {
+      final tomorrow = DateTime.now().add(const Duration(hours: 2));
+      final endTime =
+          '${tomorrow.hour.toString().padLeft(2, '0')}:${tomorrow.minute.toString().padLeft(2, '0')}';
+      final active = LunchPoll(
+        id: 'p1',
+        title: 'Lunch',
+        date: DateTime.now().subtract(const Duration(days: 1)),
+        status: 'active',
+        endTime: endTime,
+        myVote: LunchMyVote(optionId: 'o1'),
+        options: [
+          LunchPollOption(id: 'o1', label: 'Chicken', optionType: 'office'),
+        ],
+      );
+      final closed = LunchPoll(
+        id: 'p1',
+        title: 'Lunch',
+        status: 'closed',
+        endTime: '11:30',
+        options: active.options,
+      );
+
+      final merged = LunchPoll.merge(closed, active);
+      expect(merged.status, 'active');
+      expect(merged.endTime, endTime);
+      expect(merged.scopedMyVote?.optionId, 'o1');
+    });
+
+    test('reactivated poll uses today deadline for end time checks', () {
+      final tomorrow = DateTime.now().add(const Duration(hours: 2));
+      final endTime =
+          '${tomorrow.hour.toString().padLeft(2, '0')}:${tomorrow.minute.toString().padLeft(2, '0')}';
+      final yesterday = DateTime.now().subtract(const Duration(days: 1));
+
+      expect(
+        lunchPollIsPastEndTime(
+          endTime: endTime,
+          pollDate: yesterday,
+          status: 'active',
+        ),
+        isFalse,
+      );
+      expect(
+        isPollEndTimeViable(endTime, yesterday),
+        isTrue,
+      );
+    });
+
+    test('resolvedForMyLunch promotes stale closed poll with viable end time', () {
+      final tomorrow = DateTime.now().add(const Duration(hours: 2));
+      final endTime =
+          '${tomorrow.hour.toString().padLeft(2, '0')}:${tomorrow.minute.toString().padLeft(2, '0')}';
+      final closed = LunchPoll(
+        id: 'p1',
+        title: 'Yesterday Lunch',
+        date: DateTime.now().subtract(const Duration(days: 1)),
+        status: 'closed',
+        endTime: endTime,
+        options: [
+          LunchPollOption(id: 'o1', label: 'Chicken', optionType: 'office'),
+        ],
+      );
+
+      final resolved = closed.resolvedForMyLunch();
+      expect(resolved.status, 'active');
+      expect(resolved.showOnMyLunch, isTrue);
+      expect(resolved.appearsOnMyLunchCard, isTrue);
+    });
+
+    test('reactivated poll disallows vote changes but stays open for first vote', () {
+      final poll = LunchPoll(
+        id: 'p1',
+        title: 'Old lunch',
+        date: DateTime.now().subtract(const Duration(days: 1)),
+        status: 'active',
+        endTime: '23:59',
+        allowVoteChange: true,
+        options: [
+          LunchPollOption(id: 'o1', label: 'Chicken', optionType: 'office'),
+        ],
+        myVote: LunchMyVote(optionId: 'o1'),
+      );
+
+      expect(poll.isReactivatedPoll, isTrue);
+      expect(poll.allowsVoteChanges, isFalse);
+      expect(poll.isVotingOpen, isTrue);
+    });
+
+    test('prior-day poll without vote can still be open for first vote', () {
+      final poll = LunchPoll(
+        id: 'p1',
+        title: 'Old lunch',
+        date: DateTime.now().subtract(const Duration(days: 1)),
+        status: 'active',
+        endTime: '23:59',
+        options: [
+          LunchPollOption(id: 'o1', label: 'Chicken', optionType: 'office'),
+        ],
+      );
+
+      expect(poll.scopedMyVote, isNull);
+      expect(poll.allowsVoteChanges, isFalse);
+      expect(poll.isVotingOpen, isTrue);
+    });
+
+    test('applyServerSnapshot keeps newer local vote over stale history vote', () {
+      final local = LunchPoll(
+        id: 'p1',
+        title: 'Old lunch',
+        date: DateTime.now().subtract(const Duration(days: 1)),
+        status: 'active',
+        endTime: '23:59',
+        options: [
+          LunchPollOption(id: 'o1', label: 'Chicken', optionType: 'office'),
+          LunchPollOption(id: 'o2', label: 'Fish', optionType: 'office'),
+        ],
+        myVote: LunchMyVote(
+          optionId: 'o2',
+          votedAt: DateTime.now(),
+        ),
+      );
+      final stale = LunchPoll(
+        id: 'p1',
+        title: 'Old lunch',
+        date: local.date,
+        status: 'closed',
+        options: local.options,
+        myVote: LunchMyVote(
+          optionId: 'o1',
+          votedAt: DateTime.now().subtract(const Duration(days: 1)),
+        ),
+      );
+
+      final merged = local.applyServerSnapshot(stale);
+      expect(merged.scopedMyVote?.optionId, 'o2');
     });
 
     test('deriveEmployeeVotes builds rows from poll options', () {

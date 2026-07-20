@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/theme/app_theme_colors.dart';
 import '../../core/theme/design_tokens.dart';
+import '../../core/utils/friendly_error_message.dart';
 import 'crm_button.dart';
 
 class ErrorWidget extends StatelessWidget {
@@ -8,6 +9,22 @@ class ErrorWidget extends StatelessWidget {
   final VoidCallback? onRetry;
 
   const ErrorWidget({super.key, required this.message, this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return ErrorState(
+      message: friendlyErrorMessage(message),
+      onRetry: onRetry,
+    );
+  }
+}
+
+/// Friendly full-screen error with retry.
+class ErrorState extends StatelessWidget {
+  const ErrorState({super.key, required this.message, this.onRetry});
+
+  final String message;
+  final VoidCallback? onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -62,6 +79,9 @@ class ErrorWidget extends StatelessWidget {
     );
   }
 }
+
+/// Clean empty state — alias for [EmptyStateWidget].
+typedef EmptyState = EmptyStateWidget;
 
 class EmptyStateWidget extends StatelessWidget {
   final String title;

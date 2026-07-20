@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme_colors.dart';
 import '../../../core/theme/design_tokens.dart';
 import '../../providers/auth_provider.dart';
+import '../../widgets/loading_widget.dart';
 
 /// `PATCH /api/users/me` — name & phone (Postman: Update me).
 class EditProfilePage extends ConsumerStatefulWidget {
@@ -71,7 +72,18 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
 
   @override
   Widget build(BuildContext context) {
-        
+    final auth = ref.watch(authProvider);
+
+    if (auth.user == null &&
+        (auth.status == AuthStatus.loading ||
+            auth.status == AuthStatus.initial)) {
+      return Scaffold(
+        backgroundColor: AppThemeColors.backgroundColor(context),
+        appBar: AppThemeColors.appBarTitle(context, 'Edit profile'),
+        body: const ProfileSkeleton(),
+      );
+    }
+
     return Scaffold(
       backgroundColor: AppThemeColors.backgroundColor(context),
       appBar: AppThemeColors.appBarTitle(
@@ -79,13 +91,12 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
         'Edit profile',
         actions: [
           if (_saving)
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.only(right: 16),
-                child: SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+            Padding(
+              padding: const EdgeInsets.only(right: AppSpacing.md),
+              child: Center(
+                child: ButtonLoadingState(
+                  label: 'Saving…',
+                  color: Theme.of(context).colorScheme.primary,
                 ),
               ),
             )

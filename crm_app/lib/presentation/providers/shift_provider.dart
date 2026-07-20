@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/utils/async_load_helper.dart';
 import '../../data/models/shift_model.dart';
 import '../../data/models/user_model.dart';
 import '../../data/repositories/shift_repository.dart';
@@ -9,22 +10,26 @@ export 'user_profile_shift_provider.dart';
 class ShiftState {
   final List<WorkShift> shifts;
   final bool isLoading;
+  final bool isRefreshing;
   final String? error;
 
   const ShiftState({
     this.shifts = const [],
     this.isLoading = false,
+    this.isRefreshing = false,
     this.error,
   });
 
   ShiftState copyWith({
     List<WorkShift>? shifts,
     bool? isLoading,
+    bool? isRefreshing,
     Object? error = _sentinel,
   }) {
     return ShiftState(
       shifts: shifts ?? this.shifts,
       isLoading: isLoading ?? this.isLoading,
+      isRefreshing: isRefreshing ?? this.isRefreshing,
       error: identical(error, _sentinel) ? this.error : error as String?,
     );
   }
@@ -37,16 +42,32 @@ class ShiftNotifier extends StateNotifier<ShiftState> {
 
   final ShiftRepository _repository;
 
-  Future<void> loadShifts() async {
-    state = state.copyWith(isLoading: true, error: null);
+  Future<void> loadShifts({bool refresh = false}) async {
+    final hadCache = state.shifts.isNotEmpty;
+    if (!hadCache) {
+      state = state.copyWith(isLoading: true, isRefreshing: false, error: null);
+    } else if (refresh) {
+      state = state.copyWith(isRefreshing: true, error: null);
+    } else {
+      final flags = beginAsyncLoad(hasCachedData: true);
+      state = state.copyWith(
+        isLoading: flags.isLoading,
+        isRefreshing: flags.isRefreshing,
+        error: null,
+      );
+    }
     try {
       final list = await _repository.getShiftsEnriched();
-      state = ShiftState(shifts: list, isLoading: false);
-    } catch (e) {
-      state = ShiftState(
-        shifts: state.shifts,
+      state = state.copyWith(
+        shifts: list,
         isLoading: false,
-        error: e.toString().replaceFirst('Exception: ', ''),
+        isRefreshing: false,
+      );
+    } catch (e) {
+      state = state.copyWith(
+        isLoading: false,
+        isRefreshing: false,
+        error: asyncLoadError(e).replaceFirst('Exception: ', ''),
       );
     }
   }

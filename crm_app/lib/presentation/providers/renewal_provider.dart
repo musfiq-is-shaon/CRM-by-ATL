@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/utils/async_load_helper.dart';
 import '../../data/models/company_model.dart';
 import '../../data/models/renewal_model.dart';
 import '../../data/models/user_model.dart';
@@ -35,6 +36,7 @@ class RenewalListFilters {
 class RenewalsState {
   final List<Renewal> renewals;
   final bool isLoading;
+  final bool isRefreshing;
   final String? error;
   final String? listSearch;
   final RenewalListFilters listFilters;
@@ -42,6 +44,7 @@ class RenewalsState {
   const RenewalsState({
     this.renewals = const [],
     this.isLoading = false,
+    this.isRefreshing = false,
     this.error,
     this.listSearch,
     this.listFilters = RenewalListFilters.empty,
@@ -50,6 +53,7 @@ class RenewalsState {
   RenewalsState copyWith({
     List<Renewal>? renewals,
     bool? isLoading,
+    bool? isRefreshing,
     String? error,
     String? listSearch,
     bool clearListSearch = false,
@@ -58,6 +62,7 @@ class RenewalsState {
     return RenewalsState(
       renewals: renewals ?? this.renewals,
       isLoading: isLoading ?? this.isLoading,
+      isRefreshing: isRefreshing ?? this.isRefreshing,
       error: error,
       listSearch: clearListSearch ? null : (listSearch ?? this.listSearch),
       listFilters: listFilters ?? this.listFilters,
@@ -76,8 +81,20 @@ class RenewalsNotifier extends StateNotifier<RenewalsState> {
     this._userRepository,
   ) : super(const RenewalsState());
 
-  Future<void> loadRenewals() async {
-    state = state.copyWith(isLoading: true, error: null);
+  Future<void> loadRenewals({bool refresh = false}) async {
+    final hadCache = state.renewals.isNotEmpty;
+    if (!hadCache) {
+      state = state.copyWith(isLoading: true, isRefreshing: false, error: null);
+    } else if (refresh) {
+      state = state.copyWith(isRefreshing: true, error: null);
+    } else {
+      final flags = beginAsyncLoad(hasCachedData: true);
+      state = state.copyWith(
+        isLoading: flags.isLoading,
+        isRefreshing: flags.isRefreshing,
+        error: null,
+      );
+    }
     try {
       final search = state.listSearch?.trim();
       final f = state.listFilters;
@@ -123,9 +140,17 @@ class RenewalsNotifier extends StateNotifier<RenewalsState> {
         return r.copyWith(company: company, kamUser: kam);
       }).toList();
 
-      state = state.copyWith(renewals: List<Renewal>.from(enriched), isLoading: false);
+      state = state.copyWith(
+        renewals: List<Renewal>.from(enriched),
+        isLoading: false,
+        isRefreshing: false,
+      );
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
+      state = state.copyWith(
+        isLoading: false,
+        isRefreshing: false,
+        error: asyncLoadError(e),
+      );
     }
   }
 

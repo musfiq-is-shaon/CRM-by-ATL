@@ -1,6 +1,8 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/theme/design_tokens.dart';
+import 'loading_widget.dart';
 
 class AvatarWidget extends StatelessWidget {
   final String? name;
@@ -20,12 +22,18 @@ class AvatarWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     if (imageUrl != null && imageUrl!.isNotEmpty) {
       return ClipOval(
-        child: Image.network(
-          imageUrl!,
+        child: CachedNetworkImage(
+          imageUrl: imageUrl!,
           width: size,
           height: size,
           fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) => _buildInitials(context),
+          fadeInDuration: const Duration(milliseconds: 220),
+          placeholder: (_, _) => ImageSkeleton(
+            width: size,
+            height: size,
+            borderRadius: size / 2,
+          ),
+          errorWidget: (_, _, _) => _buildInitials(context),
         ),
       );
     }
