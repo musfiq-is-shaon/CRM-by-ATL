@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_theme_colors.dart';
+import '../../../core/theme/design_tokens.dart';
 import '../../providers/lunch_provider.dart';
+import '../../widgets/loading_widget.dart';
 import 'lunch_employees_page.dart';
 import 'lunch_my_lunch_page.dart';
 import 'lunch_order_summary_page.dart';
@@ -29,7 +31,15 @@ class _DeferredTabLoadState extends State<_DeferredTabLoad> {
   @override
   Widget build(BuildContext context) {
     if (widget.active) _mounted = true;
-    if (!_mounted) return const SizedBox.shrink();
+    // Inactive unmounted tabs must be zero-size — IndexedStack sizes to the
+    // largest child and a tall skeleton bloated the lunch hub.
+    if (!_mounted) {
+      if (!widget.active) return const SizedBox.shrink();
+      return const Padding(
+        padding: EdgeInsets.all(AppSpacing.md),
+        child: ListSkeletonLoader(itemCount: 3, shrinkWrap: true),
+      );
+    }
     return widget.child;
   }
 }

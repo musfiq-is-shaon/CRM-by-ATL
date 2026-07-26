@@ -36,7 +36,10 @@ class CompanyDetailPage extends ConsumerWidget {
         leading: IconButton(
           tooltip: 'Back',
           icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () {
+            FocusManager.instance.primaryFocus?.unfocus();
+            Navigator.pop(context);
+          },
         ),
         actions: [
           IconButton(

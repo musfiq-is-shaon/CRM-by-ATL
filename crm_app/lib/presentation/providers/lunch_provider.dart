@@ -41,6 +41,9 @@ class LunchState {
     this.employeeBalancesLoading = false,
     this.employeeBalancesFrom,
     this.employeeBalancesTo,
+    this.employeeBalancesError,
+    this.adminPollsError,
+    this.orderSummaryError,
     this.error,
     this.votingPollId,
     this.orderSummaryLoading = false,
@@ -64,6 +67,9 @@ class LunchState {
   final bool employeeBalancesLoading;
   final String? employeeBalancesFrom;
   final String? employeeBalancesTo;
+  final String? employeeBalancesError;
+  final String? adminPollsError;
+  final String? orderSummaryError;
   final String? error;
   final String? votingPollId;
   final bool orderSummaryLoading;
@@ -83,6 +89,7 @@ class LunchState {
     LunchLoadStatus? status,
     List<LunchPoll>? todayPolls,
     String? selectedPollId,
+    bool clearSelectedPollId = false,
     LunchOrderSummary? orderSummary,
     bool clearSummary = false,
     List<LunchPoll>? adminPolls,
@@ -102,6 +109,12 @@ class LunchState {
     String? employeeBalancesFrom,
     String? employeeBalancesTo,
     bool clearEmployeeBalancesRange = false,
+    String? employeeBalancesError,
+    bool clearEmployeeBalancesError = false,
+    String? adminPollsError,
+    bool clearAdminPollsError = false,
+    String? orderSummaryError,
+    bool clearOrderSummaryError = false,
     String? error,
     bool clearError = false,
     String? votingPollId,
@@ -111,7 +124,9 @@ class LunchState {
     return LunchState(
       status: status ?? this.status,
       todayPolls: todayPolls ?? this.todayPolls,
-      selectedPollId: selectedPollId ?? this.selectedPollId,
+      selectedPollId: clearSelectedPollId
+          ? null
+          : (selectedPollId ?? this.selectedPollId),
       orderSummary: clearSummary ? null : (orderSummary ?? this.orderSummary),
       adminPolls: adminPolls ?? this.adminPolls,
       settings: settings ?? this.settings,
@@ -134,6 +149,15 @@ class LunchState {
       employeeBalancesTo: clearEmployeeBalancesRange
           ? null
           : (employeeBalancesTo ?? this.employeeBalancesTo),
+      employeeBalancesError: clearEmployeeBalancesError
+          ? null
+          : (employeeBalancesError ?? this.employeeBalancesError),
+      adminPollsError: clearAdminPollsError
+          ? null
+          : (adminPollsError ?? this.adminPollsError),
+      orderSummaryError: clearOrderSummaryError
+          ? null
+          : (orderSummaryError ?? this.orderSummaryError),
       error: clearError ? null : (error ?? this.error),
       votingPollId: clearVoting ? null : (votingPollId ?? this.votingPollId),
       orderSummaryLoading: orderSummaryLoading ?? this.orderSummaryLoading,
@@ -149,8 +173,15 @@ class LunchNotifier extends StateNotifier<LunchState> {
   int _balanceRequestId = 0;
   int _employeeBalancesRequestId = 0;
   int _adminPollsRequestId = 0;
+  int _todayPollsRequestId = 0;
+  int _orderSummaryRequestId = 0;
+  int _voteHistoryRequestId = 0;
   Future<void>? _bootstrapInFlight;
   bool _todayPollsStale = false;
+  /// Bumped on [clear] so in-flight vote/load cannot rewrite after logout.
+  int _sessionGen = 0;
+  /// End times set by local admin update/reopen until the server list agrees.
+  final Map<String, String> _pinnedPollEndTimes = {};
 
   static DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
 
@@ -171,6 +202,44 @@ class LunchNotifier extends StateNotifier<LunchState> {
 
   bool _showOnMyLunch(LunchPoll poll) => poll.resolvedForMyLunch().showOnMyLunch;
 
+  void _pinPollEndTime(String pollId, String? endTime) {
+    final id = pollId.trim();
+    final end = endTime?.trim() ?? '';
+    if (id.isEmpty || end.isEmpty) return;
+    _pinnedPollEndTimes[id] = end.contains('AM') || end.contains('PM')
+        ? lunchEndTimeToApi(end)
+        : end;
+  }
+
+  LunchPoll _withPinnedEnd(LunchPoll poll) {
+    final pinned = _pinnedPollEndTimes[poll.id];
+    if (pinned == null) return poll;
+    final server = poll.endTime?.trim() ?? '';
+    final serverApi = server.isEmpty
+        ? ''
+        : (server.contains('AM') || server.contains('PM')
+            ? lunchEndTimeToApi(server)
+            : server);
+    if (serverApi == pinned) {
+      _pinnedPollEndTimes.remove(poll.id);
+      return poll;
+    }
+    return LunchPoll(
+      id: poll.id,
+      title: poll.title,
+      date: poll.date,
+      createdAt: poll.createdAt,
+      costAmount: poll.costAmount,
+      allowVoteChange: poll.allowVoteChange,
+      endTime: pinned,
+      status: poll.status,
+      options: poll.options,
+      results: poll.results,
+      myVote: poll.myVote,
+      reportedTotalVotes: poll.reportedTotalVotes,
+    );
+  }
+
   void _upsertPoll(LunchPoll poll) {
     if (poll.id.isEmpty) return;
     LunchPoll? prior;
@@ -188,7 +257,8 @@ class LunchNotifier extends StateNotifier<LunchState> {
         }
       }
     }
-    final merged = prior?.applyServerSnapshot(poll) ?? poll;
+    final incoming = _withPinnedEnd(poll);
+    final merged = prior?.applyServerSnapshot(incoming) ?? incoming;
 
     var today = <LunchPoll>[
       for (final p in state.todayPolls) p.id == poll.id ? merged : p,
@@ -211,38 +281,24 @@ class LunchNotifier extends StateNotifier<LunchState> {
     List<LunchPoll> existing,
     List<LunchPoll> incoming,
   ) {
+    // Server list is authoritative for membership — do not keep ghost polls.
     final priorById = {for (final p in existing) p.id: p};
-    final incomingIds = {for (final p in incoming) if (p.id.isNotEmpty) p.id};
-
-    final merged = <LunchPoll>[
-      for (final poll in incoming)
-        (priorById[poll.id]?.applyServerSnapshot(poll) ?? poll)
-            .resolvedForMyLunch(),
-    ];
-
-    void retainIfMissing(LunchPoll prior) {
-      if (prior.id.isEmpty || incomingIds.contains(prior.id)) return;
-      if (merged.any((p) => p.id == prior.id)) return;
-      final resolved = prior.resolvedForMyLunch();
-      if (!resolved.showOnMyLunch) return;
-      merged.add(resolved);
-    }
-
-    for (final prior in existing) {
-      retainIfMissing(prior);
-    }
-    for (final prior in state.adminPolls) {
-      retainIfMissing(priorById[prior.id] ?? prior);
-    }
-
-    return sortTodayPollsNewestFirst(dedupeTodayPolls(merged));
+    return sortTodayPollsNewestFirst(
+      dedupeTodayPolls([
+        for (final poll in incoming)
+          (priorById[poll.id]?.applyServerSnapshot(_withPinnedEnd(poll)) ??
+                  _withPinnedEnd(poll))
+              .resolvedForMyLunch(),
+      ]),
+    );
   }
 
   List<LunchPoll> _mergePollLists(List<LunchPoll> existing, List<LunchPoll> incoming) {
     final priorById = {for (final p in existing) p.id: p};
     return [
       for (final poll in incoming)
-        priorById[poll.id]?.applyServerSnapshot(poll) ?? poll,
+        priorById[poll.id]?.applyServerSnapshot(_withPinnedEnd(poll)) ??
+            _withPinnedEnd(poll),
     ];
   }
 
@@ -276,7 +332,7 @@ class LunchNotifier extends StateNotifier<LunchState> {
     );
   }
 
-  Future<void> _refreshPollInState(
+  Future<bool> _refreshPollInState(
     String pollId, {
     String? preserveEndTime,
     String? preserveStatus,
@@ -333,20 +389,27 @@ class LunchNotifier extends StateNotifier<LunchState> {
         fresh = prior.applyServerSnapshot(fresh);
       }
       _upsertPoll(fresh);
-    } catch (_) {}
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
+
+  /// Refresh one poll before showing its voter breakdown.
+  Future<bool> refreshPollVotes(String pollId) =>
+      _refreshPollInState(pollId);
 
   String? get _currentUserId => _ref.read(currentUserIdProvider);
 
   Future<void> bootstrapUser({bool force = false}) async {
+    if (_bootstrapInFlight != null) {
+      await _bootstrapInFlight;
+      if (!force) return;
+    }
     if (!force) {
       if (state.status == LunchLoadStatus.loaded &&
           state.todayPolls.isNotEmpty &&
           !_todayPollsStale) {
-        return;
-      }
-      if (_bootstrapInFlight != null) {
-        await _bootstrapInFlight;
         return;
       }
     }
@@ -366,10 +429,12 @@ class LunchNotifier extends StateNotifier<LunchState> {
     if (state.todayPolls.isEmpty) {
       state = state.copyWith(status: LunchLoadStatus.loading, clearError: true);
     }
+    final requestId = ++_todayPollsRequestId;
     try {
       final polls = await _repo.getTodayPollsHydrated(
         currentUserId: _currentUserId,
       );
+      if (requestId != _todayPollsRequestId) return;
       state = state.copyWith(
         status: LunchLoadStatus.loaded,
         todayPolls: _mergeTodayPollLists(state.todayPolls, polls),
@@ -378,11 +443,13 @@ class LunchNotifier extends StateNotifier<LunchState> {
       );
       _todayPollsStale = false;
     } catch (e) {
+      if (requestId != _todayPollsRequestId) return;
       state = state.copyWith(status: LunchLoadStatus.error, error: e.toString());
     }
   }
 
   Future<void> loadTodayPolls({bool silent = false}) async {
+    final requestId = ++_todayPollsRequestId;
     if (!silent) {
       state = state.copyWith(status: LunchLoadStatus.loading, clearError: true);
     }
@@ -390,6 +457,7 @@ class LunchNotifier extends StateNotifier<LunchState> {
       final polls = await _repo.getTodayPollsHydrated(
         currentUserId: _currentUserId,
       );
+      if (requestId != _todayPollsRequestId) return;
       _todayPollsStale = false;
       state = state.copyWith(
         status: LunchLoadStatus.loaded,
@@ -398,6 +466,7 @@ class LunchNotifier extends StateNotifier<LunchState> {
             (polls.isNotEmpty ? polls.first.id : null),
       );
     } catch (e) {
+      if (requestId != _todayPollsRequestId) return;
       state = state.copyWith(status: LunchLoadStatus.error, error: e.toString());
     }
   }
@@ -411,6 +480,9 @@ class LunchNotifier extends StateNotifier<LunchState> {
   }
 
   Future<void> vote(String pollId, String optionId) async {
+    // Ignore duplicate taps on the same in-flight poll; other polls may still vote.
+    if (state.votingPollId == pollId) return;
+
     LunchPoll? target;
     for (final p in state.todayPolls) {
       if (p.id == pollId) {
@@ -418,24 +490,27 @@ class LunchNotifier extends StateNotifier<LunchState> {
         break;
       }
     }
+    // Pass pre-optimistic poll so prior-day change guards still work.
+    final voteGuardPoll = target;
+    final sessionGen = _sessionGen;
 
     state = state.copyWith(votingPollId: pollId, clearError: true);
     final previousToday = state.todayPolls;
+    final voteToken = pollId;
+    final optimisticPoll = target?.withMyVote(optionId);
     state = state.copyWith(
       todayPolls: [
         for (final p in state.todayPolls)
-          if (p.id == pollId) p.withMyVote(optionId) else p,
+          if (p.id == pollId) (optimisticPoll ?? p.withMyVote(optionId)) else p,
       ],
     );
     try {
-      final liveTarget = state.todayPolls
-          .where((p) => p.id == pollId)
-          .fold<LunchPoll?>(null, (_, p) => p);
       await _repo.castVote(
         pollId,
         optionId,
-        poll: liveTarget ?? target,
+        poll: voteGuardPoll,
       );
+      if (sessionGen != _sessionGen) return;
       try {
         LunchPoll? existing;
         for (final p in state.todayPolls) {
@@ -455,6 +530,7 @@ class LunchNotifier extends StateNotifier<LunchState> {
         } catch (_) {
           refreshed = existing;
         }
+        if (sessionGen != _sessionGen) return;
 
         var merged = LunchPoll.mergeAfterVote(local: existing, server: refreshed);
         _upsertPoll(merged);
@@ -464,9 +540,39 @@ class LunchNotifier extends StateNotifier<LunchState> {
         // Keep optimistic state if refresh fails.
       }
     } catch (e) {
-      state = state.copyWith(todayPolls: previousToday, error: e.toString());
+      if (sessionGen != _sessionGen) return;
+      // Restore prior vote on the current in-state poll so concurrent refreshes
+      // (counts/status) are kept. Only adjust counts when they still match our
+      // optimistic snapshot — otherwise force myVote only.
+      if (state.votingPollId == voteToken) {
+        LunchPoll? previousPoll;
+        for (final p in previousToday) {
+          if (p.id == pollId) {
+            previousPoll = p;
+            break;
+          }
+        }
+        state = state.copyWith(
+          todayPolls: [
+            for (final p in state.todayPolls)
+              if (p.id == pollId && previousPoll != null)
+                p.restoreMyVote(
+                  previousPoll.myVote,
+                  adjustCounts: optimisticPoll != null &&
+                      p.hasSameOptionCounts(optimisticPoll),
+                )
+              else
+                p,
+          ],
+          error: e.toString(),
+        );
+      } else {
+        state = state.copyWith(error: e.toString());
+      }
     } finally {
-      state = state.copyWith(clearVoting: true);
+      if (sessionGen == _sessionGen && state.votingPollId == voteToken) {
+        state = state.copyWith(clearVoting: true);
+      }
     }
   }
 
@@ -474,7 +580,7 @@ class LunchNotifier extends StateNotifier<LunchState> {
   Future<void> bootstrapOrderSummary() async {
     state = state.copyWith(
       orderSummaryLoading: true,
-      clearError: true,
+      clearOrderSummaryError: true,
       clearSummary: state.orderSummary == null,
     );
     try {
@@ -499,18 +605,19 @@ class LunchNotifier extends StateNotifier<LunchState> {
       }
     } catch (e) {
       state = state.copyWith(
-        error: e.toString(),
+        orderSummaryError: e.toString(),
         orderSummaryLoading: false,
       );
     }
   }
 
   Future<void> loadOrderSummary(String pollId, {bool silent = false}) async {
+    final requestId = ++_orderSummaryRequestId;
     final keepSummary =
         silent && state.selectedPollId == pollId && state.orderSummary != null;
     state = state.copyWith(
       selectedPollId: pollId,
-      clearError: true,
+      clearOrderSummaryError: true,
       clearSummary: !keepSummary,
       orderSummaryLoading: !keepSummary,
     );
@@ -523,16 +630,20 @@ class LunchNotifier extends StateNotifier<LunchState> {
         if (p.id == pollId) poll = p;
       }
       poll ??= await _repo.getPoll(pollId);
+      if (requestId != _orderSummaryRequestId) return;
       final summary = await _repo.getPollSummary(pollId, poll: poll);
+      if (requestId != _orderSummaryRequestId) return;
       _upsertPoll(summary.poll);
       state = state.copyWith(
         orderSummary: summary,
         selectedPollId: pollId,
         orderSummaryLoading: false,
+        clearOrderSummaryError: true,
       );
     } catch (e) {
+      if (requestId != _orderSummaryRequestId) return;
       state = state.copyWith(
-        error: e.toString(),
+        orderSummaryError: e.toString(),
         orderSummaryLoading: false,
       );
     }
@@ -564,6 +675,7 @@ class LunchNotifier extends StateNotifier<LunchState> {
         adminPolls: merged,
         selectedPollId: state.selectedPollId ??
             (merged.isNotEmpty ? merged.first.id : null),
+        clearAdminPollsError: true,
       );
       if (!hydrate && polls.isNotEmpty) {
         unawaited(
@@ -577,7 +689,7 @@ class LunchNotifier extends StateNotifier<LunchState> {
       }
     } catch (e) {
       if (requestId != _adminPollsRequestId) return;
-      state = state.copyWith(error: e.toString());
+      state = state.copyWith(adminPollsError: e.toString());
     }
   }
 
@@ -613,24 +725,22 @@ class LunchNotifier extends StateNotifier<LunchState> {
     return _repo.fetchPollPickerList(from: from, to: to);
   }
 
-  Future<void> loadSettings() async {
+  Future<void> loadSettings({bool silent = false}) async {
     try {
       final settings = await _repo.getSettings();
-      state = state.copyWith(settings: settings);
+      state = state.copyWith(settings: settings, clearError: true);
     } catch (e) {
+      // Background loads must not pollute shared My Lunch error snackbars.
+      if (silent) return;
       state = state.copyWith(error: e.toString());
+      rethrow;
     }
   }
 
   Future<void> saveSettings(LunchSettings settings) async {
-    state = state.copyWith(status: LunchLoadStatus.loading, clearError: true);
-    try {
-      final saved = await _repo.updateSettings(settings);
-      state = state.copyWith(status: LunchLoadStatus.loaded, settings: saved);
-    } catch (e) {
-      state = state.copyWith(status: LunchLoadStatus.error, error: e.toString());
-      rethrow;
-    }
+    // Do not flip shared LunchLoadStatus — My Lunch uses it for poll load UX.
+    final saved = await _repo.updateSettings(settings);
+    state = state.copyWith(settings: saved, clearError: true);
   }
 
   Future<void> loadDashboard() async {
@@ -647,14 +757,15 @@ class LunchNotifier extends StateNotifier<LunchState> {
     final requestId = ++_balanceRequestId;
     final keepExisting =
         silent && state.myBalanceMonth == monthKey && state.myBalance != null;
+    final priorBalance = state.myBalance;
+    final priorMonth = state.myBalanceMonth;
+    final priorTx = state.transactions;
 
-    if (!silent) {
-      state = state.copyWith(status: LunchLoadStatus.loading, clearError: true);
-    }
     state = state.copyWith(
       myBalanceLoading: !keepExisting,
       myBalanceMonth: monthKey,
       clearMyBalance: !keepExisting,
+      clearError: !silent,
     );
 
     try {
@@ -668,7 +779,6 @@ class LunchNotifier extends StateNotifier<LunchState> {
       final tx = results[1] as List<LunchBalanceTransaction>;
 
       state = state.copyWith(
-        status: LunchLoadStatus.loaded,
         myBalance: bal,
         myBalanceMonth: monthKey,
         myBalanceLoading: false,
@@ -676,10 +786,14 @@ class LunchNotifier extends StateNotifier<LunchState> {
       );
     } catch (e) {
       if (requestId != _balanceRequestId) return;
+      // Always restore prior snapshot on failure so pull-to-refresh doesn't wipe
+      // a good balance into "unavailable". Never set shared LunchLoadStatus.
       state = state.copyWith(
-        status: LunchLoadStatus.error,
         myBalanceLoading: false,
-        error: e.toString(),
+        myBalance: keepExisting ? state.myBalance : priorBalance,
+        myBalanceMonth: keepExisting ? monthKey : priorMonth,
+        transactions: keepExisting ? state.transactions : priorTx,
+        error: silent ? state.error : e.toString(),
       );
     }
   }
@@ -689,9 +803,11 @@ class LunchNotifier extends StateNotifier<LunchState> {
     required DateTime to,
     String? optionType,
   }) async {
+    final requestId = ++_voteHistoryRequestId;
     state = state.copyWith(
       voteHistoryLoading: true,
       clearVoteHistoryError: true,
+      voteHistory: const [],
     );
     try {
       final rows = await _repo.getVoteHistory(
@@ -699,11 +815,13 @@ class LunchNotifier extends StateNotifier<LunchState> {
         to: to,
         optionType: optionType,
       );
+      if (requestId != _voteHistoryRequestId) return;
       state = state.copyWith(
         voteHistoryLoading: false,
         voteHistory: rows,
       );
     } catch (e) {
+      if (requestId != _voteHistoryRequestId) return;
       state = state.copyWith(
         voteHistoryLoading: false,
         voteHistoryError: e.toString(),
@@ -723,7 +841,7 @@ class LunchNotifier extends StateNotifier<LunchState> {
       employeeBalancesLoading: true,
       employeeBalances: const [],
       clearEmployeeBalancesRange: true,
-      clearError: true,
+      clearEmployeeBalancesError: true,
     );
     try {
       final rows = await _repo.getEmployeeBalances(from: fromDate, to: toDate);
@@ -733,12 +851,15 @@ class LunchNotifier extends StateNotifier<LunchState> {
         employeeBalancesLoading: false,
         employeeBalancesFrom: _dateKey(fromDate),
         employeeBalancesTo: _dateKey(toDate),
+        clearEmployeeBalancesError: true,
       );
     } catch (e) {
       if (requestId != _employeeBalancesRequestId) return;
       state = state.copyWith(
         employeeBalancesLoading: false,
-        error: e.toString(),
+        employeeBalancesFrom: _dateKey(fromDate),
+        employeeBalancesTo: _dateKey(toDate),
+        employeeBalancesError: e.toString(),
       );
     }
   }
@@ -772,6 +893,9 @@ class LunchNotifier extends StateNotifier<LunchState> {
     final endApi = poll.endTime?.trim();
     final pollDate = poll.date ?? priorState?.date ?? original?.date;
     final reopenRef = priorState ?? original;
+    if (endApi != null && endApi.isNotEmpty) {
+      _pinPollEndTime(pollId, endApi);
+    }
     if (reopenRef != null &&
         endApi != null &&
         endApi.isNotEmpty &&
@@ -789,10 +913,54 @@ class LunchNotifier extends StateNotifier<LunchState> {
         endTime: endApi,
         allowVoteChange: poll.isPriorDayPoll ? false : poll.allowVoteChange,
       );
-      _upsertPoll(updated);
+      _upsertPoll(
+        LunchPoll(
+          id: updated.id,
+          title: updated.title,
+          date: updated.date,
+          createdAt: updated.createdAt,
+          costAmount: updated.costAmount,
+          allowVoteChange:
+              poll.isPriorDayPoll ? false : updated.allowVoteChange,
+          endTime: endApi,
+          status: updated.status.isNotEmpty ? updated.status : 'active',
+          options: updated.options,
+          results: updated.results,
+          myVote: updated.myVote,
+          reportedTotalVotes: updated.reportedTotalVotes,
+        ),
+      );
       unawaited(_ensurePollVisibleOnMyLunch(pollId, endTime: endApi));
     } else {
-      _upsertPoll(updated);
+      // Force saved endTime before merge — otherwise preferPollEndTime keeps a
+      // still-viable local deadline over an authoritative past server end
+      // (e.g. admin shortens the poll closed time).
+      var toUpsert = updated;
+      if (endApi != null && endApi.isNotEmpty) {
+        toUpsert = LunchPoll(
+          id: updated.id,
+          title: updated.title,
+          date: updated.date,
+          createdAt: updated.createdAt,
+          costAmount: updated.costAmount,
+          allowVoteChange:
+              poll.isPriorDayPoll ? false : updated.allowVoteChange,
+          endTime: endApi,
+          status: updated.status,
+          options: updated.options,
+          results: updated.results,
+          myVote: updated.myVote,
+          reportedTotalVotes: updated.reportedTotalVotes,
+        );
+        _patchPollStatus(
+          pollId,
+          toUpsert.status.isNotEmpty ? toUpsert.status : 'active',
+          endTime: endApi,
+          allowVoteChange:
+              poll.isPriorDayPoll ? false : poll.allowVoteChange,
+        );
+      }
+      _upsertPoll(toUpsert);
     }
 
     _markTodayPollsStale();
@@ -854,6 +1022,7 @@ class LunchNotifier extends StateNotifier<LunchState> {
 
   Future<void> deletePoll(String pollId) async {
     _markTodayPollsStale();
+    _pinnedPollEndTimes.remove(pollId);
     await _repo.deletePoll(pollId);
     final wasSelected = state.selectedPollId == pollId;
     final today = [
@@ -864,21 +1033,49 @@ class LunchNotifier extends StateNotifier<LunchState> {
       for (final p in state.adminPolls)
         if (p.id != pollId) p,
     ];
+    final nextSelected = wasSelected
+        ? (today.isNotEmpty
+            ? today.first.id
+            : (admin.isNotEmpty ? admin.first.id : null))
+        : null;
     state = state.copyWith(
       todayPolls: today,
       adminPolls: admin,
       clearSummary: wasSelected,
-      selectedPollId: wasSelected
-          ? (today.isNotEmpty ? today.first.id : null)
-          : state.selectedPollId,
+      selectedPollId: nextSelected,
+      clearSelectedPollId: wasSelected && nextSelected == null,
+      clearOrderSummaryError: wasSelected && nextSelected == null,
       clearError: true,
     );
     await loadTodayPolls(silent: true);
+    if (!wasSelected) return;
+    final selected = state.selectedPollId;
+    if (selected != null && selected.isNotEmpty) {
+      await loadOrderSummary(selected, silent: true);
+    } else {
+      state = state.copyWith(
+        clearSummary: true,
+        clearOrderSummaryError: true,
+        clearSelectedPollId: true,
+      );
+    }
   }
 
   void clearError() => state = state.copyWith(clearError: true);
 
-  void clear() => state = const LunchState();
+  void clear() {
+    _pinnedPollEndTimes.clear();
+    _bootstrapInFlight = null;
+    _sessionGen++;
+    _balanceRequestId++;
+    _employeeBalancesRequestId++;
+    _adminPollsRequestId++;
+    _todayPollsRequestId++;
+    _orderSummaryRequestId++;
+    _voteHistoryRequestId++;
+    _todayPollsStale = false;
+    state = const LunchState();
+  }
 }
 
 final lunchProvider = StateNotifierProvider<LunchNotifier, LunchState>((ref) {

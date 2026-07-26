@@ -22,10 +22,10 @@ void main() {
     await tester.pump(const Duration(milliseconds: 500));
   });
 
-  test('WMO weather codes map correctly', () {
-    expect(DashboardWeather.labelFromWmoCode(0), 'Clear sky');
+  test('WeatherAPI condition codes map correctly', () {
+    expect(DashboardWeather.labelFromWeatherApiCode(1000), 'Clear');
     expect(
-      DashboardWeather.kindFromWmoCode(95),
+      DashboardWeather.kindFromWeatherApiCode(1276),
       DashboardWeatherKind.stormy,
     );
   });

@@ -73,15 +73,19 @@ LunchOptionKind lunchOptionKindFrom(String? raw) {
   final s = (raw ?? '').toLowerCase().replaceAll(' ', '_').replaceAll('-', '_');
   if (s == 'office' ||
       s == 'office_menu' ||
-      s.contains('office_menu') ||
-      s == 'yes' ||
+      s.startsWith('office_') ||
       s == 'menu') {
     return LunchOptionKind.officeMenu;
   }
-  if (s.contains('personal') || s == 'own') {
+  if (s == 'personal' || s.contains('personal') || s == 'own') {
     return LunchOptionKind.personal;
   }
-  if (s.contains('off') || s == 'no' || s.contains('absent')) {
+  // Exact / prefix tokens only — avoid matching "coffee", "offsite", "office_meal".
+  if (s == 'off' ||
+      s == 'no' ||
+      s == 'absent' ||
+      s.startsWith('off_') ||
+      s.startsWith('absent')) {
     return LunchOptionKind.offAbsent;
   }
   return LunchOptionKind.other;
@@ -342,37 +346,17 @@ class LunchPoll {
         status: status,
       );
 
-  /// Promote stale `closed` snapshots when the end time is still viable today.
-  LunchPoll resolvedForMyLunch() {
-    if (isCancelled || id.isEmpty) return this;
-    if (status.toLowerCase() == 'active') return this;
-    if (!isPollEndTimeViable(endTime, date)) return this;
-    return LunchPoll(
-      id: id,
-      title: title,
-      date: date,
-      createdAt: createdAt,
-      costAmount: costAmount,
-      allowVoteChange: allowVoteChange,
-      endTime: endTime,
-      status: 'active',
-      options: options,
-      results: results,
-      myVote: myVote,
-      reportedTotalVotes: reportedTotalVotes,
-    );
-  }
+  /// Do not invent `active` for intentionally closed polls.
+  /// Visibility of closed same-day polls is handled by [appearsOnMyLunchCard].
+  LunchPoll resolvedForMyLunch() => this;
 
-  bool get showOnMyLunch {
-    final resolved = resolvedForMyLunch();
-    return lunchPollShowOnMyLunch(
-      id: resolved.id,
-      status: resolved.status,
-      date: resolved.date,
-      endTime: resolved.endTime,
-      isCancelled: resolved.isCancelled,
-    );
-  }
+  bool get showOnMyLunch => lunchPollShowOnMyLunch(
+        id: id,
+        status: status,
+        date: date,
+        endTime: endTime,
+        isCancelled: isCancelled,
+      );
 
   /// Open/reactivated polls plus same-day closed polls (greyed out).
   bool get appearsOnMyLunchCard {
@@ -395,11 +379,10 @@ class LunchPoll {
 
   static bool _allowVoteChangeForPollDate({
     required DateTime? pollDate,
-    required bool prior,
-    required bool incoming,
+    required bool value,
   }) {
     if (_dateIsBeforeToday(pollDate)) return false;
-    return prior || incoming;
+    return value;
   }
 
   /// Best-effort timestamp for newest-first ordering.
@@ -431,7 +414,7 @@ class LunchPoll {
   }
 
   Set<String> get _optionIds => {
-    for (final o in options) if (o.id.isNotEmpty) o.id,
+    for (final o in mergedOptions) if (o.id.isNotEmpty) o.id,
   };
 
   /// [myVote] only when its option id belongs to this poll's choices.
@@ -439,8 +422,9 @@ class LunchPoll {
     final vote = myVote;
     if (vote == null || vote.optionId.isEmpty) return null;
     final ids = _optionIds;
-    if (ids.isEmpty || ids.contains(vote.optionId)) return vote;
-    return null;
+    // Without option ids we cannot safely highlight a choice.
+    if (ids.isEmpty || !ids.contains(vote.optionId)) return null;
+    return vote;
   }
 
   List<LunchPollOption> get _scopedResults {
@@ -486,6 +470,145 @@ class LunchPoll {
       results: results,
       reportedTotalVotes: reportedTotalVotes,
     );
+  }
+
+  /// Undo an optimistic [withMyVote] back to [priorVote] (or no vote).
+  ///
+  /// When [adjustCounts] is false, only [myVote] is restored — use after a
+  /// concurrent refresh replaced option counts with server values.
+  LunchPoll restoreMyVote(LunchMyVote? priorVote, {bool adjustCounts = true}) {
+    final priorId = priorVote?.optionId ?? '';
+    final currentId = myVote?.optionId ?? '';
+    if (!adjustCounts) {
+      return LunchPoll(
+        id: id,
+        title: title,
+        date: date,
+        createdAt: createdAt,
+        costAmount: costAmount,
+        allowVoteChange: allowVoteChange,
+        endTime: endTime,
+        status: status,
+        options: options,
+        myVote: priorVote,
+        results: results,
+        reportedTotalVotes: reportedTotalVotes,
+      );
+    }
+    if (priorId == currentId) {
+      if (priorVote == null) return withoutMyVote();
+      // Same option — still restore prior votedAt after a no-op re-tap.
+      if (myVote?.votedAt == priorVote.votedAt) return this;
+      return LunchPoll(
+        id: id,
+        title: title,
+        date: date,
+        createdAt: createdAt,
+        costAmount: costAmount,
+        allowVoteChange: allowVoteChange,
+        endTime: endTime,
+        status: status,
+        options: options,
+        myVote: priorVote,
+        results: results,
+        reportedTotalVotes: reportedTotalVotes,
+      );
+    }
+    if (priorId.isNotEmpty) {
+      return withMyVote(priorId, votedAt: priorVote?.votedAt);
+    }
+
+    // Clear first/optimistic vote and decrement counts.
+    LunchPollOption adjust(LunchPollOption o) {
+      var count = o.effectiveVoteCount;
+      if (o.id == currentId && count > 0) count--;
+      return o.copyWith(
+        voteCount: count,
+        voters: count == 0 ? const [] : o.voters,
+      );
+    }
+
+    final adjustedOptions = options.map(adjust).toList();
+    final adjustedResults = results.map(adjust).toList();
+    final nextReported = (reportedTotalVotes != null && reportedTotalVotes! > 0)
+        ? reportedTotalVotes! - 1
+        : reportedTotalVotes;
+
+    return LunchPoll(
+      id: id,
+      title: title,
+      date: date,
+      createdAt: createdAt,
+      costAmount: costAmount,
+      allowVoteChange: allowVoteChange,
+      endTime: endTime,
+      status: status,
+      options: adjustedOptions,
+      results: adjustedResults,
+      reportedTotalVotes: nextReported != null && nextReported <= 0 ? null : nextReported,
+    );
+  }
+
+  /// Whether option vote counts match [other] (used to detect concurrent refresh).
+  bool hasSameOptionCounts(LunchPoll other) {
+    final mine = {
+      for (final o in mergedOptions)
+        if (o.id.isNotEmpty) o.id: o.effectiveVoteCount,
+    };
+    final theirs = {
+      for (final o in other.mergedOptions)
+        if (o.id.isNotEmpty) o.id: o.effectiveVoteCount,
+    };
+    if (mine.length != theirs.length) return false;
+    for (final e in mine.entries) {
+      if (theirs[e.key] != e.value) return false;
+    }
+    return true;
+  }
+
+  /// Resolve a history row to a poll option. Prefer option id / exact label.
+  /// Never guess among multiple office-menu items by type alone.
+  static LunchMyVote? myVoteFromHistoryRow(
+    LunchVoteHistoryRow row,
+    List<LunchPollOption> options, {
+    DateTime? votedAt,
+  }) {
+    if (options.isEmpty) return null;
+    final at = votedAt ?? row.votedAt;
+
+    final optionId = row.optionId?.trim() ?? '';
+    if (optionId.isNotEmpty) {
+      for (final opt in options) {
+        if (opt.id == optionId) {
+          return LunchMyVote(optionId: opt.id, votedAt: at);
+        }
+      }
+    }
+
+    String normalize(String raw) => raw
+        .trim()
+        .toLowerCase()
+        .replaceAll(RegExp(r'\s+'), ' ');
+
+    final choice = normalize(row.menuItem ?? '');
+    if (choice.isNotEmpty) {
+      for (final opt in options) {
+        if (normalize(opt.label) == choice) {
+          return LunchMyVote(optionId: opt.id, votedAt: at);
+        }
+      }
+      // No partial/contains matching — too easy to pick the wrong office menu.
+    }
+
+    final kind = lunchOptionKindFrom(row.optionType ?? '');
+    if (kind == LunchOptionKind.other) return null;
+    final sameKind = options.where((o) => o.kind == kind).toList();
+    // Only safe when this poll has exactly one option of that kind
+    // (e.g. Personal / Off). Multiple office menus must not guess.
+    if (sameKind.length == 1 && sameKind.first.id.isNotEmpty) {
+      return LunchMyVote(optionId: sameKind.first.id, votedAt: at);
+    }
+    return null;
   }
 
   static LunchMyVote? _resolveMyVoteAfterSnapshot({
@@ -538,14 +661,15 @@ class LunchPoll {
     LunchMyVote? fallback,
   }) {
     final ids = {for (final o in options) if (o.id.isNotEmpty) o.id};
+    if (ids.isEmpty) return null;
     if (preferred != null &&
         preferred.optionId.isNotEmpty &&
-        (ids.isEmpty || ids.contains(preferred.optionId))) {
+        ids.contains(preferred.optionId)) {
       return preferred;
     }
     if (fallback != null &&
         fallback.optionId.isNotEmpty &&
-        (ids.isEmpty || ids.contains(fallback.optionId))) {
+        ids.contains(fallback.optionId)) {
       return fallback;
     }
     return null;
@@ -590,9 +714,8 @@ class LunchPoll {
     if (reportedTotalVotes != null && reportedTotalVotes! > 0) {
       return reportedTotalVotes!;
     }
-    final fromCounts = mergedOptions.fold<int>(0, (sum, o) => sum + o.voteCount);
-    if (fromCounts > 0) return fromCounts;
-    return mergedOptions.fold<int>(0, (sum, o) => sum + o.voters.length);
+    // Same rule as option bars ([effectiveVoteCount]) so fractions stay ≤ 1.
+    return mergedOptions.fold<int>(0, (sum, o) => sum + o.effectiveVoteCount);
   }
 
   String get statusHint {
@@ -629,8 +752,8 @@ class LunchPoll {
       costAmount: primary.costAmount ?? secondary.costAmount,
       allowVoteChange: _allowVoteChangeForPollDate(
         pollDate: pollDate,
-        prior: primary.allowVoteChange,
-        incoming: secondary.allowVoteChange,
+        // False wins so list stubs (default true) cannot override an explicit lock.
+        value: primary.allowVoteChange && secondary.allowVoteChange,
       ),
       endTime: endTime,
       status: _resolveMergedStatus(
@@ -644,7 +767,7 @@ class LunchPoll {
       options: options,
       results: _pickRicherResults(primary.results, secondary.results),
       myVote: _resolveScopedMyVote(
-        options: options,
+        options: options.isNotEmpty ? options : _pickRicherResults(primary.results, secondary.results),
         preferred: secondary.myVote,
         fallback: primary.myVote,
       ),
@@ -669,6 +792,16 @@ class LunchPoll {
     } else {
       preferred = server.myVote ?? local.myVote;
     }
+    // Server terminal status must win — merge() can keep a viable local `active`.
+    final serverStatus = server.status.toLowerCase();
+    final status = (serverStatus == 'closed' || serverStatus == 'cancelled')
+        ? serverStatus
+        : merged.status;
+    // Non-empty server endTime is authoritative (same rule as applyServerSnapshot).
+    final serverEnd = server.endTime?.trim();
+    final endTime = (serverEnd != null && serverEnd.isNotEmpty)
+        ? serverEnd
+        : merged.endTime;
     return LunchPoll(
       id: merged.id,
       title: merged.title,
@@ -676,12 +809,12 @@ class LunchPoll {
       createdAt: merged.createdAt,
       costAmount: merged.costAmount,
       allowVoteChange: merged.allowVoteChange,
-      endTime: merged.endTime,
-      status: merged.status,
+      endTime: endTime,
+      status: status,
       options: merged.options,
       results: merged.results,
       myVote: _resolveScopedMyVote(
-        options: merged.options,
+        options: merged.mergedOptions,
         preferred: preferred,
         fallback: null,
       ),
@@ -721,6 +854,11 @@ class LunchPoll {
     required String? resolvedEndTime,
     required DateTime? pollDate,
   }) {
+    // Authoritative closed/cancelled from the server always wins.
+    const terminal = {'closed', 'cancelled'};
+    final incoming = incomingStatus.toLowerCase();
+    if (terminal.contains(incoming)) return incoming;
+
     final priorActive = _isViableActiveStatus(
       status: priorStatus,
       endTime: priorEndTime ?? resolvedEndTime,
@@ -731,15 +869,8 @@ class LunchPoll {
       endTime: incomingEndTime ?? resolvedEndTime,
       pollDate: pollDate,
     );
-    final resolvedStillOpen = resolvedEndTime != null &&
-        resolvedEndTime.trim().isNotEmpty &&
-        !lunchPollIsPastEndTime(
-          endTime: resolvedEndTime,
-          pollDate: pollDate,
-          status: 'active',
-        );
 
-    if (priorActive || incomingActive || resolvedStillOpen) {
+    if (priorActive || incomingActive) {
       if (priorStatus.toLowerCase() == 'active' ||
           incomingStatus.toLowerCase() == 'active') {
         return 'active';
@@ -751,13 +882,46 @@ class LunchPoll {
 
   LunchPoll applyServerSnapshot(LunchPoll fresh) {
     final pollDate = _preferredPollDate(fresh.date, date);
-    final resolvedEnd = preferPollEndTime(
-      prior: endTime,
-      incoming: fresh.endTime,
-      pollDate: pollDate,
-    );
-    final mergedOptions =
-        fresh.mergedOptions.isNotEmpty ? fresh.options : options;
+    // Non-empty server endTime is authoritative. Local reopen/shorten flows pin
+    // the intended end onto [fresh] before merge when the list API lags.
+    final incomingEnd = fresh.endTime?.trim();
+    final resolvedEnd = (incomingEnd != null && incomingEnd.isNotEmpty)
+        ? incomingEnd
+        : endTime;
+
+    final priorMerged = mergedOptions;
+    final List<LunchPollOption> baseOptions;
+    if (fresh.options.isNotEmpty) {
+      baseOptions = fresh.options;
+    } else if (options.isNotEmpty) {
+      baseOptions = options;
+    } else if (fresh.results.isNotEmpty) {
+      baseOptions = fresh.results;
+    } else {
+      baseOptions = results;
+    }
+    // GET /polls/:id often returns options with zero tallies — keep prior votes.
+    final resolvedOptions =
+        _mergeOptionsPreservingVotes(baseOptions, priorMerged);
+
+    final freshHasOptionVotes =
+        resolvedOptions.any((o) => o.effectiveVoteCount > 0);
+    final List<LunchPollOption> nextResults;
+    if (fresh.results.isNotEmpty) {
+      nextResults = _pickRicherResults(
+        fresh.results,
+        results,
+      );
+    } else if (fresh.options.isNotEmpty && freshHasOptionVotes) {
+      // Vote tallies already live on options — drop stale result rows.
+      nextResults = const <LunchPollOption>[];
+    } else if (fresh.options.isNotEmpty) {
+      // Sparse options shell — never wipe richer prior results (View all votes).
+      nextResults = results;
+    } else {
+      nextResults = results;
+    }
+
     return LunchPoll(
       id: fresh.id.isNotEmpty ? fresh.id : id,
       title: fresh.title.isNotEmpty ? fresh.title : title,
@@ -766,8 +930,8 @@ class LunchPoll {
       costAmount: fresh.costAmount ?? costAmount,
       allowVoteChange: _allowVoteChangeForPollDate(
         pollDate: pollDate,
-        prior: allowVoteChange,
-        incoming: fresh.allowVoteChange,
+        // Sparse shells default allowVoteChange=true — never unlock a local lock.
+        value: allowVoteChange && fresh.allowVoteChange,
       ),
       endTime: resolvedEnd,
       status: _resolveMergedStatus(
@@ -778,10 +942,10 @@ class LunchPoll {
         resolvedEndTime: resolvedEnd,
         pollDate: pollDate,
       ),
-      options: mergedOptions,
-      results: _pickRicherResults(results, fresh.results),
+      options: resolvedOptions,
+      results: nextResults,
       myVote: _resolveMyVoteAfterSnapshot(
-        options: mergedOptions,
+        options: resolvedOptions,
         prior: myVote,
         incoming: fresh.myVote,
       ),
@@ -792,18 +956,47 @@ class LunchPoll {
     ).withPollScopedVotes();
   }
 
+  /// Copy vote counts / voter lists from [prior] onto matching [fresh] options
+  /// when the fresh shell has empty tallies (common on GET poll).
+  static List<LunchPollOption> _mergeOptionsPreservingVotes(
+    List<LunchPollOption> fresh,
+    List<LunchPollOption> prior,
+  ) {
+    if (fresh.isEmpty) return prior;
+    if (prior.isEmpty) return fresh;
+    final byId = {
+      for (final o in prior)
+        if (o.id.isNotEmpty) o.id: o,
+    };
+    final byLabel = {
+      for (final o in prior)
+        if (o.label.trim().isNotEmpty) o.label.trim().toLowerCase(): o,
+    };
+    return fresh.map((o) {
+      final p = o.id.isNotEmpty
+          ? byId[o.id]
+          : byLabel[o.label.trim().toLowerCase()];
+      if (p == null) return o;
+      final count = o.effectiveVoteCount > 0
+          ? o.effectiveVoteCount
+          : p.effectiveVoteCount;
+      final voters = o.voters.isNotEmpty ? o.voters : p.voters;
+      if (count == o.voteCount && identical(voters, o.voters)) return o;
+      return o.copyWith(voteCount: count, voters: voters);
+    }).toList();
+  }
+
+  /// Prefer authoritative [fresh] totals when present (including lower values).
   static int? _pickHigherVoteTotal(int? prior, int? fresh) {
-    if (prior == null || prior <= 0) return fresh;
-    if (fresh == null || fresh <= 0) return prior;
-    return fresh > prior ? fresh : prior;
+    if (fresh != null && fresh > 0) return fresh;
+    if (prior != null && prior > 0) return prior;
+    return fresh ?? prior;
   }
 
   static DateTime? _preferredPollDate(DateTime? fresh, DateTime? prior) {
-    if (fresh == null) return prior;
-    if (prior == null) return fresh;
-    final fd = DateTime(fresh.year, fresh.month, fresh.day);
-    final pd = DateTime(prior.year, prior.month, prior.day);
-    return fd.isAfter(pd) ? fresh : prior;
+    // Server/fresh date wins when present (admin may correct a date backward).
+    if (fresh != null) return fresh;
+    return prior;
   }
 
   LunchPoll withReportedTotalVotes(int total) {
@@ -841,14 +1034,69 @@ class LunchPoll {
       allowVoteChange: allowVoteChange,
       endTime: endTime,
       status: status,
-      options: options,
+      // Keep tallies on options so View-all-votes / bars stay correct even when
+      // a later snapshot clears results.
+      options: hasRich ? opts : options,
       myVote: myVote,
       results: hasRich ? opts : results,
       reportedTotalVotes: totalVotes > 0 ? totalVotes : reportedTotalVotes,
     );
   }
 
-  LunchPoll withMyVote(String optionId, {bool? allowVoteChangeOverride}) {
+  /// Attach employee summary rows onto option voter lists + counts.
+  LunchPoll attachEmployeeVotes(List<LunchEmployeeVoteRow> employees) {
+    if (employees.isEmpty) return this;
+    final byLabel = <String, List<LunchOptionVoter>>{};
+    for (final row in employees) {
+      final key = row.choice.trim().toLowerCase();
+      if (key.isEmpty) continue;
+      byLabel
+          .putIfAbsent(key, () => <LunchOptionVoter>[])
+          .add(
+            LunchOptionVoter(
+              name: row.userName,
+              userId: row.userId.isEmpty ? null : row.userId,
+            ),
+          );
+    }
+    if (byLabel.isEmpty) return this;
+
+    List<LunchPollOption> paint(List<LunchPollOption> source) {
+      return source.map((o) {
+        final voters = byLabel[o.label.trim().toLowerCase()];
+        if (voters == null || voters.isEmpty) return o;
+        final count = o.effectiveVoteCount > voters.length
+            ? o.effectiveVoteCount
+            : voters.length;
+        return o.copyWith(voteCount: count, voters: voters);
+      }).toList();
+    }
+
+    final nextOptions = options.isNotEmpty ? paint(options) : options;
+    final nextResults = results.isNotEmpty
+        ? paint(results)
+        : (nextOptions.isNotEmpty ? nextOptions : results);
+    return LunchPoll(
+      id: id,
+      title: title,
+      date: date,
+      createdAt: createdAt,
+      costAmount: costAmount,
+      allowVoteChange: allowVoteChange,
+      endTime: endTime,
+      status: status,
+      options: nextOptions,
+      myVote: myVote,
+      results: nextResults,
+      reportedTotalVotes: reportedTotalVotes,
+    ).withPollScopedVotes();
+  }
+
+  LunchPoll withMyVote(
+    String optionId, {
+    bool? allowVoteChangeOverride,
+    DateTime? votedAt,
+  }) {
     final previousId = myVote?.optionId ?? '';
     LunchPollOption adjustCounts(LunchPollOption o) {
       var count = o.effectiveVoteCount;
@@ -861,12 +1109,30 @@ class LunchPoll {
       if (o.id == optionId && previousId != optionId) {
         count++;
       }
-      return o.copyWith(voteCount: count);
+      return o.copyWith(
+        voteCount: count,
+        // Avoid effectiveVoteCount falling back to stale voters when count is 0.
+        voters: count == 0 ? const [] : o.voters,
+      );
     }
 
     final adjustedResults = results.map(adjustCounts).toList();
     final adjustedOptions = options.map(adjustCounts).toList();
     final allowChanges = allowVoteChangeOverride ?? allowVoteChange;
+    final isFirstVote = previousId.isEmpty && optionId.isNotEmpty;
+    final optionSum = adjustedOptions.fold<int>(0, (s, o) => s + o.voteCount);
+    final resultSum = adjustedResults.fold<int>(0, (s, o) => s + o.voteCount);
+    final counted = optionSum > 0 ? optionSum : resultSum;
+    final int? nextReported;
+    if (isFirstVote) {
+      // Prefer option/result sums when reported was missing/stale so bars stay coherent.
+      final base = (reportedTotalVotes != null && reportedTotalVotes! > 0)
+          ? reportedTotalVotes!
+          : (counted > 1 ? counted - 1 : 0);
+      nextReported = base + 1;
+    } else {
+      nextReported = reportedTotalVotes;
+    }
 
     return LunchPoll(
       id: id,
@@ -878,9 +1144,12 @@ class LunchPoll {
       endTime: endTime,
       status: status,
       options: adjustedOptions,
-      myVote: LunchMyVote(optionId: optionId, votedAt: DateTime.now()),
+      myVote: LunchMyVote(
+        optionId: optionId,
+        votedAt: votedAt ?? DateTime.now(),
+      ),
       results: adjustedResults,
-      reportedTotalVotes: reportedTotalVotes,
+      reportedTotalVotes: nextReported,
     );
   }
 
@@ -1013,11 +1282,13 @@ class LunchPoll {
   List<Map<String, dynamic>> toUpdateJsonSequence({LunchPoll? original}) {
     final payloads = <Map<String, dynamic>>[];
     final parts = partitionUpdateOptions(original);
+    final optionsRemoved = _optionsRemoved(original);
 
     if (_metadataChanged(original)) {
       payloads.add(toUpdateBaseJson());
     }
-    if (parts.newOptions.isNotEmpty) {
+    // Full options PUT when adding OR removing — otherwise deletes never persist.
+    if (parts.newOptions.isNotEmpty || optionsRemoved) {
       payloads.add({'options': optionsForPut()});
     } else if (parts.optionUpdates.isNotEmpty) {
       payloads.add({'optionUpdates': parts.optionUpdates});
@@ -1074,6 +1345,17 @@ class LunchPoll {
     return (newOptions: newOptions, optionUpdates: optionUpdates);
   }
 
+  bool _optionsRemoved(LunchPoll? original) {
+    if (original == null) return false;
+    final currentIds = {
+      for (final o in options)
+        if (o.id.isNotEmpty) o.id,
+    };
+    return original.options.any(
+      (o) => o.id.isNotEmpty && !currentIds.contains(o.id),
+    );
+  }
+
   bool _metadataChanged(LunchPoll? original) {
     if (original == null) return true;
     if (title.trim() != original.title.trim()) return true;
@@ -1108,29 +1390,34 @@ LunchPoll _applyTodayFeaturedShell({
   LunchMyVote? topVote,
 }) {
   var merged = poll;
+  LunchPoll shell({
+    List<LunchPollOption> options = const [],
+    List<LunchPollOption> results = const [],
+    LunchMyVote? vote,
+  }) =>
+      LunchPoll(
+        id: merged.id,
+        title: merged.title,
+        // Keep poll identity fields — default status 'active' would revive closed.
+        date: merged.date,
+        status: merged.status,
+        endTime: merged.endTime,
+        options: options,
+        results: results,
+        myVote: vote,
+      );
   if (topVote != null ||
       topResults.isNotEmpty ||
       topOptions.isNotEmpty) {
     merged = LunchPoll.merge(
       merged,
-      LunchPoll(
-        id: merged.id,
-        title: merged.title,
-        options: topOptions,
-        results: topResults,
-        myVote: topVote,
-      ),
+      shell(options: topOptions, results: topResults, vote: topVote),
     );
   }
   if (merged.mergedOptions.isEmpty && topOptions.isNotEmpty) {
     merged = LunchPoll.merge(
       merged,
-      LunchPoll(
-        id: merged.id,
-        title: merged.title,
-        options: topOptions,
-        results: topResults,
-      ),
+      shell(options: topOptions, results: topResults),
     );
   }
   return merged.withPollScopedVotes();
@@ -1191,11 +1478,12 @@ List<LunchPoll> sortTodayPollsNewestFirst(List<LunchPoll> polls) {
 
 void _upsertTodayPoll(Map<String, LunchPoll> byId, LunchPoll poll) {
   if (poll.id.isEmpty) return;
-  final clean = poll.withoutMyVote();
   final existing = byId[poll.id];
+  // Keep per-poll myVote from the incoming row; only strip when merging shells
+  // that intentionally omit votes would lose authoritative selection.
   byId[poll.id] = existing == null
-      ? clean
-      : existing.applyServerSnapshot(clean).withoutMyVote();
+      ? poll.withPollScopedVotes()
+      : existing.applyServerSnapshot(poll).withPollScopedVotes();
 }
 
 class LunchTodayBundle {
@@ -1699,24 +1987,26 @@ class LunchEmployeeBalance {
     required this.userName,
     this.netChange = 0,
     this.balance = 0,
+    this.hasExplicitNetChange = false,
   });
 
   final String userId;
   final String userName;
   final num netChange;
   final num balance;
+  final bool hasExplicitNetChange;
 
   /// Net change for the selected date range (primary value for the employees table).
   num get periodNetChange {
-    if (netChange != 0) return netChange;
+    if (hasExplicitNetChange) return netChange;
     return balance;
   }
 
   /// Running account balance — only when distinct from [periodNetChange].
   num? get runningBalance {
+    if (!hasExplicitNetChange) return null;
     if (balance == 0) return null;
-    if (netChange != 0 && balance != netChange) return balance;
-    if (netChange == 0) return null;
+    if (balance != netChange) return balance;
     return null;
   }
 
@@ -1770,6 +2060,7 @@ class LunchEmployeeBalance {
       userName: name.isEmpty ? 'Unknown' : name,
       netChange: net ?? 0,
       balance: total ?? 0,
+      hasExplicitNetChange: net != null,
     );
   }
 }
@@ -1780,6 +2071,7 @@ class LunchVoteHistoryRow {
     this.pollDate,
     this.menuItem,
     this.optionType,
+    this.optionId,
     this.amount,
     this.userName,
     this.userId,
@@ -1791,6 +2083,7 @@ class LunchVoteHistoryRow {
   final DateTime? pollDate;
   final String? menuItem;
   final String? optionType;
+  final String? optionId;
   final num? amount;
   final String? userName;
   final String? userId;
@@ -1813,6 +2106,16 @@ class LunchVoteHistoryRow {
       if (userName.isEmpty) userName = _str(um['name']);
       if (userId.isEmpty) userId = _id(um['id'] ?? um['_id']);
     }
+    final optionObj = json['option'];
+    var optionId = _id(
+      json['optionId'] ??
+          json['option_id'] ??
+          json['selectedOptionId'] ??
+          json['selected_option_id'],
+    );
+    if (optionId.isEmpty && optionObj is Map) {
+      optionId = _id(optionObj['id'] ?? optionObj['_id']);
+    }
     return LunchVoteHistoryRow(
       pollTitle: _str(json['pollTitle'] ?? json['poll_title'] ?? json['title'], 'Poll'),
       pollDate: DateTime.tryParse(_str(json['pollDate'] ?? json['poll_date'] ?? json['date'])),
@@ -1820,6 +2123,7 @@ class LunchVoteHistoryRow {
       optionType: _str(json['optionType'] ?? json['option_type']).isEmpty
           ? null
           : _str(json['optionType'] ?? json['option_type']),
+      optionId: optionId.isEmpty ? null : optionId,
       amount: parseOptionalNum(
         json['amount'] ?? json['balanceChange'] ?? json['balance_change'] ?? json['cost'],
       ),

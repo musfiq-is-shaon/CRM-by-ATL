@@ -22,6 +22,7 @@ class CompaniesListPage extends ConsumerStatefulWidget {
 
 class _CompaniesListPageState extends ConsumerState<CompaniesListPage> {
   final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
 
   @override
   void initState() {
@@ -41,8 +42,21 @@ class _CompaniesListPageState extends ConsumerState<CompaniesListPage> {
 
   @override
   void dispose() {
+    _searchFocusNode.unfocus();
     _searchController.dispose();
+    _searchFocusNode.dispose();
     super.dispose();
+  }
+
+  void _dismissKeyboard() {
+    _searchFocusNode.unfocus();
+    FocusManager.instance.primaryFocus?.unfocus();
+  }
+
+  Future<void> _openPage(Widget page) async {
+    _dismissKeyboard();
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => page));
+    if (mounted) _dismissKeyboard();
   }
 
   @override
@@ -63,7 +77,10 @@ class _CompaniesListPageState extends ConsumerState<CompaniesListPage> {
         actions: [
           IconButton(
             icon: const Icon(Icons.add),
-            onPressed: () => _showCreateCompanyDialog(context),
+            onPressed: () {
+              _dismissKeyboard();
+              _showCreateCompanyDialog(context);
+            },
           ),
         ],
       ),
@@ -71,6 +88,7 @@ class _CompaniesListPageState extends ConsumerState<CompaniesListPage> {
         children: [
           AppSearchFilterBar(
             controller: _searchController,
+            focusNode: _searchFocusNode,
             hintText: 'Search companies...',
             padding: AppThemeColors.listHeaderPadding,
             onChanged: (value) {
@@ -81,7 +99,10 @@ class _CompaniesListPageState extends ConsumerState<CompaniesListPage> {
               ref.read(companiesProvider.notifier).setSearchQuery(null);
               setState(() {});
             },
-            onFilterTap: () => _showFilterDialog(context),
+            onFilterTap: () {
+              _dismissKeyboard();
+              _showFilterDialog(context);
+            },
           ),
           Expanded(
             child: AsyncScreenView(
@@ -111,12 +132,8 @@ class _CompaniesListPageState extends ConsumerState<CompaniesListPage> {
                         padding: AppThemeColors.cardListItemMargin,
                         child: CRMCard(
                             onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) =>
-                                      CompanyDetailPage(companyId: company.id),
-                                ),
+                              _openPage(
+                                CompanyDetailPage(companyId: company.id),
                               );
                             },
                             child: Row(

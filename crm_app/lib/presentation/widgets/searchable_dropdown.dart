@@ -175,110 +175,126 @@ class _SearchableDropdownState<T> extends State<SearchableDropdown<T>>
   }
 
   void _showOverlay() {
-    if (!mounted) return;
+    if (!mounted || _isOpen) return;
     _searchController.clear();
     _filterItems('');
+    setState(() => _isOpen = true);
+    widget.onMenuOpened?.call();
 
-    _overlayEntry = OverlayEntry(
-      builder: (overlayContext) {
-        // Anchor key — avoid [State.context] after route pop (inactive element).
-        final anchorContext = _anchorKey.currentContext;
-        if (anchorContext == null || !anchorContext.mounted) {
-          WidgetsBinding.instance.addPostFrameCallback((_) => _detachOverlay());
-          return const SizedBox.shrink();
-        }
-        final renderBox = anchorContext.findRenderObject() as RenderBox?;
-        if (renderBox == null || !renderBox.hasSize) {
-          return const SizedBox.shrink();
-        }
-        final size = renderBox.size;
-        final media = MediaQuery.of(overlayContext);
-        final viewInsetsBottom = media.viewInsets.bottom;
-        // Visible viewport above system keyboard / IME.
-        final safeHeight = media.size.height - viewInsetsBottom;
-        final globalPosition = renderBox.localToGlobal(Offset.zero);
+    // Insert on the next frame so the opening tap does not hit the dismiss
+    // barrier and immediately close the menu (common on Android).
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_isOpen || _overlayEntry != null) return;
 
-        final bottomSpace = safeHeight - globalPosition.dy - size.height;
-        final topSpace = globalPosition.dy;
-        final keyboardOpen = viewInsetsBottom > 0;
+      _overlayEntry = OverlayEntry(
+        builder: (overlayContext) {
+          // Anchor key — avoid [State.context] after route pop (inactive element).
+          final anchorContext = _anchorKey.currentContext;
+          if (anchorContext == null || !anchorContext.mounted) {
+            WidgetsBinding.instance
+                .addPostFrameCallback((_) => _detachOverlay());
+            return const SizedBox.shrink();
+          }
+          final renderBox = anchorContext.findRenderObject() as RenderBox?;
+          if (renderBox == null || !renderBox.hasSize) {
+            return const SizedBox.shrink();
+          }
+          final size = renderBox.size;
+          final media = MediaQuery.of(overlayContext);
+          final viewInsetsBottom = media.viewInsets.bottom;
+          // Visible viewport above system keyboard / IME.
+          final safeHeight = media.size.height - viewInsetsBottom;
+          final globalPosition = renderBox.localToGlobal(Offset.zero);
 
-        // With the keyboard up, keep the panel below the field (above the IME).
-        // Flipping above the field pushes the whole sheet too far up on long forms.
-        final showAbove = !keyboardOpen &&
-            bottomSpace < 140 &&
-            topSpace > bottomSpace + 80;
+          final bottomSpace = safeHeight - globalPosition.dy - size.height;
+          final topSpace = globalPosition.dy;
+          final keyboardOpen = viewInsetsBottom > 0;
 
-        const searchAndChrome = 60.0;
-        final spaceForList = (showAbove ? topSpace : bottomSpace) -
-            searchAndChrome -
-            12;
-        // Shorter list when the keyboard is open — suggestions sit just under search.
-        final listCap = keyboardOpen ? 100.0 : 160.0;
-        final listMaxHeight = spaceForList.clamp(40.0, listCap);
-        final panelCap = keyboardOpen ? 200.0 : 260.0;
-        // Min height fits search row + compact empty state (avoids 31px overflow).
-        final panelMin = keyboardOpen ? 108.0 : 120.0;
-        final panelHeight =
-            (searchAndChrome + listMaxHeight).clamp(panelMin, panelCap);
+          // With the keyboard up, keep the panel below the field (above the IME).
+          // Flipping above the field pushes the whole sheet too far up on long forms.
+          final showAbove = !keyboardOpen &&
+              bottomSpace < 140 &&
+              topSpace > bottomSpace + 80;
 
-        final offsetY = showAbove
-            ? -(panelHeight + size.height + 4)
-            : size.height + 4;
+          const searchAndChrome = 60.0;
+          final addNewHeight = widget.onAddNew != null ? 52.0 : 0.0;
+          final spaceForList = (showAbove ? topSpace : bottomSpace) -
+              searchAndChrome -
+              addNewHeight -
+              12;
+          // Shorter list when the keyboard is open — suggestions sit just under search.
+          final listCap = keyboardOpen ? 140.0 : 200.0;
+          final listMaxHeight = spaceForList.clamp(72.0, listCap);
+          final panelCap = keyboardOpen ? 260.0 : 320.0;
+          // Min height fits search row + compact empty state (avoids 31px overflow).
+          final panelMin = keyboardOpen ? 140.0 : 160.0;
+          final panelHeight = (searchAndChrome + listMaxHeight + addNewHeight)
+              .clamp(panelMin, panelCap);
 
-        return Stack(
-          children: [
-            Positioned.fill(
-              child: GestureDetector(
-                onTap: _removeOverlay,
-                behavior: HitTestBehavior.opaque,
-                child: Container(color: Colors.transparent),
+          final offsetY = showAbove
+              ? -(panelHeight + size.height + 4)
+              : size.height + 4;
+
+          return Stack(
+            children: [
+              Positioned.fill(
+                child: GestureDetector(
+                  onTap: _removeOverlay,
+                  behavior: HitTestBehavior.opaque,
+                  child: Container(color: Colors.transparent),
+                ),
               ),
-            ),
-            Positioned(
-              width: size.width,
-              child: CompositedTransformFollower(
-                link: _layerLink,
-                showWhenUnlinked: false,
-                offset: Offset(0, offsetY),
-                child: Material(
-                  elevation: 8,
-                  borderRadius: BorderRadius.circular(16),
-                  color: widget.dropdownColor,
-                  child: Container(
-                    constraints: BoxConstraints(maxHeight: panelHeight),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: widget.hintColor.withValues(alpha: 0.2),
-                      ),
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        _buildSearchField(),
-                        Flexible(
-                          child: _buildResultsList(maxHeight: listMaxHeight),
+              Positioned(
+                width: size.width,
+                child: CompositedTransformFollower(
+                  link: _layerLink,
+                  showWhenUnlinked: false,
+                  offset: Offset(0, offsetY),
+                  child: Material(
+                    elevation: 8,
+                    borderRadius: BorderRadius.circular(16),
+                    color: widget.dropdownColor,
+                    child: SizedBox(
+                      height: panelHeight,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: widget.hintColor.withValues(alpha: 0.2),
+                          ),
                         ),
-                        if (widget.onAddNew != null) _buildAddNewOption(),
-                      ],
+                        child: Column(
+                          children: [
+                            _buildSearchField(),
+                            Expanded(
+                              child: _buildResultsList(maxHeight: listMaxHeight),
+                            ),
+                            if (widget.onAddNew != null) _buildAddNewOption(),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-          ],
-        );
-      },
-    );
+            ],
+          );
+        },
+      );
 
-    Overlay.of(context).insert(_overlayEntry!);
-    setState(() => _isOpen = true);
-    widget.onMenuOpened?.call();
+      final overlay = Overlay.maybeOf(context);
+      if (overlay == null) {
+        _detachOverlay();
+        if (mounted) setState(() {});
+        return;
+      }
+      overlay.insert(_overlayEntry!);
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !_isOpen) return;
-      _searchFocusNode.requestFocus();
-      _overlayEntry?.markNeedsBuild();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_isOpen) return;
+        _searchFocusNode.requestFocus();
+        _overlayEntry?.markNeedsBuild();
+      });
     });
   }
 
@@ -632,9 +648,7 @@ class _SearchableDropdownState<T> extends State<SearchableDropdown<T>>
     return CompositedTransformTarget(
       key: _anchorKey,
       link: _layerLink,
-      child: GestureDetector(
-        onTap: _toggleDropdown,
-        child: TextFormField(
+      child: TextFormField(
           controller: _displayController,
           focusNode: _focusNode,
           readOnly: true,
@@ -697,7 +711,6 @@ class _SearchableDropdownState<T> extends State<SearchableDropdown<T>>
           ),
           validator: widget.validator,
           onTap: _toggleDropdown,
-        ),
       ),
     );
   }
@@ -739,16 +752,22 @@ class CompanyDropdown extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SearchableDropdown<String>(
-      items: companies.map((c) => c.id).toList(),
-      value: value,
+    return SearchableDropdown<Company>(
+      items: companies,
+      value: value != null
+          ? companies.where((c) => c.id == value).firstOrNull
+          : null,
       hintText: hintText,
       labelText: labelText,
-      itemLabelBuilder: (id) {
-        final company = companies.where((c) => c.id == id).firstOrNull;
-        return company?.name ?? '';
+      itemLabelBuilder: (company) {
+        final loc = [
+          if (company.location?.trim().isNotEmpty == true) company.location!.trim(),
+          if (company.country?.trim().isNotEmpty == true) company.country!.trim(),
+        ].join(', ');
+        if (loc.isEmpty) return company.name;
+        return '${company.name} · $loc';
       },
-      onChanged: onChanged,
+      onChanged: (company) => onChanged?.call(company?.id),
       validator: validator,
       dropdownColor: dropdownColor,
       textColor: textColor,
@@ -756,10 +775,7 @@ class CompanyDropdown extends StatelessWidget {
       required: required,
       onAddNew: onAddNew,
       isLoading: isLoading,
-      leadingBuilder: (id) {
-        final company = companies.where((c) => c.id == id).firstOrNull;
-        if (company == null) return const SizedBox.shrink();
-
+      leadingBuilder: (company) {
         return _CompanyAvatar(
           name: company.name,
           size: 36,
@@ -767,10 +783,7 @@ class CompanyDropdown extends StatelessWidget {
           textColor: textColor,
         );
       },
-      highlightBuilder: (id, searchText) {
-        final company = companies.where((c) => c.id == id).firstOrNull;
-        if (company == null) return const SizedBox.shrink();
-
+      highlightBuilder: (company, searchText) {
         return _CompanyListTile(
           company: company,
           searchText: searchText,

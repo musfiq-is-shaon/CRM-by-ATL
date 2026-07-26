@@ -86,7 +86,12 @@ class _TaskDetailPageState extends ConsumerState<TaskDetailPage> {
           leading: IconButton(
             tooltip: 'Back',
             icon: const Icon(Icons.arrow_back),
-            onPressed: _celebrating ? null : () => Navigator.pop(context),
+            onPressed: _celebrating
+                ? null
+                : () {
+                    FocusManager.instance.primaryFocus?.unfocus();
+                    Navigator.pop(context);
+                  },
           ),
           actions: [
             if (isAdmin)
@@ -1041,7 +1046,10 @@ class _TaskFormPageState extends ConsumerState<TaskFormPage> {
         leading: IconButton(
           tooltip: 'Close',
           icon: const Icon(Icons.close),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () {
+            FocusManager.instance.primaryFocus?.unfocus();
+            Navigator.pop(context);
+          },
         ),
         actions: [
           TextButton(

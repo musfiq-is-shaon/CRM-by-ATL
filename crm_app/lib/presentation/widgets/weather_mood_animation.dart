@@ -4,7 +4,8 @@ import 'package:flutter/material.dart';
 
 import '../../data/models/weather_model.dart';
 
-/// Reliable canvas-based weather mood animations (no Lottie dependency).
+/// Animated weather scene (v2) — soft gradient shapes, eased motion, day/night
+/// aware. Canvas-based so it works offline and themes cleanly.
 class WeatherMoodAnimation extends StatefulWidget {
   const WeatherMoodAnimation({
     super.key,
@@ -30,7 +31,7 @@ class _WeatherMoodAnimationState extends State<WeatherMoodAnimation>
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 4),
+      duration: const Duration(seconds: 6),
     )..repeat();
   }
 
@@ -49,9 +50,9 @@ class _WeatherMoodAnimationState extends State<WeatherMoodAnimation>
         animation: _controller,
         builder: (context, _) {
           return CustomPaint(
-            painter: _WeatherMoodPainter(
+            painter: _WeatherScenePainter(
               kind: widget.kind,
-              progress: _controller.value,
+              t: _controller.value,
               isDay: widget.isDay,
             ),
             size: Size.square(widget.size),
@@ -62,22 +63,28 @@ class _WeatherMoodAnimationState extends State<WeatherMoodAnimation>
   }
 }
 
-class _WeatherMoodPainter extends CustomPainter {
-  _WeatherMoodPainter({
+class _WeatherScenePainter extends CustomPainter {
+  _WeatherScenePainter({
     required this.kind,
-    required this.progress,
+    required this.t,
     required this.isDay,
   });
 
   final DashboardWeatherKind kind;
-  final double progress;
+  final double t;
   final bool isDay;
+
+  // Smooth ping-pong 0→1→0 with easing.
+  double get _sway {
+    final phase = (math.sin(t * math.pi * 2) + 1) / 2;
+    return Curves.easeInOut.transform(phase);
+  }
 
   @override
   void paint(Canvas canvas, Size size) {
     switch (kind) {
       case DashboardWeatherKind.sunny:
-        _paintSunny(canvas, size);
+        isDay ? _paintSun(canvas, size) : _paintMoon(canvas, size);
       case DashboardWeatherKind.partlyCloudy:
         _paintPartlyCloudy(canvas, size);
       case DashboardWeatherKind.cloudy:
@@ -93,209 +100,392 @@ class _WeatherMoodPainter extends CustomPainter {
     }
   }
 
-  void _paintSunny(Canvas canvas, Size size) {
-    final center = Offset(size.width * 0.5, size.height * 0.5);
-    final pulse = 0.92 + math.sin(progress * math.pi * 2) * 0.08;
-    final radius = size.width * 0.22 * pulse;
+  // ---------------------------------------------------------------- sun/moon
 
-    final glow = Paint()
-      ..shader = RadialGradient(
-        colors: [
-          const Color(0xFFFFF176).withValues(alpha: isDay ? 0.55 : 0.25),
-          Colors.transparent,
-        ],
-      ).createShader(Rect.fromCircle(center: center, radius: radius * 2.2));
-    canvas.drawCircle(center, radius * 2.2, glow);
+  void _paintSun(Canvas canvas, Size size, {Offset? at, double scale = 1}) {
+    final center = at ?? Offset(size.width * 0.5, size.height * 0.5);
+    final breath = 0.96 + _sway * 0.08;
+    final r = size.width * 0.21 * scale * breath;
 
+    // Outer halo.
+    canvas.drawCircle(
+      center,
+      r * 2.3,
+      Paint()
+        ..shader = RadialGradient(
+          colors: [
+            const Color(0xFFFFE082).withValues(alpha: 0.5),
+            const Color(0xFFFFE082).withValues(alpha: 0.0),
+          ],
+        ).createShader(Rect.fromCircle(center: center, radius: r * 2.3)),
+    );
+
+    // Rays — 12, alternating length, slow rotation with eased wobble.
     canvas.save();
     canvas.translate(center.dx, center.dy);
-    canvas.rotate(progress * math.pi * 2);
+    canvas.rotate(t * math.pi / 3 + _sway * 0.06);
     final rayPaint = Paint()
-      ..color = isDay ? const Color(0xFFFFD54F) : const Color(0xFF90CAF9)
-      ..strokeWidth = size.width * 0.035
-      ..strokeCap = StrokeCap.round;
-    for (var i = 0; i < 8; i++) {
+      ..strokeCap = StrokeCap.round
+      ..shader = const LinearGradient(
+        colors: [Color(0xFFFFB300), Color(0xFFFFD54F)],
+      ).createShader(Rect.fromLTWH(-r, -r * 2, r * 2, r * 2));
+    for (var i = 0; i < 12; i++) {
+      final long = i.isEven;
+      rayPaint.strokeWidth = size.width * (long ? 0.038 : 0.028);
       canvas.drawLine(
-        Offset(0, -radius * 1.35),
-        Offset(0, -radius * 1.85),
+        Offset(0, -r * 1.32),
+        Offset(0, -r * (long ? 1.75 : 1.55)),
         rayPaint,
       );
-      canvas.rotate(math.pi / 4);
+      canvas.rotate(math.pi / 6);
     }
     canvas.restore();
 
+    // Body with warm gradient + inner highlight.
     canvas.drawCircle(
       center,
-      radius,
-      Paint()..color = isDay ? const Color(0xFFFFCA28) : const Color(0xFF64B5F6),
+      r,
+      Paint()
+        ..shader = RadialGradient(
+          center: const Alignment(-0.35, -0.4),
+          colors: const [Color(0xFFFFF176), Color(0xFFFFB300)],
+        ).createShader(Rect.fromCircle(center: center, radius: r)),
+    );
+    canvas.drawCircle(
+      Offset(center.dx - r * 0.28, center.dy - r * 0.3),
+      r * 0.32,
+      Paint()..color = Colors.white.withValues(alpha: 0.35),
+    );
+  }
+
+  void _paintMoon(Canvas canvas, Size size) {
+    final center = Offset(size.width * 0.52, size.height * 0.5);
+    final r = size.width * 0.24;
+
+    canvas.drawCircle(
+      center,
+      r * 1.9,
+      Paint()
+        ..shader = RadialGradient(
+          colors: [
+            const Color(0xFFB3C4FF).withValues(alpha: 0.35),
+            Colors.transparent,
+          ],
+        ).createShader(Rect.fromCircle(center: center, radius: r * 1.9)),
+    );
+
+    // Crescent: full disc minus offset disc.
+    final moon = Path()..addOval(Rect.fromCircle(center: center, radius: r));
+    final bite = Path()
+      ..addOval(
+        Rect.fromCircle(
+          center: Offset(center.dx + r * 0.52, center.dy - r * 0.28),
+          radius: r * 0.82,
+        ),
+      );
+    canvas.drawPath(
+      Path.combine(PathOperation.difference, moon, bite),
+      Paint()
+        ..shader = RadialGradient(
+          center: const Alignment(-0.4, -0.3),
+          colors: const [Color(0xFFFFFDE7), Color(0xFFE6EBFF)],
+        ).createShader(Rect.fromCircle(center: center, radius: r)),
+    );
+
+    // Twinkling stars.
+    final stars = [
+      Offset(size.width * 0.18, size.height * 0.26),
+      Offset(size.width * 0.3, size.height * 0.62),
+      Offset(size.width * 0.78, size.height * 0.72),
+      Offset(size.width * 0.72, size.height * 0.2),
+    ];
+    for (var i = 0; i < stars.length; i++) {
+      final tw = (math.sin((t * 2 + i * 0.31) * math.pi * 2) + 1) / 2;
+      _drawStar(
+        canvas,
+        stars[i],
+        size.width * (0.022 + 0.012 * tw),
+        Colors.white.withValues(alpha: 0.45 + 0.55 * tw),
+      );
+    }
+  }
+
+  void _drawStar(Canvas canvas, Offset c, double r, Color color) {
+    final p = Paint()
+      ..color = color
+      ..strokeWidth = r * 0.55
+      ..strokeCap = StrokeCap.round;
+    canvas.drawLine(Offset(c.dx - r, c.dy), Offset(c.dx + r, c.dy), p);
+    canvas.drawLine(Offset(c.dx, c.dy - r), Offset(c.dx, c.dy + r), p);
+  }
+
+  // ------------------------------------------------------------------ clouds
+
+  void _drawCloud(
+    Canvas canvas,
+    Offset center,
+    double width, {
+    required Color top,
+    required Color bottom,
+    double shadowAlpha = 0.12,
+  }) {
+    final h = width * 0.6;
+    final rect = Rect.fromCenter(center: center, width: width, height: h);
+
+    final path = Path();
+    // Base pill.
+    path.addRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromCenter(
+          center: Offset(center.dx, center.dy + h * 0.22),
+          width: width,
+          height: h * 0.52,
+        ),
+        Radius.circular(h * 0.26),
+      ),
+    );
+    // Two puffs.
+    path.addOval(
+      Rect.fromCircle(
+        center: Offset(center.dx - width * 0.18, center.dy - h * 0.02),
+        radius: width * 0.21,
+      ),
+    );
+    path.addOval(
+      Rect.fromCircle(
+        center: Offset(center.dx + width * 0.13, center.dy - h * 0.12),
+        radius: width * 0.26,
+      ),
+    );
+
+    // Soft drop shadow.
+    canvas.drawOval(
+      Rect.fromCenter(
+        center: Offset(center.dx, center.dy + h * 0.52),
+        width: width * 0.8,
+        height: h * 0.16,
+      ),
+      Paint()
+        ..color = Colors.black.withValues(alpha: shadowAlpha)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5),
+    );
+
+    canvas.drawPath(
+      path,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [top, bottom],
+        ).createShader(rect),
     );
   }
 
   void _paintPartlyCloudy(Canvas canvas, Size size) {
-    _paintSunny(canvas, size);
-    final drift = math.sin(progress * math.pi * 2) * size.width * 0.04;
+    if (isDay) {
+      _paintSun(
+        canvas,
+        size,
+        at: Offset(size.width * 0.36, size.height * 0.36),
+        scale: 0.86,
+      );
+    } else {
+      _paintMoon(canvas, size);
+    }
+    final drift = (_sway - 0.5) * size.width * 0.07;
     _drawCloud(
       canvas,
-      Offset(size.width * 0.52 + drift, size.height * 0.58),
-      size.width * 0.42,
-      const Color(0xFFECEFF1),
-      const Color(0xFFB0BEC5),
+      Offset(size.width * 0.58 + drift, size.height * 0.66),
+      size.width * 0.52,
+      top: Colors.white,
+      bottom: const Color(0xFFCFD8DC),
     );
   }
 
   void _paintCloudy(Canvas canvas, Size size) {
-    final drift = math.sin(progress * math.pi * 2) * size.width * 0.05;
+    final drift = (_sway - 0.5) * size.width * 0.08;
     _drawCloud(
       canvas,
-      Offset(size.width * 0.48 + drift, size.height * 0.42),
+      Offset(size.width * 0.42 - drift * 0.7, size.height * 0.4),
       size.width * 0.5,
-      const Color(0xFFCFD8DC),
-      const Color(0xFF90A4AE),
+      top: const Color(0xFFE3E8EC),
+      bottom: const Color(0xFF9FB2BC),
+      shadowAlpha: 0.08,
     );
     _drawCloud(
       canvas,
-      Offset(size.width * 0.55 - drift * 0.6, size.height * 0.62),
-      size.width * 0.38,
-      const Color(0xFFECEFF1),
-      const Color(0xFFB0BEC5),
+      Offset(size.width * 0.58 + drift, size.height * 0.64),
+      size.width * 0.58,
+      top: Colors.white,
+      bottom: const Color(0xFFC3CFD6),
     );
   }
 
   void _paintFoggy(Canvas canvas, Size size) {
-    for (var i = 0; i < 4; i++) {
-      final y = size.height * (0.35 + i * 0.14);
-      final shift = math.sin((progress + i * 0.2) * math.pi * 2) * size.width * 0.08;
-      final rect = RRect.fromRectAndRadius(
-        Rect.fromLTWH(
-          size.width * 0.05 + shift,
-          y,
-          size.width * 0.9,
-          size.height * 0.08,
-        ),
-        Radius.circular(size.height * 0.04),
-      );
+    _drawCloud(
+      canvas,
+      Offset(size.width * 0.5, size.height * 0.34),
+      size.width * 0.5,
+      top: const Color(0xFFECEFF1),
+      bottom: const Color(0xFFB0BEC5),
+      shadowAlpha: 0,
+    );
+    for (var i = 0; i < 3; i++) {
+      final shift =
+          math.sin((t + i * 0.28) * math.pi * 2) * size.width * 0.07;
+      final w = size.width * (0.66 - i * 0.1);
+      final y = size.height * (0.58 + i * 0.14);
       canvas.drawRRect(
-        rect,
+        RRect.fromRectAndRadius(
+          Rect.fromCenter(
+            center: Offset(size.width * 0.5 + shift, y),
+            width: w,
+            height: size.height * 0.055,
+          ),
+          Radius.circular(size.height * 0.03),
+        ),
         Paint()
-          ..color = Colors.white.withValues(alpha: 0.35 + i * 0.08)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
+          ..color = Colors.white.withValues(alpha: 0.75 - i * 0.18)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
       );
     }
   }
 
+  // -------------------------------------------------------------------- rain
+
   void _paintRain(Canvas canvas, Size size, {required bool storm}) {
-    _drawCloud(
-      canvas,
-      Offset(size.width * 0.5, size.height * 0.28),
-      size.width * 0.52,
-      storm ? const Color(0xFF546E7A) : const Color(0xFF78909C),
-      storm ? const Color(0xFF37474F) : const Color(0xFF607D8B),
-    );
+    final drift = (_sway - 0.5) * size.width * 0.04;
 
-    final dropPaint = Paint()
-      ..color = storm ? const Color(0xFF81D4FA) : const Color(0xFF4FC3F7)
-      ..strokeWidth = size.width * 0.025
-      ..strokeCap = StrokeCap.round;
-
-    for (var i = 0; i < 14; i++) {
-      final seed = i * 17.0;
-      final x = (seed * 13.7 % size.width);
-      final phase = (progress + seed / 100) % 1.0;
-      final yStart = size.height * 0.42 + phase * size.height * 0.55;
+    // Drops behind the cloud edge, fading in/out along their fall.
+    final dropPaint = Paint()..strokeCap = StrokeCap.round;
+    const dropCount = 7;
+    for (var i = 0; i < dropCount; i++) {
+      final lane = (i + 0.5) / dropCount;
+      final x = size.width * (0.18 + lane * 0.64);
+      final phase = (t * 1.6 + i * 0.37) % 1.0;
+      final y = size.height * (0.5 + phase * 0.42);
+      final fade = phase < 0.15
+          ? phase / 0.15
+          : (phase > 0.8 ? (1 - phase) / 0.2 : 1.0);
+      dropPaint
+        ..color = (storm ? const Color(0xFF9BD8FF) : const Color(0xFF6FC7F2))
+            .withValues(alpha: 0.9 * fade)
+        ..strokeWidth = size.width * 0.032;
       canvas.drawLine(
-        Offset(x, yStart),
-        Offset(x - size.width * 0.04, yStart + size.height * 0.12),
+        Offset(x, y),
+        Offset(x - size.width * 0.035, y + size.height * 0.085),
         dropPaint,
       );
     }
 
+    _drawCloud(
+      canvas,
+      Offset(size.width * 0.5 + drift, size.height * 0.32),
+      size.width * 0.58,
+      top: storm ? const Color(0xFF90A4AE) : const Color(0xFFE3E8EC),
+      bottom: storm ? const Color(0xFF546E7A) : const Color(0xFF90A4AE),
+    );
+
     if (storm) {
-      final flash = _lightningOpacity(progress);
-      if (flash > 0) {
-        canvas.drawRect(
-          Rect.fromLTWH(0, 0, size.width, size.height),
-          Paint()..color = Colors.white.withValues(alpha: flash),
-        );
+      // Bolt flickers twice per cycle with a glow.
+      final flick = _boltOpacity(t);
+      if (flick > 0) {
         final bolt = Path()
-          ..moveTo(size.width * 0.62, size.height * 0.18)
-          ..lineTo(size.width * 0.54, size.height * 0.42)
-          ..lineTo(size.width * 0.6, size.height * 0.42)
-          ..lineTo(size.width * 0.48, size.height * 0.72);
+          ..moveTo(size.width * 0.52, size.height * 0.44)
+          ..lineTo(size.width * 0.42, size.height * 0.66)
+          ..lineTo(size.width * 0.5, size.height * 0.66)
+          ..lineTo(size.width * 0.4, size.height * 0.9)
+          ..lineTo(size.width * 0.62, size.height * 0.6)
+          ..lineTo(size.width * 0.53, size.height * 0.6)
+          ..lineTo(size.width * 0.62, size.height * 0.44)
+          ..close();
         canvas.drawPath(
           bolt,
           Paint()
-            ..color = const Color(0xFFFFEB3B)
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = size.width * 0.04
-            ..strokeJoin = StrokeJoin.round,
+            ..color = const Color(0xFFFFD740).withValues(alpha: flick)
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
+        );
+        canvas.drawPath(
+          bolt,
+          Paint()
+            ..shader = const LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0xFFFFE57F), Color(0xFFFFC400)],
+            ).createShader(
+              Rect.fromLTWH(0, 0, size.width, size.height),
+            )
+            ..color = Colors.white.withValues(alpha: flick),
         );
       }
     }
   }
 
+  double _boltOpacity(double x) {
+    final cycle = (x * 2) % 1.0;
+    if (cycle < 0.55) return 1.0;
+    if (cycle < 0.62) return 0.25;
+    if (cycle < 0.7) return 0.9;
+    return 0.0;
+  }
+
+  // -------------------------------------------------------------------- snow
+
   void _paintSnow(Canvas canvas, Size size) {
+    final drift = (_sway - 0.5) * size.width * 0.04;
+
+    const flakeCount = 8;
+    for (var i = 0; i < flakeCount; i++) {
+      final lane = (i + 0.5) / flakeCount;
+      final phase = (t * 0.8 + i * 0.29) % 1.0;
+      final x = size.width * (0.16 + lane * 0.68) +
+          math.sin((t * 2 + i) * math.pi * 2) * size.width * 0.03;
+      final y = size.height * (0.48 + phase * 0.44);
+      final fade = phase > 0.82 ? (1 - phase) / 0.18 : 1.0;
+      final r = size.width * (0.02 + (i % 3) * 0.006);
+      _drawFlake(
+        canvas,
+        Offset(x, y),
+        r,
+        Colors.white.withValues(alpha: 0.95 * fade),
+        rotation: t * math.pi * 2 + i,
+      );
+    }
+
     _drawCloud(
       canvas,
-      Offset(size.width * 0.5, size.height * 0.28),
-      size.width * 0.48,
-      const Color(0xFFECEFF1),
-      const Color(0xFFB0BEC5),
+      Offset(size.width * 0.5 + drift, size.height * 0.32),
+      size.width * 0.56,
+      top: Colors.white,
+      bottom: const Color(0xFFB6C6CE),
     );
-
-    final flakePaint = Paint()..color = Colors.white;
-    for (var i = 0; i < 16; i++) {
-      final seed = i * 23.0;
-      final x = (seed * 11.3 % size.width) +
-          math.sin((progress + seed / 50) * math.pi * 2) * 6;
-      final phase = (progress * 0.7 + seed / 120) % 1.0;
-      final y = size.height * 0.38 + phase * size.height * 0.58;
-      canvas.drawCircle(Offset(x, y), size.width * 0.018 + (i % 3) * 0.004, flakePaint);
-    }
   }
 
-  double _lightningOpacity(double t) {
-    final cycle = (t * 3) % 1.0;
-    if (cycle > 0.08 && cycle < 0.14) return 0.35;
-    if (cycle > 0.16 && cycle < 0.19) return 0.2;
-    return 0;
-  }
-
-  void _drawCloud(
+  void _drawFlake(
     Canvas canvas,
-    Offset center,
-    double width,
-    Color light,
-    Color dark,
-  ) {
-    final h = width * 0.42;
-    final puffs = [
-      Offset(center.dx - width * 0.22, center.dy + h * 0.1),
-      Offset(center.dx, center.dy - h * 0.15),
-      Offset(center.dx + width * 0.24, center.dy + h * 0.05),
-    ];
-    final radii = [width * 0.2, width * 0.26, width * 0.22];
-
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromCenter(
-          center: Offset(center.dx, center.dy + h * 0.15),
-          width: width * 0.95,
-          height: h * 0.75,
-        ),
-        Radius.circular(h * 0.35),
-      ),
-      Paint()..color = dark,
-    );
-
-    for (var i = 0; i < puffs.length; i++) {
-      canvas.drawCircle(puffs[i], radii[i], Paint()..color = light);
+    Offset c,
+    double r,
+    Color color, {
+    double rotation = 0,
+  }) {
+    final p = Paint()
+      ..color = color
+      ..strokeWidth = r * 0.45
+      ..strokeCap = StrokeCap.round;
+    canvas.save();
+    canvas.translate(c.dx, c.dy);
+    canvas.rotate(rotation);
+    for (var i = 0; i < 3; i++) {
+      canvas.drawLine(Offset(0, -r), Offset(0, r), p);
+      canvas.rotate(math.pi / 3);
     }
+    canvas.restore();
   }
 
   @override
-  bool shouldRepaint(covariant _WeatherMoodPainter oldDelegate) {
+  bool shouldRepaint(covariant _WeatherScenePainter oldDelegate) {
     return oldDelegate.kind != kind ||
-        oldDelegate.progress != progress ||
+        oldDelegate.t != t ||
         oldDelegate.isDay != isDay;
   }
 }

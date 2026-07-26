@@ -204,21 +204,23 @@ class TasksNotifier extends StateNotifier<TasksState> {
         }
       }
 
-      // Batch fetch all companies and users in parallel
-      final companiesFuture = companyIds.isNotEmpty
-          ? _companyRepository.getCompaniesByIds(companyIds.toList())
-          : Future.value(<String, Company>{});
-      final usersFuture = userIds.isNotEmpty
-          ? _userRepository.getUsersByIds(userIds.toList())
-          : Future.value(<String, User>{});
+      // Batch fetch all companies and users in parallel (best-effort).
+      Map<String, Company> companiesMap = {};
+      Map<String, User> usersMap = {};
+      try {
+        final companiesFuture = companyIds.isNotEmpty
+            ? _companyRepository.getCompaniesByIds(companyIds.toList())
+            : Future.value(<String, Company>{});
+        final usersFuture = userIds.isNotEmpty
+            ? _userRepository.getUsersByIds(userIds.toList())
+            : Future.value(<String, User>{});
 
-      final List<dynamic> results = await Future.wait([
-        companiesFuture,
-        usersFuture,
-      ]);
-
-      final companiesMap = results[0] as Map<String, Company>;
-      final usersMap = results[1] as Map<String, User>;
+        final results = await Future.wait([companiesFuture, usersFuture]);
+        companiesMap = results[0] as Map<String, Company>;
+        usersMap = results[1] as Map<String, User>;
+      } catch (_) {
+        // Enrichment is optional — still show the raw task list.
+      }
 
       // Now map tasks with pre-fetched data
       final tasksWithDetails = tasks.map((task) {

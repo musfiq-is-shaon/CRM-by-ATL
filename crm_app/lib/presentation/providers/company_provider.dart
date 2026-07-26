@@ -29,18 +29,25 @@ class CompaniesState {
     bool? isLoading,
     bool? isRefreshing,
     String? error,
+    bool clearError = false,
     String? searchQuery,
+    bool clearSearchQuery = false,
     String? countryFilter,
+    bool clearCountryFilter = false,
     String? kamUserIdFilter,
+    bool clearKamUserIdFilter = false,
   }) {
     return CompaniesState(
       companies: companies ?? this.companies,
       isLoading: isLoading ?? this.isLoading,
       isRefreshing: isRefreshing ?? this.isRefreshing,
-      error: error,
-      searchQuery: searchQuery ?? this.searchQuery,
-      countryFilter: countryFilter,
-      kamUserIdFilter: kamUserIdFilter,
+      error: clearError ? null : (error ?? this.error),
+      searchQuery: clearSearchQuery ? null : (searchQuery ?? this.searchQuery),
+      countryFilter:
+          clearCountryFilter ? null : (countryFilter ?? this.countryFilter),
+      kamUserIdFilter: clearKamUserIdFilter
+          ? null
+          : (kamUserIdFilter ?? this.kamUserIdFilter),
     );
   }
 
@@ -118,12 +125,21 @@ class CompaniesNotifier extends StateNotifier<CompaniesState> {
 
       if (generation != _loadGeneration) return;
 
+      // Show companies immediately so pickers are usable while KAM users load.
+      state = state.copyWith(
+        companies: _mergeFetchedCompanies(companies),
+        isLoading: false,
+        isRefreshing: false,
+        clearError: true,
+      );
+      _lastLoadedAt = DateTime.now();
+
       // Fetch users to get KAM data
       List<User> users = [];
       try {
         users = await _userRepository.getUsers();
       } catch (e) {
-        // Ignore user fetch error
+        // Ignore user fetch error — company list is already available.
       }
 
       if (generation != _loadGeneration) return;
@@ -154,8 +170,8 @@ class CompaniesNotifier extends StateNotifier<CompaniesState> {
         companies: _mergeFetchedCompanies(companiesWithKam),
         isLoading: false,
         isRefreshing: false,
+        clearError: true,
       );
-      _lastLoadedAt = DateTime.now();
     } catch (e) {
       if (generation != _loadGeneration) return;
       state = state.copyWith(
@@ -178,22 +194,34 @@ class CompaniesNotifier extends StateNotifier<CompaniesState> {
   }
 
   void setSearchQuery(String? query) {
-    state = state.copyWith(searchQuery: query);
+    if (query == null || query.isEmpty) {
+      state = state.copyWith(clearSearchQuery: true);
+    } else {
+      state = state.copyWith(searchQuery: query);
+    }
   }
 
   void setCountryFilter(String? country) {
-    state = state.copyWith(countryFilter: country);
+    if (country == null || country.isEmpty) {
+      state = state.copyWith(clearCountryFilter: true);
+    } else {
+      state = state.copyWith(countryFilter: country);
+    }
   }
 
   void setKamUserFilter(String? userId) {
-    state = state.copyWith(kamUserIdFilter: userId);
+    if (userId == null || userId.isEmpty) {
+      state = state.copyWith(clearKamUserIdFilter: true);
+    } else {
+      state = state.copyWith(kamUserIdFilter: userId);
+    }
   }
 
   void clearFilters() {
     state = state.copyWith(
-      searchQuery: null,
-      countryFilter: null,
-      kamUserIdFilter: null,
+      clearSearchQuery: true,
+      clearCountryFilter: true,
+      clearKamUserIdFilter: true,
     );
   }
 

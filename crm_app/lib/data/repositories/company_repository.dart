@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/network/api_client.dart';
@@ -35,8 +37,11 @@ class CompanyRepository {
       AppConstants.companies,
       queryParameters: queryParams,
     );
-    final List<dynamic> data = response.data;
-    final companies = data.map((json) => Company.fromJson(json)).toList();
+    final data = _asCompanyList(response.data);
+    final companies = data
+        .whereType<Map>()
+        .map((json) => Company.fromJson(Map<String, dynamic>.from(json)))
+        .toList();
 
     // Cache all companies
     _cachedCompanies = companies;
@@ -54,7 +59,7 @@ class CompanyRepository {
     }
 
     final response = await _apiClient.get('${AppConstants.companies}/$id');
-    final company = Company.fromJson(response.data);
+    final company = Company.fromJson(_asCompanyMap(response.data));
     _companyCache[company.id] = company;
     return company;
   }
@@ -120,7 +125,7 @@ class CompanyRepository {
       AppConstants.companies,
       data: data,
     );
-    var company = Company.fromJson(_unwrapCompanyJson(response.data));
+    var company = Company.fromJson(_asCompanyMap(response.data));
     if (company.name.trim().isEmpty) {
       company = Company(
         id: company.id,
@@ -196,7 +201,7 @@ class CompanyRepository {
         'kamUserId': kamUserId,
       },
     );
-    return Company.fromJson(response.data);
+    return Company.fromJson(_asCompanyMap(response.data));
   }
 
   Future<void> deleteCompany(String id) async {
@@ -209,26 +214,80 @@ final companyRepositoryProvider = Provider<CompanyRepository>((ref) {
   return CompanyRepository(apiClient: apiClient);
 });
 
-Map<String, dynamic> _unwrapCompanyJson(dynamic data) {
-  if (data is! Map) return {};
-  var current = Map<String, dynamic>.from(data);
+dynamic _unwrapCompany(dynamic raw) {
+  if (raw is Map && raw['data'] != null) return raw['data'];
+  return raw;
+}
 
-  for (var depth = 0; depth < 4; depth++) {
-    if (current.containsKey('id') || current.containsKey('_id')) {
-      return current;
+Map<String, dynamic> _asCompanyMap(dynamic raw) {
+  var current = raw;
+  if (current is String) {
+    final trimmed = current.trim();
+    if (trimmed.isEmpty) return {};
+    try {
+      current = jsonDecode(trimmed);
+    } catch (_) {
+      return {};
     }
+  }
+  final u = _unwrapCompany(current);
+  if (u is Map) {
+    var m = Map<String, dynamic>.from(u);
+    for (var depth = 0; depth < 4; depth++) {
+      if (m.containsKey('id') || m.containsKey('_id') || m.containsKey('name')) {
+        return m;
+      }
+      Map<String, dynamic>? nested;
+      for (final key in ['company', 'data', 'result', 'item']) {
+        final inner = m[key];
+        if (inner is Map) {
+          nested = Map<String, dynamic>.from(inner);
+          break;
+        }
+      }
+      if (nested == null) return m;
+      m = nested;
+    }
+    return m;
+  }
+  if (u is List && u.isNotEmpty && u.first is Map) {
+    return Map<String, dynamic>.from(u.first as Map);
+  }
+  return {};
+}
 
-    Map<String, dynamic>? nested;
-    for (final key in ['company', 'data', 'result', 'item']) {
-      final inner = current[key];
-      if (inner is Map) {
-        nested = Map<String, dynamic>.from(inner);
-        break;
+List<dynamic> _asCompanyList(dynamic raw) {
+  var current = raw;
+  // Dio sometimes leaves a JSON array as a String.
+  if (current is String) {
+    final trimmed = current.trim();
+    if (trimmed.isEmpty) return const [];
+    try {
+      current = jsonDecode(trimmed);
+    } catch (_) {
+      return const [];
+    }
+  }
+  final u = _unwrapCompany(current);
+  if (u is List) return u;
+  if (u is Map) {
+    for (final key in [
+      'companies',
+      'items',
+      'results',
+      'records',
+      'rows',
+      'data',
+    ]) {
+      final v = u[key];
+      if (v is List) return v;
+      if (v is String) {
+        try {
+          final decoded = jsonDecode(v.trim());
+          if (decoded is List) return decoded;
+        } catch (_) {}
       }
     }
-    if (nested == null) return current;
-    current = nested;
   }
-
-  return current;
+  return const [];
 }

@@ -10,6 +10,7 @@ import '../../../core/theme/app_theme_colors.dart';
 import '../../../core/theme/design_tokens.dart';
 import '../../providers/attendance_provider.dart';
 import '../../providers/dashboard_live_location_provider.dart';
+import '../../providers/dashboard_weather_provider.dart';
 import '../../providers/contact_provider.dart';
 import '../../providers/notifications_provider.dart';
 import '../../providers/rbac_prefetch.dart';
@@ -114,6 +115,8 @@ class _ShellPageState extends ConsumerState<ShellPage>
   /// Commits the active tab (provider + loads). Used when the [PageView] lands on a page.
   void _commitTab(List<String> tabIds, int index) {
     final clamped = index.clamp(0, tabIds.length - 1);
+    // Dismiss IME when switching tabs (e.g. Tasks search still focused under More).
+    FocusManager.instance.primaryFocus?.unfocus();
     if (ref.read(selectedTabProvider) != clamped) {
       ref.read(selectedTabProvider.notifier).state = clamped;
     }
@@ -152,6 +155,7 @@ class _ShellPageState extends ConsumerState<ShellPage>
 
   void _switchToTab(int index, List<String> tabIds, int currentSelected) {
     final clamped = index.clamp(0, tabIds.length - 1);
+    FocusManager.instance.primaryFocus?.unfocus();
     if (_navBarPreviewIndex != null) {
       setState(() {
         _navBarPreviewIndex = null;
@@ -376,6 +380,7 @@ class _ShellPageState extends ConsumerState<ShellPage>
           tick + 1;
       prefetchCrmLookupData(ref, me);
       ref.read(notificationsProvider.notifier).load(silent: true);
+      unawaited(ref.read(dashboardWeatherProvider.notifier).refresh());
       final uid = ref.read(currentUserIdProvider)?.trim();
       if (uid != null && uid.isNotEmpty) {
         final loadAttendance =
@@ -405,6 +410,20 @@ class _ShellPageState extends ConsumerState<ShellPage>
       return;
     }
 
+    if (id == _kLunch) {
+      final loaded = ref.read(loadedTabsProvider);
+      if (!loaded.contains(id)) {
+        // First visit: bootstrap only (includes today polls). Avoid overlapping
+        // loadTodayPolls that share _todayPollsRequestId and discard winners.
+        ref.read(loadedTabsProvider.notifier).update((s) => {...s, id});
+        unawaited(ref.read(lunchProvider.notifier).bootstrapUser());
+      } else {
+        // Later visits: silent refresh so remote reopen/close shows up.
+        unawaited(ref.read(lunchProvider.notifier).loadTodayPolls(silent: true));
+      }
+      return;
+    }
+
     final loaded = ref.read(loadedTabsProvider);
     if (loaded.contains(id)) return;
 
@@ -414,9 +433,6 @@ class _ShellPageState extends ConsumerState<ShellPage>
       case _kAttendance:
         ref.read(attendanceProvider.notifier).loadToday();
         unawaited(ref.read(shiftProvider.notifier).loadShifts());
-        break;
-      case _kLunch:
-        ref.read(lunchProvider.notifier).bootstrapUser();
         break;
       case _kExpenses:
         break;

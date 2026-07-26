@@ -36,9 +36,9 @@ class _LunchMyLunchPageState extends ConsumerState<LunchMyLunchPage> {
 
   Future<void> _bootstrap() async {
     final n = ref.read(lunchProvider.notifier);
+    // Coalesce with shell bootstrap — force:true raced _todayPollsRequestId.
     await n.bootstrapUser();
-    await n.refreshTodayPollsIfStale();
-    unawaited(n.loadSettings());
+    unawaited(n.loadSettings(silent: true));
     unawaited(n.loadMyBalance(month: _monthKey(_balanceMonth), silent: true));
   }
 
@@ -50,14 +50,20 @@ class _LunchMyLunchPageState extends ConsumerState<LunchMyLunchPage> {
   String _monthKey(DateTime d) =>
       '${d.year}-${d.month.toString().padLeft(2, '0')}';
 
-  void _shiftMonth(int delta) {
-    setState(() {
-      _balanceMonth = DateTime(_balanceMonth.year, _balanceMonth.month + delta);
-    });
-    ref.read(lunchProvider.notifier).loadMyBalance(
-      month: _monthKey(_balanceMonth),
+  Future<void> _shiftMonth(int delta) async {
+    final previous = _balanceMonth;
+    final next = DateTime(_balanceMonth.year, _balanceMonth.month + delta);
+    setState(() => _balanceMonth = next);
+    await ref.read(lunchProvider.notifier).loadMyBalance(
+      month: _monthKey(next),
       silent: true,
     );
+    if (!mounted) return;
+    final loadedMonth = ref.read(lunchProvider).myBalanceMonth;
+    // Silent failure restores prior month in provider — snap the UI back too.
+    if (loadedMonth != _monthKey(next)) {
+      setState(() => _balanceMonth = previous);
+    }
   }
 
   @override
@@ -80,16 +86,7 @@ class _LunchMyLunchPageState extends ConsumerState<LunchMyLunchPage> {
     });
 
     if (state.status == LunchLoadStatus.loading && state.todayPolls.isEmpty) {
-      return ListView(
-        padding: AppThemeColors.pagePaddingAll,
-        children: const [
-          ShimmerCard(height: 76),
-          SizedBox(height: AppSpacing.md),
-          ShimmerCard(height: 200),
-          SizedBox(height: AppSpacing.md),
-          ShimmerCard(height: 160),
-        ],
-      );
+      return const LunchMyLunchSkeleton();
     }
 
     if (state.status == LunchLoadStatus.error && state.todayPolls.isEmpty) {
@@ -314,43 +311,61 @@ class _TodayPollCard extends ConsumerWidget {
           if (options.isEmpty)
             Text('No menu options yet', style: TextStyle(color: textSecondary))
           else
-            AbsorbPointer(
-              absorbing: optionsLocked,
-              child: Column(
-                children: options
-                    .map(
-                      (opt) => LunchPollOptionCard(
-                        option: opt,
-                        selected: myOptionId == opt.id,
-                        totalVotes: total,
-                        enabled: !optionsLocked,
-                        dimmed: !pollClosed && hasVoted && myOptionId != opt.id,
-                        compact: true,
-                        onTap: () async {
-                          if (optionsLocked) {
-                            if (!canVote) {
-                              showLunchVoteDisabledMessage(context, poll);
-                            }
-                            return;
-                          }
-                          if (!livePoll.allowsVoteChanges &&
-                              myOptionId != null &&
-                              myOptionId != opt.id) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Vote changes are not allowed'),
-                              ),
-                            );
-                            return;
-                          }
-                          await ref
-                              .read(lunchProvider.notifier)
-                              .vote(poll.id, opt.id);
-                        },
-                      ),
-                    )
-                    .toList(),
-              ),
+            Column(
+              children: [
+                for (final opt in options)
+                  LunchPollOptionCard(
+                    key: ValueKey('poll-${poll.id}-opt-${opt.id}-${opt.label}'),
+                    option: opt,
+                    selected: myOptionId != null &&
+                        myOptionId.isNotEmpty &&
+                        opt.id.isNotEmpty &&
+                        myOptionId == opt.id,
+                    totalVotes: total,
+                    enabled: !optionsLocked && opt.id.isNotEmpty,
+                    dimmed: !pollClosed && hasVoted && myOptionId != opt.id,
+                    compact: true,
+                    onTap: () async {
+                      final optionId = opt.id;
+                      if (optionId.isEmpty) {
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Menu option unavailable — pull to refresh',
+                            ),
+                          ),
+                        );
+                        return;
+                      }
+                      if (optionsLocked) {
+                        if (!canVote) {
+                          showLunchVoteDisabledMessage(context, livePoll);
+                        } else if (hasVoted && !livePoll.allowsVoteChanges) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Vote changes are not allowed'),
+                            ),
+                          );
+                        }
+                        return;
+                      }
+                      if (!livePoll.allowsVoteChanges &&
+                          myOptionId != null &&
+                          myOptionId != optionId) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Vote changes are not allowed'),
+                          ),
+                        );
+                        return;
+                      }
+                      await ref
+                          .read(lunchProvider.notifier)
+                          .vote(poll.id, optionId);
+                    },
+                  ),
+              ],
             ),
           if (voting) ...[
             const SizedBox(height: 8),
@@ -380,7 +395,7 @@ class _TodayPollCard extends ConsumerWidget {
                   minimumSize: Size.zero,
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
-                onPressed: () => showLunchPollVotesSheet(context, poll),
+                onPressed: () => showLunchPollVotesSheet(context, livePoll),
                 child: const Text(
                   'View all votes',
                   style: TextStyle(
@@ -419,9 +434,10 @@ class _BalanceCard extends StatelessWidget {
     final textPrimary = AppThemeColors.textPrimaryColor(context);
     final textSecondary = AppThemeColors.textSecondaryColor(context);
     final cs = Theme.of(context).colorScheme;
+    final hasBalance = balance != null;
     final monthAmount = balance?.monthNetChange ?? 0;
     final runningTotal = balance?.balance ?? 0;
-    final isOwed = monthAmount < 0;
+    final isOwed = hasBalance && monthAmount < 0;
     final monthLabel = DateFormat('MMMM yyyy').format(month);
 
     return CRMCard(
@@ -437,7 +453,7 @@ class _BalanceCard extends StatelessWidget {
               color: textSecondary,
             ),
           ),
-          if (!loading) ...[
+          if (!loading && hasBalance) ...[
             const SizedBox(height: 4),
             Text(
               'Total owed: $runningTotal ${AppConstants.currencySymbol}',
@@ -472,14 +488,26 @@ class _BalanceCard extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.xs),
           if (loading)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 12),
-              child: Center(
-                child: SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
+            const SizedBox(
+              height: 88,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  ShimmerLoading(width: 72, height: 10),
+                  SizedBox(height: 10),
+                  ShimmerLoading(width: 132, height: 34),
+                  SizedBox(height: 10),
+                  ShimmerLoading(width: 100, height: 12),
+                ],
+              ),
+            )
+          else if (!hasBalance)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Text(
+                'Balance unavailable',
+                style: TextStyle(color: textSecondary, fontWeight: FontWeight.w600),
               ),
             )
           else ...[

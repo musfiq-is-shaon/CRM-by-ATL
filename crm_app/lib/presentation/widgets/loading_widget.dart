@@ -76,20 +76,28 @@ class ShimmerLoading extends StatelessWidget {
 }
 
 class ShimmerCard extends StatelessWidget {
-  const ShimmerCard({super.key, this.height});
+  const ShimmerCard({
+    super.key,
+    this.height,
+    this.padding = const EdgeInsets.all(AppSpacing.sm),
+    this.borderRadius = AppRadius.lg,
+  });
 
   final double? height;
+  final EdgeInsetsGeometry padding;
+  final double borderRadius;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
     return Container(
+      width: double.infinity,
       height: height,
-      padding: const EdgeInsets.all(AppSpacing.sm),
+      padding: padding,
       decoration: BoxDecoration(
         color: cs.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(AppRadius.md),
+        borderRadius: BorderRadius.circular(borderRadius),
         border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.55)),
       ),
       child: LayoutBuilder(
@@ -99,9 +107,9 @@ class ShimmerCard extends StatelessWidget {
           final lineCount = !bounded || maxH >= 76 ? 3 : 2;
           final gaps = (lineCount - 1) * AppSpacing.xs;
           final lineH = bounded
-              ? ((maxH - gaps) / lineCount).clamp(8.0, 14.0)
+              ? ((maxH - gaps - 8) / lineCount).clamp(8.0, 14.0)
               : 12.0;
-          const widths = [100.0, 160.0, 120.0];
+          const widths = [0.55, 0.85, 0.4];
 
           return Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -110,7 +118,10 @@ class ShimmerCard extends StatelessWidget {
             children: [
               for (var i = 0; i < lineCount; i++) ...[
                 if (i > 0) const SizedBox(height: AppSpacing.xs),
-                ShimmerLoading(width: widths[i], height: lineH),
+                FractionallySizedBox(
+                  widthFactor: widths[i],
+                  child: ShimmerLoading(height: lineH),
+                ),
               ],
             ],
           );
@@ -149,29 +160,52 @@ class ListSkeletonLoader extends StatelessWidget {
   }
 }
 
-/// Dashboard / detail hero skeleton.
+/// Dashboard / detail hero skeleton — matches dashboard hero + weather slot.
 class DashboardHeroSkeleton extends StatelessWidget {
   const DashboardHeroSkeleton({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return const Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        ShimmerLoading(width: 120, height: 14),
-        SizedBox(height: AppSpacing.sm),
-        ShimmerLoading(width: 220, height: 28),
-        SizedBox(height: AppSpacing.lg),
-        Row(
-          children: [
-            Expanded(child: ShimmerCard(height: 76)),
-            SizedBox(width: AppSpacing.sm),
-            Expanded(child: ShimmerCard(height: 76)),
-            SizedBox(width: AppSpacing.sm),
-            Expanded(child: ShimmerCard(height: 76)),
-          ],
-        ),
-      ],
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.55)),
+      ),
+      child: const Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ShimmerLoading(width: 110, height: 12),
+                    SizedBox(height: 6),
+                    ShimmerLoading(width: 180, height: 22),
+                    SizedBox(height: AppSpacing.sm),
+                    ShimmerLoading(height: 12),
+                    SizedBox(height: 4),
+                    ShimmerLoading(width: 220, height: 12),
+                  ],
+                ),
+              ),
+              SizedBox(width: AppSpacing.sm),
+              ShimmerLoading(width: 40, height: 40, borderRadius: AppRadius.sm),
+              SizedBox(width: AppSpacing.xs),
+              ShimmerLoading(width: 40, height: 40, borderRadius: AppRadius.sm),
+            ],
+          ),
+          SizedBox(height: AppSpacing.md),
+          // Weather banner slot (fixed 92 like live banner).
+          ShimmerLoading(height: 92, borderRadius: AppRadius.lg),
+        ],
+      ),
     );
   }
 }
@@ -182,7 +216,7 @@ typedef PageSkeleton = DashboardHeroSkeleton;
 typedef CardSkeleton = ShimmerCard;
 typedef ListSkeleton = ListSkeletonLoader;
 
-/// Full dashboard page placeholder.
+/// Full dashboard page placeholder matching real section order.
 class DashboardSkeleton extends StatelessWidget {
   const DashboardSkeleton({super.key});
 
@@ -193,24 +227,89 @@ class DashboardSkeleton extends StatelessWidget {
       physics: const NeverScrollableScrollPhysics(),
       children: const [
         DashboardHeroSkeleton(),
-        SizedBox(height: AppSpacing.lg),
-        ShimmerLoading(width: 140, height: 18),
-        SizedBox(height: AppSpacing.sm),
+        SizedBox(height: AppSpacing.md),
+        // Quick actions
         Row(
           children: [
-            Expanded(child: ShimmerCard(height: 100)),
+            Expanded(child: ShimmerCard(height: 48)),
             SizedBox(width: AppSpacing.sm),
-            Expanded(child: ShimmerCard(height: 100)),
+            Expanded(child: ShimmerCard(height: 48)),
+            SizedBox(width: AppSpacing.sm),
+            Expanded(child: ShimmerCard(height: 48)),
           ],
         ),
         SizedBox(height: AppSpacing.lg),
-        ShimmerLoading(width: 160, height: 18),
+        ShimmerLoading(width: 120, height: 16),
+        SizedBox(height: 4),
+        ShimmerLoading(width: 180, height: 12),
         SizedBox(height: AppSpacing.sm),
-        ShimmerCard(height: 72),
+        // Attendance card (status + live loc + hold)
+        AttendanceCardSkeleton(),
+        SizedBox(height: AppSpacing.lg),
+        ShimmerLoading(width: 130, height: 16),
         SizedBox(height: AppSpacing.sm),
-        ShimmerCard(height: 72),
+        ShimmerCard(height: 64),
         SizedBox(height: AppSpacing.sm),
-        ShimmerCard(height: 72),
+        ShimmerCard(height: 64),
+      ],
+    );
+  }
+}
+
+/// Matches [TodayAttendanceCardWidget] initial footprint.
+class AttendanceCardSkeleton extends StatelessWidget {
+  const AttendanceCardSkeleton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const ShimmerCard(
+      height: 228,
+      padding: EdgeInsets.all(AppSpacing.sm),
+      borderRadius: AppRadius.lg,
+    );
+  }
+}
+
+/// My Lunch page placeholder: header + poll + balance.
+class LunchMyLunchSkeleton extends StatelessWidget {
+  const LunchMyLunchSkeleton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: AppThemeColors.pagePaddingAll,
+      physics: const NeverScrollableScrollPhysics(),
+      children: const [
+        // Module header (~72)
+        ShimmerCard(height: 72, padding: EdgeInsets.all(AppSpacing.md)),
+        SizedBox(height: AppSpacing.sm),
+        // Poll card
+        ShimmerCard(height: 260, padding: EdgeInsets.all(AppSpacing.md)),
+        SizedBox(height: AppSpacing.md),
+        // Balance card
+        ShimmerCard(height: 168, padding: EdgeInsets.all(AppSpacing.md)),
+      ],
+    );
+  }
+}
+
+/// Compact settings / form placeholder (not a full detail page).
+class SettingsFormSkeleton extends StatelessWidget {
+  const SettingsFormSkeleton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: AppThemeColors.pagePaddingAll,
+      physics: const NeverScrollableScrollPhysics(),
+      children: const [
+        ShimmerLoading(width: 120, height: 22),
+        SizedBox(height: 6),
+        ShimmerLoading(width: 220, height: 12),
+        SizedBox(height: AppSpacing.lg),
+        ShimmerCard(height: 140, padding: EdgeInsets.all(AppSpacing.md)),
+        SizedBox(height: AppSpacing.lg),
+        ShimmerLoading(height: AppSizes.buttonHeight, borderRadius: AppRadius.md),
       ],
     );
   }

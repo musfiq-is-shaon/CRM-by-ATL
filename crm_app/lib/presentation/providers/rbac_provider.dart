@@ -40,6 +40,7 @@ class RbacNotifier extends StateNotifier<RbacState> {
 
   final RbacRepository _repository;
   bool _loadBusy = false;
+  int _loadGen = 0;
 
   /// Single in-flight request — avoids discarding a successful response when a newer
   /// call fails first (sequence-based loads left [me] null and hid all modules).
@@ -49,6 +50,7 @@ class RbacNotifier extends StateNotifier<RbacState> {
   Future<void> load({bool silent = false}) async {
     if (_loadBusy) return;
     _loadBusy = true;
+    final gen = ++_loadGen;
     final previousMe = state.me;
     if (!silent) {
       state = state.copyWith(
@@ -58,6 +60,7 @@ class RbacNotifier extends StateNotifier<RbacState> {
     }
     try {
       final me = await _repository.fetchMe();
+      if (gen != _loadGen) return;
       if (silent) {
         final unchanged =
             previousMe != null &&
@@ -70,6 +73,7 @@ class RbacNotifier extends StateNotifier<RbacState> {
         state = RbacState(status: RbacLoadStatus.loaded, me: me);
       }
     } catch (e) {
+      if (gen != _loadGen) return;
       if (!silent) {
         state = RbacState(
           status: RbacLoadStatus.error,
@@ -78,11 +82,15 @@ class RbacNotifier extends StateNotifier<RbacState> {
         );
       }
     } finally {
-      _loadBusy = false;
+      if (gen == _loadGen) {
+        _loadBusy = false;
+      }
     }
   }
 
   void clear() {
+    _loadGen++;
+    _loadBusy = false;
     state = const RbacState();
   }
 }

@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../../../core/theme/app_theme_colors.dart';
 import '../../../core/theme/design_tokens.dart';
+import '../../../core/utils/friendly_error_message.dart';
 import '../../../data/models/lunch_model.dart';
 import '../../providers/lunch_provider.dart';
 import '../../widgets/app_search_filter_bar.dart';
@@ -108,20 +109,9 @@ class _LunchOrderSummaryPageState extends ConsumerState<LunchOrderSummaryPage> {
     final textSecondary = AppThemeColors.textSecondaryColor(context);
     final cs = Theme.of(context).colorScheme;
 
-    ref.listen(lunchProvider, (prev, next) {
-      if (next.error != null &&
-          prev?.error != next.error &&
-          context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(next.error!)),
-        );
-        ref.read(lunchProvider.notifier).clearError();
-      }
-    });
-
     if ((state.orderSummaryLoading || !_initialLoadComplete) &&
         summary == null &&
-        state.error == null) {
+        state.orderSummaryError == null) {
       return const ListSkeletonLoader(
         padding: AppThemeColors.pagePaddingAll,
         itemCount: 6,
@@ -130,9 +120,9 @@ class _LunchOrderSummaryPageState extends ConsumerState<LunchOrderSummaryPage> {
 
     if (summary == null &&
         !state.orderSummaryLoading &&
-        state.error != null) {
+        state.orderSummaryError != null) {
       return app_widgets.ErrorWidget(
-        message: state.error ?? 'Could not load order summary',
+        message: state.orderSummaryError ?? 'Could not load order summary',
         onRetry: _bootstrap,
       );
     }
@@ -162,7 +152,38 @@ class _LunchOrderSummaryPageState extends ConsumerState<LunchOrderSummaryPage> {
       );
     }
 
-    final employeeVotes = summary?.employeeVotes ?? const <LunchEmployeeVoteRow>[];
+    if (summary == null) {
+      return Center(
+        child: Padding(
+          padding: AppThemeColors.pagePaddingAll,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.receipt_long_outlined, size: 48, color: textSecondary),
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                'No order summary yet',
+                style: TextStyle(color: textPrimary, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                'Pull to refresh or choose another poll.',
+                style: TextStyle(color: textSecondary),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: AppSpacing.md),
+              OutlinedButton.icon(
+                onPressed: _bootstrap,
+                icon: const Icon(Icons.refresh, size: 18),
+                label: const Text('Retry'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final employeeVotes = summary.employeeVotes;
     final filteredVotes = employeeVotes.where((v) {
       if (_search.isEmpty) return true;
       return v.userName.toLowerCase().contains(_search.toLowerCase()) ||
@@ -180,12 +201,20 @@ class _LunchOrderSummaryPageState extends ConsumerState<LunchOrderSummaryPage> {
                 ? '${DateFormat('EEE, MMM d, yyyy').format(poll.date!.toLocal())} · ${poll.title}'
                 : poll.title,
             trailing: [
-              if (summary != null)
-                IconButton(
-                  onPressed: () => exportLunchOrderSummaryPdf(summary),
-                  icon: const Icon(Icons.picture_as_pdf_outlined),
-                  tooltip: 'Export PDF',
-                ),
+              IconButton(
+                onPressed: () async {
+                  try {
+                    await exportLunchOrderSummaryPdf(summary);
+                  } catch (e) {
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(friendlyErrorMessage(e))),
+                    );
+                  }
+                },
+                icon: const Icon(Icons.picture_as_pdf_outlined),
+                tooltip: 'Export PDF',
+              ),
             ],
           ),
           const SizedBox(height: AppSpacing.xs),
@@ -202,148 +231,146 @@ class _LunchOrderSummaryPageState extends ConsumerState<LunchOrderSummaryPage> {
               lunchPollStatusBadge(poll.effectiveStatus),
             ],
           ),
-          if (summary != null) ...[
-            const SizedBox(height: AppSpacing.md),
-            Row(
-              children: [
-                Expanded(
-                  child: _StatCard(
-                    label: 'Office',
-                    value: '${summary.officeOrders}',
-                    color: cs.primary,
-                  ),
+          const SizedBox(height: AppSpacing.md),
+          Row(
+            children: [
+              Expanded(
+                child: _StatCard(
+                  label: 'Office',
+                  value: '${summary.officeOrders}',
+                  color: cs.primary,
                 ),
-                const SizedBox(width: AppSpacing.xs),
-                Expanded(
-                  child: _StatCard(
-                    label: 'Personal',
-                    value: '${summary.personalCount}',
-                    color: cs.secondary,
-                  ),
+              ),
+              const SizedBox(width: AppSpacing.xs),
+              Expanded(
+                child: _StatCard(
+                  label: 'Personal',
+                  value: '${summary.personalCount}',
+                  color: cs.secondary,
                 ),
-                const SizedBox(width: AppSpacing.xs),
-                Expanded(
-                  child: _StatCard(
-                    label: 'Total votes',
-                    value: '${summary.totalVotes}',
-                    color: cs.tertiary,
-                  ),
+              ),
+              const SizedBox(width: AppSpacing.xs),
+              Expanded(
+                child: _StatCard(
+                  label: 'Total votes',
+                  value: '${summary.totalVotes}',
+                  color: cs.tertiary,
                 ),
-              ],
-            ),
-            const SizedBox(height: AppThemeColors.sectionGap),
-            const AppSectionHeader(title: 'Menu breakdown'),
-            const SizedBox(height: AppSpacing.xs),
-            if (summary.menuBreakdown.isEmpty)
-              CRMCard(
-                child: Text('No menu data', style: TextStyle(color: textSecondary)),
-              )
-            else
-              ...summary.menuBreakdown.map(
-                (row) => Padding(
-                  padding: AppThemeColors.cardListItemMargin,
-                  child: CRMCard(
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                row.label,
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  color: textPrimary,
-                                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppThemeColors.sectionGap),
+          const AppSectionHeader(title: 'Menu breakdown'),
+          const SizedBox(height: AppSpacing.xs),
+          if (summary.menuBreakdown.isEmpty)
+            CRMCard(
+              child: Text('No menu data', style: TextStyle(color: textSecondary)),
+            )
+          else
+            ...summary.menuBreakdown.map(
+              (row) => Padding(
+                padding: AppThemeColors.cardListItemMargin,
+                child: CRMCard(
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              row.label,
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                color: textPrimary,
                               ),
-                              const SizedBox(height: 4),
-                              lunchOptionTypeBadge(row.optionType),
-                            ],
-                          ),
+                            ),
+                            const SizedBox(height: 4),
+                            lunchOptionTypeBadge(row.optionType),
+                          ],
                         ),
+                      ),
+                      Text(
+                        '${row.votes}',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 18,
+                          color: textPrimary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          const SizedBox(height: AppThemeColors.sectionGap),
+          AppSectionHeader(
+            title: 'Employee votes (${employeeVotes.length})',
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          AppSearchFilterBar(
+            controller: _searchController,
+            hintText: 'Search employees…',
+            activeFilterCount: 0,
+            onChanged: (v) => setState(() => _search = v.trim()),
+            onClear: () {
+              _searchController.clear();
+              setState(() => _search = '');
+            },
+            padding: EdgeInsets.zero,
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          if (filteredVotes.isEmpty)
+            CRMCard(
+              child: Text(
+                _search.isEmpty
+                    ? 'No votes recorded for this poll'
+                    : 'No employees match your search',
+                style: TextStyle(color: textSecondary),
+              ),
+            )
+          else
+            ...filteredVotes.map(
+              (v) => Padding(
+                padding: AppThemeColors.cardListItemMargin,
+                child: CRMCard(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      AvatarWidget(name: v.userName, size: 36),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              v.userName,
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                color: textPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              v.choice.isNotEmpty ? v.choice : '—',
+                              style: TextStyle(fontSize: 13, color: textSecondary),
+                            ),
+                            if (v.optionType.isNotEmpty) ...[
+                              const SizedBox(height: 6),
+                              lunchOptionTypeBadge(v.optionType),
+                            ],
+                          ],
+                        ),
+                      ),
+                      if (v.votedAt != null)
                         Text(
-                          '${row.votes}',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 18,
-                            color: textPrimary,
-                          ),
+                          formatLunchVoteTime(v.votedAt),
+                          style: TextStyle(fontSize: 12, color: textSecondary),
                         ),
-                      ],
-                    ),
+                    ],
                   ),
                 ),
               ),
-            const SizedBox(height: AppThemeColors.sectionGap),
-            AppSectionHeader(
-              title: 'Employee votes (${employeeVotes.length})',
             ),
-            const SizedBox(height: AppSpacing.xs),
-            AppSearchFilterBar(
-              controller: _searchController,
-              hintText: 'Search employees…',
-              activeFilterCount: 0,
-              onChanged: (v) => setState(() => _search = v.trim()),
-              onClear: () {
-                _searchController.clear();
-                setState(() => _search = '');
-              },
-              padding: EdgeInsets.zero,
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            if (filteredVotes.isEmpty)
-              CRMCard(
-                child: Text(
-                  _search.isEmpty
-                      ? 'No votes recorded for this poll'
-                      : 'No employees match your search',
-                  style: TextStyle(color: textSecondary),
-                ),
-              )
-            else
-              ...filteredVotes.map(
-                (v) => Padding(
-                  padding: AppThemeColors.cardListItemMargin,
-                  child: CRMCard(
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        AvatarWidget(name: v.userName, size: 36),
-                        const SizedBox(width: AppSpacing.sm),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                v.userName,
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  color: textPrimary,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                v.choice.isNotEmpty ? v.choice : '—',
-                                style: TextStyle(fontSize: 13, color: textSecondary),
-                              ),
-                              if (v.optionType.isNotEmpty) ...[
-                                const SizedBox(height: 6),
-                                lunchOptionTypeBadge(v.optionType),
-                              ],
-                            ],
-                          ),
-                        ),
-                        if (v.votedAt != null)
-                          Text(
-                            formatLunchVoteTime(v.votedAt),
-                            style: TextStyle(fontSize: 12, color: textSecondary),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-          ],
           const SizedBox(height: AppSpacing.lg),
         ],
       ),

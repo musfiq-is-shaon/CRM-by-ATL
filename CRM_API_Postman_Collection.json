@@ -7,7 +7,7 @@
   "variable": [
     {
       "key": "baseUrl",
-      "value": "http://localhost:5000"
+      "value": "https://crm.apptriangle.com"
     },
     {
       "key": "token",

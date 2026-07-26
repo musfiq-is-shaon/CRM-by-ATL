@@ -21,10 +21,10 @@ class WeatherPalette {
     if (isNight) {
       return WeatherPalette(
         gradient: isDark
-            ? [const Color(0xFF1A237E), const Color(0xFF0D1B4C)]
-            : [const Color(0xFF5C6BC0), const Color(0xFF3949AB)],
+            ? [const Color(0xFF16213E), const Color(0xFF0F1B3D)]
+            : [const Color(0xFF3E4C8A), const Color(0xFF222C5C)],
         text: const Color(0xFFE8EAF6),
-        shadow: const Color(0xFF3949AB),
+        shadow: const Color(0xFF283593),
       );
     }
 
@@ -32,41 +32,41 @@ class WeatherPalette {
       DashboardWeatherKind.sunny => WeatherPalette(
           gradient: hour < 11
               ? (isDark
-                  ? [const Color(0xFF5D4037), const Color(0xFFE65100)]
-                  : [const Color(0xFFFFE082), const Color(0xFFFFB74D)])
+                  ? [const Color(0xFF7A4A12), const Color(0xFFB2620E)]
+                  : [const Color(0xFFFFC15E), const Color(0xFFFF9A3D)])
               : (isDark
-                  ? [const Color(0xFF1565C0), const Color(0xFF0277BD)]
-                  : [const Color(0xFF64B5F6), const Color(0xFF42A5F5)]),
-          text: isDark ? const Color(0xFFFFF8E1) : const Color(0xFF1A1A1A),
-          shadow: const Color(0xFF42A5F5),
+                  ? [const Color(0xFF0D47A1), const Color(0xFF1565C0)]
+                  : [const Color(0xFF4FACFE), const Color(0xFF2F80ED)]),
+          text: Colors.white,
+          shadow: hour < 11 ? const Color(0xFFFF9A3D) : const Color(0xFF2F80ED),
         ),
       DashboardWeatherKind.partlyCloudy => WeatherPalette(
           gradient: isDark
-              ? [const Color(0xFF37474F), const Color(0xFF546E7A)]
-              : [const Color(0xFFB3E5FC), const Color(0xFF81D4FA)],
-          text: isDark ? const Color(0xFFECEFF1) : const Color(0xFF01579B),
-          shadow: const Color(0xFF0288D1),
+              ? [const Color(0xFF2C4A63), const Color(0xFF1E3448)]
+              : [const Color(0xFF56A8E8), const Color(0xFF3D7EC9)],
+          text: Colors.white,
+          shadow: const Color(0xFF3D7EC9),
         ),
       DashboardWeatherKind.cloudy || DashboardWeatherKind.foggy => WeatherPalette(
           gradient: isDark
-              ? [const Color(0xFF455A64), const Color(0xFF37474F)]
-              : [const Color(0xFFCFD8DC), const Color(0xFF90A4AE)],
-          text: isDark ? const Color(0xFFECEFF1) : const Color(0xFF37474F),
-          shadow: const Color(0xFF546E7A),
+              ? [const Color(0xFF37474F), const Color(0xFF263238)]
+              : [const Color(0xFF7F96A8), const Color(0xFF5B7285)],
+          text: Colors.white,
+          shadow: const Color(0xFF5B7285),
         ),
       DashboardWeatherKind.rainy || DashboardWeatherKind.stormy => WeatherPalette(
           gradient: isDark
-              ? [const Color(0xFF1A237E), const Color(0xFF283593)]
-              : [const Color(0xFF90CAF9), const Color(0xFF5C6BC0)],
-          text: isDark ? const Color(0xFFE3F2FD) : const Color(0xFF1A237E),
-          shadow: const Color(0xFF3949AB),
+              ? [const Color(0xFF1F2A56), const Color(0xFF141C3F)]
+              : [const Color(0xFF4B5FA8), const Color(0xFF303F77)],
+          text: const Color(0xFFEAF0FF),
+          shadow: const Color(0xFF303F77),
         ),
       DashboardWeatherKind.snowy => WeatherPalette(
           gradient: isDark
-              ? [const Color(0xFF37474F), const Color(0xFF546E7A)]
-              : [const Color(0xFFECEFF1), const Color(0xFFB0BEC5)],
-          text: isDark ? const Color(0xFFECEFF1) : const Color(0xFF455A64),
-          shadow: const Color(0xFF78909C),
+              ? [const Color(0xFF34495E), const Color(0xFF22303F)]
+              : [const Color(0xFF8FA8C8), const Color(0xFF6A84A8)],
+          text: Colors.white,
+          shadow: const Color(0xFF6A84A8),
         ),
     };
   }

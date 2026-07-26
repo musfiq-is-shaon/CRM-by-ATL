@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -8,6 +9,7 @@ import '../../../core/theme/app_theme_colors.dart';
 import '../../../core/theme/design_tokens.dart';
 import '../../../core/utils/lunch_poll_schedule.dart';
 import '../../../data/models/lunch_model.dart';
+import '../../providers/lunch_provider.dart';
 
 export '../../../core/utils/lunch_poll_schedule.dart'
     show
@@ -177,15 +179,9 @@ void showLunchVoteDisabledMessage(BuildContext context, LunchPoll poll) {
 /// Display HH:mm or existing 12h string as 12-hour time (e.g. "6:30 PM").
 String formatLunchEndTimeDisplay(String? raw) {
   if (raw == null || raw.trim().isEmpty) return '—';
-  final t = raw.trim();
-  final parts = t.split(':');
-  if (parts.length >= 2) {
-    final h = int.tryParse(parts[0]) ?? 0;
-    final m = int.tryParse(parts[1]) ?? 0;
-    final dt = DateTime(2000, 1, 1, h, m);
-    return DateFormat.jm().format(dt);
-  }
-  return t;
+  final tod = lunchEndTimeOfDay(raw);
+  final dt = DateTime(2000, 1, 1, tod.hour, tod.minute);
+  return DateFormat.jm().format(dt);
 }
 
 extension LunchPollVoting on LunchPoll {
@@ -553,104 +549,191 @@ void showLunchPollVotesSheet(BuildContext context, LunchPoll poll) {
     context: context,
     showDragHandle: true,
     isScrollControlled: true,
-    builder: (ctx) {
-      final options = poll.mergedOptions;
-      final textPrimary = AppThemeColors.textPrimaryColor(ctx);
-      final textSecondary = AppThemeColors.textSecondaryColor(ctx);
-      return SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(8, 0, 16, 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.arrow_back),
-                    tooltip: 'Back',
-                    onPressed: () => Navigator.pop(ctx),
+    builder: (_) => _LunchPollVotesSheet(initialPoll: poll),
+  );
+}
+
+class _LunchPollVotesSheet extends ConsumerStatefulWidget {
+  const _LunchPollVotesSheet({required this.initialPoll});
+
+  final LunchPoll initialPoll;
+
+  @override
+  ConsumerState<_LunchPollVotesSheet> createState() =>
+      _LunchPollVotesSheetState();
+}
+
+class _LunchPollVotesSheetState
+    extends ConsumerState<_LunchPollVotesSheet> {
+  bool _refreshing = true;
+  bool _refreshFailed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _reload());
+  }
+
+  Future<void> _reload() async {
+    if (!_refreshing) {
+      setState(() {
+        _refreshing = true;
+        _refreshFailed = false;
+      });
+    }
+    final ok = await ref
+        .read(lunchProvider.notifier)
+        .refreshPollVotes(widget.initialPoll.id);
+    if (!mounted) return;
+    setState(() {
+      _refreshing = false;
+      _refreshFailed = !ok;
+    });
+  }
+
+  LunchPoll _livePoll(LunchState state) {
+    for (final poll in [...state.todayPolls, ...state.adminPolls]) {
+      if (poll.id == widget.initialPoll.id) return poll;
+    }
+    return widget.initialPoll;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final poll = _livePoll(ref.watch(lunchProvider));
+    final options = poll.mergedOptions;
+    final textPrimary = AppThemeColors.textPrimaryColor(context);
+    final textSecondary = AppThemeColors.textSecondaryColor(context);
+
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(8, 0, 16, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.arrow_back),
+                  tooltip: 'Back',
+                  onPressed: () => Navigator.pop(context),
+                ),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'All votes — ${poll.title}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w700,
+                            ),
+                      ),
+                      Text(
+                        _refreshing
+                            ? 'Updating latest votes…'
+                            : _refreshFailed
+                                ? 'Could not refresh · showing saved results'
+                                : 'Latest votes loaded',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: _refreshFailed
+                              ? Theme.of(context).colorScheme.error
+                              : textSecondary,
+                        ),
+                      ),
+                    ],
                   ),
-                  Expanded(
-                    child: Text(
-                      'All votes — ${poll.title}',
-                      style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              Flexible(
-                child: ListView(
-                  shrinkWrap: true,
-                  children: options.map((opt) {
-                    final count = opt.effectiveVoteCount;
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  opt.label,
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 15,
-                                    color: textPrimary,
-                                  ),
-                                ),
-                              ),
-                              Text(
-                                '$count vote${count == 1 ? '' : 's'}',
+                ),
+                IconButton(
+                  tooltip: 'Refresh votes',
+                  onPressed: _refreshing ? null : _reload,
+                  icon: _refreshing
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.refresh_rounded),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Flexible(
+              child: ListView(
+                shrinkWrap: true,
+                children: options.map((opt) {
+                  final count = opt.effectiveVoteCount;
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                opt.label,
                                 style: TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 13,
-                                  color: textSecondary,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 6),
-                          if (opt.voters.isEmpty)
-                            Text(
-                              'No votes yet',
-                              style: TextStyle(fontSize: 13, color: textSecondary),
-                            )
-                          else
-                            ...opt.voters.map(
-                              (v) => ListTile(
-                                contentPadding: EdgeInsets.zero,
-                                dense: true,
-                                leading: CircleAvatar(
-                                  radius: 16,
-                                  child: Text(
-                                    v.name.isNotEmpty ? v.name[0].toUpperCase() : '?',
-                                    style: const TextStyle(fontSize: 12),
-                                  ),
-                                ),
-                                title: Text(
-                                  v.name,
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w500,
-                                    color: textPrimary,
-                                  ),
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 15,
+                                  color: textPrimary,
                                 ),
                               ),
                             ),
-                        ],
-                      ),
-                    );
-                  }).toList(),
-                ),
+                            Text(
+                              '$count vote${count == 1 ? '' : 's'}',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13,
+                                color: textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        if (opt.voters.isEmpty)
+                          Text(
+                            'No votes yet',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: textSecondary,
+                            ),
+                          )
+                        else
+                          ...opt.voters.map(
+                            (v) => ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              dense: true,
+                              leading: CircleAvatar(
+                                radius: 16,
+                                child: Text(
+                                  v.name.isNotEmpty
+                                      ? v.name[0].toUpperCase()
+                                      : '?',
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                              ),
+                              title: Text(
+                                v.name,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w500,
+                                  color: textPrimary,
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  );
+                }).toList(),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
-      );
-    },
-  );
+      ),
+    );
+  }
 }

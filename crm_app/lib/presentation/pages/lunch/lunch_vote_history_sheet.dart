@@ -115,6 +115,8 @@ class _LunchVoteHistorySheetState extends ConsumerState<_LunchVoteHistorySheet> 
         .where((d) => d.isNotEmpty)
         .toSet()
         .length;
+    final totalsReady =
+        !state.voteHistoryLoading && state.voteHistoryError == null;
 
     return DraggableScrollableSheet(
       expand: false,
@@ -239,27 +241,56 @@ class _LunchVoteHistorySheetState extends ConsumerState<_LunchVoteHistorySheet> 
                           ),
                         ),
                         Text(
-                          '$daysWithVotes day${daysWithVotes == 1 ? '' : 's'} with votes',
+                          totalsReady
+                              ? '$daysWithVotes day${daysWithVotes == 1 ? '' : 's'} with votes'
+                              : 'Loading…',
                           style: TextStyle(fontSize: 12, color: textSecondary),
                         ),
                       ],
                     ),
                   ),
                   Text(
-                    '$total ${AppConstants.currencySymbol}',
+                    totalsReady ? '$total ${AppConstants.currencySymbol}' : '—',
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w800,
-                      color: total < 0 ? cs.error : lunchBrandGreen,
+                      color: !totalsReady
+                          ? textSecondary
+                          : (total < 0 ? cs.error : lunchBrandGreen),
                     ),
                   ),
                 ],
               ),
             ),
             const SizedBox(height: 12),
+            if (state.voteHistoryError != null && rows.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: Material(
+                  color: cs.errorContainer.withValues(alpha: 0.5),
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            state.voteHistoryError!,
+                            style: TextStyle(fontSize: 12, color: cs.onErrorContainer),
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: _load,
+                          child: const Text('Retry'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
             Expanded(
               child: state.voteHistoryLoading && rows.isEmpty
-                  ? const LoadingWidget(message: 'Loading history…')
+                  ? const ListSkeletonLoader(itemCount: 5)
                   : state.voteHistoryError != null && rows.isEmpty
                   ? Center(
                       child: Padding(
@@ -292,6 +323,11 @@ class _LunchVoteHistorySheetState extends ConsumerState<_LunchVoteHistorySheet> 
                       controller: scrollController,
                       padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
                       children: [
+                        if (state.voteHistoryLoading)
+                          const Padding(
+                            padding: EdgeInsets.only(bottom: 12),
+                            child: LinearProgressIndicator(minHeight: 2),
+                          ),
                         _HistoryTableHeader(textSecondary: textSecondary),
                         const Divider(height: 1),
                         ...rows.map((r) => _HistoryRow(row: r)),

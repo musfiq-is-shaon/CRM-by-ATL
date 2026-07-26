@@ -148,6 +148,33 @@ void main() {
       expect(bundle.items.firstWhere((p) => p.id == 'p2').myVote?.optionId, 'o3');
     });
 
+    test('LunchTodayBundle featured shell does not revive closed poll', () {
+      final tomorrow = DateTime.now().add(const Duration(hours: 2));
+      final endTime =
+          '${tomorrow.hour.toString().padLeft(2, '0')}:${tomorrow.minute.toString().padLeft(2, '0')}';
+      final bundle = LunchTodayBundle.fromJson({
+        'items': [
+          {
+            'id': 'p1',
+            'title': 'Lunch',
+            'date': '2026-06-28',
+            'status': 'closed',
+            'endTime': endTime,
+            'options': [
+              {'id': 'o1', 'label': 'Chicken', 'optionType': 'office'},
+            ],
+          },
+        ],
+        'myVote': {'optionId': 'o1'},
+        'results': [
+          {'id': 'o1', 'label': 'Chicken', 'optionType': 'office', 'votes': 2},
+        ],
+      });
+      expect(bundle.items, hasLength(1));
+      expect(bundle.items.first.status, 'closed');
+      expect(bundle.items.first.myVote?.optionId, 'o1');
+    });
+
     test('LunchTodayBundle keeps same-title polls with different ids', () {
       final bundle = LunchTodayBundle.fromJson({
         'items': [
@@ -344,6 +371,192 @@ void main() {
       expect(merged.mergedOptions.firstWhere((o) => o.id == 'o1').voteCount, 4);
     });
 
+    test('mergeAfterVote keeps authoritative server closed status', () {
+      final tomorrow = DateTime.now().add(const Duration(hours: 2));
+      final endTime =
+          '${tomorrow.hour.toString().padLeft(2, '0')}:${tomorrow.minute.toString().padLeft(2, '0')}';
+      final local = LunchPoll(
+        id: 'p1',
+        title: 'Lunch',
+        status: 'active',
+        endTime: endTime,
+        myVote: LunchMyVote(optionId: 'o1'),
+        options: [
+          LunchPollOption(id: 'o1', label: 'A', optionType: 'office', voteCount: 1),
+        ],
+      );
+      final server = LunchPoll(
+        id: 'p1',
+        title: 'Lunch',
+        status: 'closed',
+        endTime: endTime,
+        myVote: LunchMyVote(optionId: 'o1'),
+        options: [
+          LunchPollOption(id: 'o1', label: 'A', optionType: 'office', voteCount: 1),
+        ],
+      );
+      final merged = LunchPoll.mergeAfterVote(local: local, server: server);
+      expect(merged.status, 'closed');
+    });
+
+    test('mergeAfterVote takes authoritative past server endTime', () {
+      final now = DateTime.now();
+      final future = now.add(const Duration(hours: 2));
+      final past = now.subtract(const Duration(hours: 1));
+      final futureApi =
+          '${future.hour.toString().padLeft(2, '0')}:${future.minute.toString().padLeft(2, '0')}';
+      final pastApi =
+          '${past.hour.toString().padLeft(2, '0')}:${past.minute.toString().padLeft(2, '0')}';
+      final local = LunchPoll(
+        id: 'p1',
+        title: 'Lunch',
+        date: DateTime(now.year, now.month, now.day),
+        status: 'active',
+        endTime: futureApi,
+        myVote: LunchMyVote(optionId: 'o1'),
+        options: [
+          LunchPollOption(id: 'o1', label: 'A', optionType: 'office', voteCount: 1),
+        ],
+      );
+      final server = LunchPoll(
+        id: 'p1',
+        title: 'Lunch',
+        date: local.date,
+        status: 'active',
+        endTime: pastApi,
+        myVote: LunchMyVote(optionId: 'o1'),
+        options: local.options,
+      );
+      final merged = LunchPoll.mergeAfterVote(local: local, server: server);
+      expect(merged.endTime, pastApi);
+    });
+
+    test('withMyVote clears voters when previous option reaches zero', () {
+      final poll = LunchPoll(
+        id: 'p1',
+        title: 'Lunch',
+        myVote: LunchMyVote(optionId: 'o1'),
+        results: [
+          LunchPollOption(
+            id: 'o1',
+            label: 'A',
+            optionType: 'office_menu',
+            voteCount: 1,
+            voters: const [LunchOptionVoter(name: 'You')],
+          ),
+          LunchPollOption(id: 'o2', label: 'B', optionType: 'office_menu', voteCount: 2),
+        ],
+      );
+      final updated = poll.withMyVote('o2');
+      final prev = updated.mergedOptions.firstWhere((o) => o.id == 'o1');
+      expect(prev.voteCount, 0);
+      expect(prev.effectiveVoteCount, 0);
+      expect(prev.voters, isEmpty);
+    });
+
+    test('applyServerSnapshot prefers lower authoritative reportedTotalVotes', () {
+      final local = LunchPoll(
+        id: 'p1',
+        title: 'Lunch',
+        reportedTotalVotes: 9,
+        options: [
+          LunchPollOption(id: 'o1', label: 'A', optionType: 'office', voteCount: 3),
+        ],
+      );
+      final fresh = LunchPoll(
+        id: 'p1',
+        title: 'Lunch',
+        reportedTotalVotes: 4,
+        options: [
+          LunchPollOption(id: 'o1', label: 'A', optionType: 'office', voteCount: 4),
+        ],
+      );
+      final merged = local.applyServerSnapshot(fresh);
+      expect(merged.totalVoteCount, 4);
+    });
+
+    test('restoreMyVote undoes optimistic first vote on current poll', () {
+      final prior = LunchPoll(
+        id: 'p1',
+        title: 'Lunch',
+        results: [
+          LunchPollOption(id: 'o1', label: 'A', optionType: 'office_menu', voteCount: 2),
+          LunchPollOption(id: 'o2', label: 'B', optionType: 'office_menu', voteCount: 1),
+        ],
+        reportedTotalVotes: 3,
+      );
+      final optimistic = prior.withMyVote('o1');
+      expect(optimistic.totalVoteCount, 4);
+      final restored = optimistic.restoreMyVote(null);
+      expect(restored.myVote, isNull);
+      expect(restored.totalVoteCount, 3);
+      expect(restored.mergedOptions.firstWhere((o) => o.id == 'o1').voteCount, 2);
+    });
+
+    test('restoreMyVote switches back to prior choice', () {
+      final prior = LunchPoll(
+        id: 'p1',
+        title: 'Lunch',
+        myVote: LunchMyVote(optionId: 'o1', votedAt: DateTime(2026, 1, 1)),
+        results: [
+          LunchPollOption(id: 'o1', label: 'A', optionType: 'office_menu', voteCount: 5),
+          LunchPollOption(id: 'o2', label: 'B', optionType: 'office_menu', voteCount: 3),
+        ],
+        reportedTotalVotes: 8,
+      );
+      final optimistic = prior.withMyVote('o2');
+      final restored = optimistic.restoreMyVote(prior.myVote);
+      expect(restored.myVote?.optionId, 'o1');
+      expect(restored.myVote?.votedAt, DateTime(2026, 1, 1));
+      expect(restored.mergedOptions.firstWhere((o) => o.id == 'o1').voteCount, 5);
+      expect(restored.mergedOptions.firstWhere((o) => o.id == 'o2').voteCount, 3);
+    });
+
+    test('restoreMyVote same option restores prior votedAt', () {
+      final priorAt = DateTime(2026, 1, 1, 10);
+      final optimisticAt = DateTime(2026, 1, 1, 12);
+      final poll = LunchPoll(
+        id: 'p1',
+        title: 'Lunch',
+        myVote: LunchMyVote(optionId: 'o1', votedAt: optimisticAt),
+        options: [
+          LunchPollOption(id: 'o1', label: 'A', optionType: 'office', voteCount: 1),
+        ],
+      );
+      final restored = poll.restoreMyVote(
+        LunchMyVote(optionId: 'o1', votedAt: priorAt),
+      );
+      expect(restored.myVote?.optionId, 'o1');
+      expect(restored.myVote?.votedAt, priorAt);
+      expect(restored.mergedOptions.first.voteCount, 1);
+    });
+
+    test('restoreMyVote without adjustCounts keeps server option totals', () {
+      final prior = LunchPoll(
+        id: 'p1',
+        title: 'Lunch',
+        myVote: LunchMyVote(optionId: 'o1'),
+        results: [
+          LunchPollOption(id: 'o1', label: 'A', optionType: 'office_menu', voteCount: 5),
+          LunchPollOption(id: 'o2', label: 'B', optionType: 'office_menu', voteCount: 3),
+        ],
+      );
+      final refreshed = LunchPoll(
+        id: 'p1',
+        title: 'Lunch',
+        myVote: LunchMyVote(optionId: 'o2'),
+        results: [
+          LunchPollOption(id: 'o1', label: 'A', optionType: 'office_menu', voteCount: 10),
+          LunchPollOption(id: 'o2', label: 'B', optionType: 'office_menu', voteCount: 8),
+        ],
+        reportedTotalVotes: 18,
+      );
+      final restored = refreshed.restoreMyVote(prior.myVote, adjustCounts: false);
+      expect(restored.myVote?.optionId, 'o1');
+      expect(restored.mergedOptions.firstWhere((o) => o.id == 'o1').voteCount, 10);
+      expect(restored.totalVoteCount, 18);
+    });
+
     test('withMyVote shifts counts when changing vote', () {
       final poll = LunchPoll(
         id: 'p1',
@@ -353,11 +566,42 @@ void main() {
           LunchPollOption(id: 'o1', label: 'A', optionType: 'office_menu', voteCount: 5),
           LunchPollOption(id: 'o2', label: 'B', optionType: 'office_menu', voteCount: 3),
         ],
+        reportedTotalVotes: 8,
       );
       final updated = poll.withMyVote('o2');
       expect(updated.myVote?.optionId, 'o2');
       expect(updated.mergedOptions.firstWhere((o) => o.id == 'o1').voteCount, 4);
       expect(updated.mergedOptions.firstWhere((o) => o.id == 'o2').voteCount, 4);
+      expect(updated.totalVoteCount, 8);
+    });
+
+    test('withMyVote increments reportedTotalVotes on first vote', () {
+      final poll = LunchPoll(
+        id: 'p1',
+        title: 'Lunch',
+        results: [
+          LunchPollOption(id: 'o1', label: 'A', optionType: 'office_menu', voteCount: 2),
+          LunchPollOption(id: 'o2', label: 'B', optionType: 'office_menu', voteCount: 1),
+        ],
+        reportedTotalVotes: 3,
+      );
+      final updated = poll.withMyVote('o1');
+      expect(updated.totalVoteCount, 4);
+      expect(updated.mergedOptions.firstWhere((o) => o.id == 'o1').voteCount, 3);
+    });
+
+    test('withMyVote first vote uses option sums when reportedTotalVotes missing', () {
+      final poll = LunchPoll(
+        id: 'p1',
+        title: 'Lunch',
+        results: [
+          LunchPollOption(id: 'o1', label: 'A', optionType: 'office_menu', voteCount: 2),
+          LunchPollOption(id: 'o2', label: 'B', optionType: 'office_menu', voteCount: 1),
+        ],
+      );
+      final updated = poll.withMyVote('o1');
+      expect(updated.totalVoteCount, 4);
+      expect(updated.mergedOptions.firstWhere((o) => o.id == 'o1').voteCount, 3);
     });
 
     test('LunchVoteHistoryRow parses menu item and amount', () {
@@ -451,6 +695,35 @@ void main() {
       expect(lunchOptionKindFrom('office'), LunchOptionKind.officeMenu);
       expect(lunchOptionKindFrom('office_menu'), LunchOptionKind.officeMenu);
       expect(lunchOptionKindFrom('off'), LunchOptionKind.offAbsent);
+      expect(lunchOptionKindFrom('coffee'), LunchOptionKind.other);
+      expect(lunchOptionKindFrom('offsite'), LunchOptionKind.other);
+      expect(lunchOptionKindFrom('yes'), LunchOptionKind.other);
+    });
+
+    test('totalVoteCount uses effectiveVoteCount for mixed payloads', () {
+      final poll = LunchPoll(
+        id: 'p1',
+        title: 'Lunch',
+        options: [
+          LunchPollOption(
+            id: 'o1',
+            label: 'A',
+            optionType: 'office',
+            voteCount: 2,
+          ),
+          LunchPollOption(
+            id: 'o2',
+            label: 'B',
+            optionType: 'personal',
+            voteCount: 0,
+            voters: const [
+              LunchOptionVoter(name: 'x'),
+              LunchOptionVoter(name: 'y'),
+            ],
+          ),
+        ],
+      );
+      expect(poll.totalVoteCount, 4);
     });
 
     test('toAddOptionJson uses office for office menu append', () {
@@ -542,6 +815,15 @@ void main() {
       });
       expect(periodOnly.periodNetChange, 80);
       expect(periodOnly.runningBalance, isNull);
+
+      final zeroNet = LunchEmployeeBalance.fromJson({
+        'userId': 'u4',
+        'userName': 'Dan',
+        'netChange': 0,
+        'balance': 500,
+      });
+      expect(zeroNet.periodNetChange, 0);
+      expect(zeroNet.runningBalance, 500);
     });
 
     test('toUpdateJsonSequence batches multiple new options in one options request', () {
@@ -671,7 +953,68 @@ void main() {
       expect(payloads[0].containsKey('optionUpdates'), isFalse);
     });
 
-    test('applyServerSnapshot keeps reactivated poll active over stale closed API', () {
+    test('toUpdateJsonSequence persists option removals', () {
+      final original = LunchPoll(
+        id: 'p1',
+        title: 'Lunch',
+        options: [
+          LunchPollOption(id: 'o1', label: 'Chicken', optionType: 'office'),
+          LunchPollOption(id: 'o2', label: 'Personal', optionType: 'personal'),
+          LunchPollOption(id: 'o3', label: 'Off', optionType: 'off'),
+        ],
+      );
+      final poll = LunchPoll(
+        id: 'p1',
+        title: 'Lunch',
+        options: [
+          LunchPollOption(id: 'o2', label: 'Personal', optionType: 'personal'),
+          LunchPollOption(id: 'o3', label: 'Off', optionType: 'off'),
+        ],
+      );
+
+      final payloads = poll.toUpdateJsonSequence(original: original);
+      expect(payloads.length, 1);
+      expect(payloads.first.containsKey('options'), isTrue);
+      final opts = payloads.first['options'] as List;
+      expect(opts.length, 2);
+      expect(
+        opts.map((o) => (o as Map)['label']).toList(),
+        containsAll(['Personal', 'Off']),
+      );
+    });
+
+    test('applyServerSnapshot takes authoritative past server endTime', () {
+      final now = DateTime.now();
+      final future = now.add(const Duration(hours: 2));
+      final past = now.subtract(const Duration(hours: 1));
+      final futureApi =
+          '${future.hour.toString().padLeft(2, '0')}:${future.minute.toString().padLeft(2, '0')}';
+      final pastApi =
+          '${past.hour.toString().padLeft(2, '0')}:${past.minute.toString().padLeft(2, '0')}';
+      final local = LunchPoll(
+        id: 'p1',
+        title: 'Lunch',
+        date: DateTime(now.year, now.month, now.day),
+        status: 'active',
+        endTime: futureApi,
+        options: [
+          LunchPollOption(id: 'o1', label: 'Chicken', optionType: 'office'),
+        ],
+      );
+      final fresh = LunchPoll(
+        id: 'p1',
+        title: 'Lunch',
+        date: local.date,
+        status: 'active',
+        endTime: pastApi,
+        options: local.options,
+      );
+
+      final merged = local.applyServerSnapshot(fresh);
+      expect(merged.endTime, pastApi);
+    });
+
+    test('applyServerSnapshot prefers authoritative closed from server', () {
       final tomorrow = DateTime.now().add(const Duration(hours: 2));
       final endTime =
           '${tomorrow.hour.toString().padLeft(2, '0')}:${tomorrow.minute.toString().padLeft(2, '0')}';
@@ -686,19 +1029,126 @@ void main() {
         ],
         myVote: LunchMyVote(optionId: 'o1'),
       );
-      final stale = LunchPoll(
+      final closed = LunchPoll(
         id: 'p1',
         title: 'Yesterday Lunch',
         date: local.date,
         status: 'closed',
-        endTime: '11:30',
+        endTime: endTime,
         options: local.options,
       );
 
-      final merged = local.applyServerSnapshot(stale);
-      expect(merged.status, 'active');
-      expect(merged.endTime, endTime);
+      final merged = local.applyServerSnapshot(closed);
+      expect(merged.status, 'closed');
       expect(merged.scopedMyVote?.optionId, 'o1');
+    });
+
+    test('applyServerSnapshot does not wipe options when fresh only has results', () {
+      final local = LunchPoll(
+        id: 'p1',
+        title: 'Lunch',
+        status: 'active',
+        options: [
+          LunchPollOption(id: 'o1', label: 'Chicken', optionType: 'office'),
+          LunchPollOption(id: 'o2', label: 'Fish', optionType: 'office'),
+        ],
+        myVote: LunchMyVote(optionId: 'o2'),
+      );
+      final fresh = LunchPoll(
+        id: 'p1',
+        title: 'Lunch',
+        status: 'active',
+        options: const [],
+        results: [
+          LunchPollOption(id: 'o1', label: 'Chicken', optionType: 'office', voteCount: 3),
+          LunchPollOption(id: 'o2', label: 'Fish', optionType: 'office', voteCount: 1),
+        ],
+      );
+
+      final merged = local.applyServerSnapshot(fresh);
+      expect(merged.options.length, 2);
+      expect(merged.scopedMyVote?.optionId, 'o2');
+    });
+
+    test('applyServerSnapshot keeps vote tallies when fresh options are sparse', () {
+      final local = LunchPoll(
+        id: 'p1',
+        title: 'Lunch',
+        status: 'active',
+        options: [
+          LunchPollOption(id: 'o1', label: 'Chicken', optionType: 'office'),
+          LunchPollOption(id: 'o2', label: 'Fish', optionType: 'office'),
+        ],
+        results: [
+          LunchPollOption(
+            id: 'o1',
+            label: 'Chicken',
+            optionType: 'office',
+            voteCount: 4,
+            voters: const [LunchOptionVoter(name: 'Ada')],
+          ),
+          LunchPollOption(
+            id: 'o2',
+            label: 'Fish',
+            optionType: 'office',
+            voteCount: 2,
+            voters: const [LunchOptionVoter(name: 'Bob')],
+          ),
+        ],
+      );
+      final fresh = LunchPoll(
+        id: 'p1',
+        title: 'Lunch',
+        status: 'active',
+        options: [
+          LunchPollOption(id: 'o1', label: 'Chicken', optionType: 'office'),
+          LunchPollOption(id: 'o2', label: 'Fish', optionType: 'office'),
+        ],
+      );
+
+      final merged = local.applyServerSnapshot(fresh);
+      expect(merged.mergedOptions.firstWhere((o) => o.id == 'o1').voteCount, 4);
+      expect(merged.mergedOptions.firstWhere((o) => o.id == 'o1').voters.length, 1);
+      expect(merged.mergedOptions.firstWhere((o) => o.id == 'o2').voteCount, 2);
+      expect(merged.totalVoteCount, 6);
+    });
+
+    test('attachEmployeeVotes fills counts and voter names', () {
+      final poll = LunchPoll(
+        id: 'p1',
+        title: 'Lunch',
+        status: 'active',
+        options: [
+          LunchPollOption(id: 'o1', label: 'Chicken', optionType: 'office'),
+          LunchPollOption(id: 'o2', label: 'Fish', optionType: 'office'),
+        ],
+      ).attachEmployeeVotes(const [
+        LunchEmployeeVoteRow(
+          userId: 'u1',
+          userName: 'Ada',
+          choice: 'Chicken',
+          optionType: 'office',
+        ),
+        LunchEmployeeVoteRow(
+          userId: 'u2',
+          userName: 'Bob',
+          choice: 'Chicken',
+          optionType: 'office',
+        ),
+        LunchEmployeeVoteRow(
+          userId: 'u3',
+          userName: 'Cara',
+          choice: 'Fish',
+          optionType: 'office',
+        ),
+      ]);
+
+      final chicken = poll.mergedOptions.firstWhere((o) => o.id == 'o1');
+      final fish = poll.mergedOptions.firstWhere((o) => o.id == 'o2');
+      expect(chicken.effectiveVoteCount, 2);
+      expect(chicken.voters.map((v) => v.name), ['Ada', 'Bob']);
+      expect(fish.effectiveVoteCount, 1);
+      expect(fish.voters.single.name, 'Cara');
     });
 
     test('merge prefers active poll with viable end time over stale closed snapshot', () {
@@ -750,7 +1200,7 @@ void main() {
       );
     });
 
-    test('resolvedForMyLunch promotes stale closed poll with viable end time', () {
+    test('resolvedForMyLunch does not invent active for closed polls', () {
       final tomorrow = DateTime.now().add(const Duration(hours: 2));
       final endTime =
           '${tomorrow.hour.toString().padLeft(2, '0')}:${tomorrow.minute.toString().padLeft(2, '0')}';
@@ -766,9 +1216,64 @@ void main() {
       );
 
       final resolved = closed.resolvedForMyLunch();
-      expect(resolved.status, 'active');
-      expect(resolved.showOnMyLunch, isTrue);
-      expect(resolved.appearsOnMyLunchCard, isTrue);
+      expect(resolved.status, 'closed');
+      expect(resolved.showOnMyLunch, isFalse);
+      expect(resolved.appearsOnMyLunchCard, isFalse);
+    });
+
+    test('history vote does not guess among multiple office menus by type', () {
+      final options = [
+        LunchPollOption(id: 'o1', label: 'Chicken', optionType: 'office'),
+        LunchPollOption(id: 'o2', label: 'Fish', optionType: 'office'),
+        LunchPollOption(id: 'o3', label: 'Personal', optionType: 'personal'),
+      ];
+      final ambiguous = LunchVoteHistoryRow(
+        pollTitle: 'Lunch',
+        menuItem: null,
+        optionType: 'office',
+      );
+      expect(LunchPoll.myVoteFromHistoryRow(ambiguous, options), isNull);
+
+      final byLabel = LunchVoteHistoryRow(
+        pollTitle: 'Lunch',
+        menuItem: 'Fish',
+        optionType: 'office',
+      );
+      expect(
+        LunchPoll.myVoteFromHistoryRow(byLabel, options)?.optionId,
+        'o2',
+      );
+
+      final byId = LunchVoteHistoryRow(
+        pollTitle: 'Lunch',
+        optionId: 'o1',
+        optionType: 'office',
+      );
+      expect(
+        LunchPoll.myVoteFromHistoryRow(byId, options)?.optionId,
+        'o1',
+      );
+
+      final uniqueKind = LunchVoteHistoryRow(
+        pollTitle: 'Lunch',
+        optionType: 'personal',
+      );
+      expect(
+        LunchPoll.myVoteFromHistoryRow(uniqueKind, options)?.optionId,
+        'o3',
+      );
+    });
+
+    test('scopedMyVote ignores votes when option ids are missing', () {
+      final poll = LunchPoll(
+        id: 'p1',
+        title: 'Lunch',
+        options: [
+          LunchPollOption(id: '', label: 'Chicken', optionType: 'office'),
+        ],
+        myVote: const LunchMyVote(optionId: 'o1'),
+      );
+      expect(poll.scopedMyVote, isNull);
     });
 
     test('reactivated poll disallows vote changes but stays open for first vote', () {

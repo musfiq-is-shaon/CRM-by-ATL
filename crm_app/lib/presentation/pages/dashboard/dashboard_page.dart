@@ -11,6 +11,7 @@ import '../../providers/auth_provider.dart';
 import '../../providers/rbac_prefetch.dart';
 import '../../providers/rbac_provider.dart'
     show
+        RbacLoadStatus,
         rbacProvider,
         rbacMeProvider,
         rbacAccessDigestProvider,
@@ -109,6 +110,21 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     final cs = Theme.of(context).colorScheme;
     final primary = cs.primary;
 
+    final rbacStatus = ref.watch(rbacProvider.select((s) => s.status));
+    final permissionsBootstrapping =
+        authState.status == AuthStatus.loading ||
+        authState.status == AuthStatus.initial ||
+        (authState.status == AuthStatus.authenticated &&
+            me == null &&
+            (rbacStatus == RbacLoadStatus.idle ||
+                rbacStatus == RbacLoadStatus.loading));
+    if (permissionsBootstrapping) {
+      return Scaffold(
+        backgroundColor: bgColor,
+        body: const SafeArea(child: DashboardSkeleton()),
+      );
+    }
+
     return Scaffold(
       backgroundColor: bgColor,
       body: SafeArea(
@@ -125,81 +141,97 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                     width: double.infinity,
                     padding: const EdgeInsets.all(AppSpacing.md),
                     decoration: AppThemeColors.heroSurface(context),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    greeting,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .labelLarge
-                                        ?.copyWith(
-                                          color: textSecondary,
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                  ),
-                                  if (authState.user?.name.isNotEmpty ?? false)
+                    child: MediaQuery.withClampedTextScaling(
+                      minScaleFactor: 0.85,
+                      maxScaleFactor: 1.2,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      greeting,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .labelLarge
+                                          ?.copyWith(
+                                            color: textSecondary,
+                                            fontWeight: FontWeight.w500,
+                                            height: 1.2,
+                                          ),
+                                    ),
                                     Padding(
                                       padding: const EdgeInsets.only(top: 4),
                                       child: Text(
-                                        authState.user!.name,
+                                        (authState.user?.name.isNotEmpty ??
+                                                false)
+                                            ? authState.user!.name
+                                            : ' ',
                                         maxLines: 2,
                                         overflow: TextOverflow.ellipsis,
                                         style: AppTypography.pageTitle(
                                           context,
-                                        )?.copyWith(color: textPrimary),
+                                        )?.copyWith(
+                                          color: textPrimary,
+                                          height: 1.2,
+                                        ),
                                       ),
                                     ),
-                                  Padding(
-                                    padding: const EdgeInsets.only(top: AppSpacing.sm),
-                                    child: Text(
-                                      '\u201C $dailyQuote \u201D',
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodySmall
-                                          ?.copyWith(
-                                            color: textSecondary,
-                                            fontStyle: FontStyle.italic,
-                                            height: 1.45,
-                                          ),
+                                    Padding(
+                                      padding: const EdgeInsets.only(
+                                        top: AppSpacing.sm,
+                                      ),
+                                      child: Text(
+                                        '\u201C $dailyQuote \u201D',
+                                        maxLines: 3,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall
+                                            ?.copyWith(
+                                              color: textSecondary,
+                                              fontStyle: FontStyle.italic,
+                                              height: 1.45,
+                                            ),
+                                      ),
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
-                            ),
-                            _DashboardIconButton(
-                              icon: Icons.notifications_outlined,
-                              badge: notificationsState.unreadCount > 0,
-                              onPressed: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) =>
-                                        const NotificationsPage(),
-                                  ),
-                                );
-                              },
-                            ),
-                            const SizedBox(width: AppSpacing.xs),
-                            _DashboardIconButton(
-                              icon: isDarkMode
-                                  ? Icons.light_mode_outlined
-                                  : Icons.dark_mode_outlined,
-                              onPressed: () {
-                                ref.read(themeProvider.notifier).toggleTheme();
-                              },
-                            ),
-                          ],
-                        ),
-                        const DashboardWeatherBanner(),
-                      ],
+                              _DashboardIconButton(
+                                icon: Icons.notifications_outlined,
+                                badge: notificationsState.unreadCount > 0,
+                                onPressed: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) =>
+                                          const NotificationsPage(),
+                                    ),
+                                  );
+                                },
+                              ),
+                              const SizedBox(width: AppSpacing.xs),
+                              _DashboardIconButton(
+                                icon: isDarkMode
+                                    ? Icons.light_mode_outlined
+                                    : Icons.dark_mode_outlined,
+                                onPressed: () {
+                                  ref
+                                      .read(themeProvider.notifier)
+                                      .toggleTheme();
+                                },
+                              ),
+                            ],
+                          ),
+                          const DashboardWeatherBanner(),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -571,27 +603,30 @@ class _QuickActionButton extends StatelessWidget {
         highlightColor: tonal.foreground.withValues(alpha: 0.06),
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, color: tonal.foreground, size: 22),
-              const SizedBox(width: 8),
-              Flexible(
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    height: 1.2,
-                    color: tonal.foreground,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 24),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, color: tonal.foreground, size: 22),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      height: 1.2,
+                      color: tonal.foreground,
+                    ),
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

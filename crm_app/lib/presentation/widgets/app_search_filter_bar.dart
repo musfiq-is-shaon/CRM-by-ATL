@@ -11,12 +11,14 @@ class AppSearchFilterBar extends StatefulWidget {
     required this.hintText,
     required this.onChanged,
     required this.onClear,
+    this.focusNode,
     this.onFilterTap,
     this.activeFilterCount = 0,
     this.padding = AppThemeColors.searchFilterBarPadding,
   });
 
   final TextEditingController controller;
+  final FocusNode? focusNode;
   final String hintText;
   final ValueChanged<String> onChanged;
   final VoidCallback onClear;
@@ -73,6 +75,7 @@ class _AppSearchFilterBarState extends State<AppSearchFilterBar> {
               height: AppSizes.searchBarHeight,
               child: TextField(
                 controller: widget.controller,
+                focusNode: widget.focusNode,
                 style: AppTypography.input(context)?.copyWith(color: textPrimary),
                 decoration: InputDecoration(
                   hintText: widget.hintText,

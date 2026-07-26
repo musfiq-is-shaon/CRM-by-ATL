@@ -34,7 +34,7 @@ class _LunchBalancePageState extends ConsumerState<LunchBalancePage> {
     final textSecondary = AppThemeColors.textSecondaryColor(context);
     final cs = Theme.of(context).colorScheme;
 
-    if (state.status == LunchLoadStatus.loading && bal == null) {
+    if (state.myBalanceLoading && bal == null) {
       return const ListSkeletonLoader(
         padding: AppThemeColors.pagePaddingAll,
         itemCount: 5,
@@ -61,16 +61,20 @@ class _LunchBalancePageState extends ConsumerState<LunchBalancePage> {
                 Text('Current balance', style: TextStyle(color: textSecondary, fontSize: 12)),
                 const SizedBox(height: 4),
                 Text(
-                  '${AppConstants.currencySymbol}${bal?.balance ?? 0}',
+                  bal == null
+                      ? 'Balance unavailable'
+                      : '${AppConstants.currencySymbol}${bal.balance}',
                   style: TextStyle(
-                    fontSize: 32,
+                    fontSize: bal == null ? 18 : 32,
                     fontWeight: FontWeight.w800,
-                    color: cs.primary,
+                    color: bal == null ? textSecondary : cs.primary,
                   ),
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'This month: ${bal?.monthNetChange ?? 0}',
+                  bal == null
+                      ? 'Pull to refresh'
+                      : 'This month: ${bal.monthNetChange}',
                   style: TextStyle(color: textSecondary, fontSize: 13),
                 ),
               ],

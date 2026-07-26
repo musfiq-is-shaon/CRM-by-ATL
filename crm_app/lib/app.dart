@@ -2,7 +2,6 @@ import 'dart:async' show Timer, unawaited;
 
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/services/attendance_reminder_controller.dart';
 import 'core/services/fcm_notification_sync.dart';
@@ -14,6 +13,8 @@ import 'presentation/providers/accent_color_provider.dart';
 import 'presentation/providers/amoled_provider.dart';
 import 'presentation/providers/attendance_provider.dart';
 import 'presentation/providers/auth_provider.dart';
+import 'presentation/providers/dashboard_weather_provider.dart';
+import 'presentation/providers/lunch_provider.dart';
 import 'presentation/providers/notifications_provider.dart';
 import 'presentation/providers/user_profile_shift_provider.dart';
 import 'core/network/session_expiration_provider.dart';
@@ -24,7 +25,11 @@ import 'data/repositories/user_repository.dart';
 import 'presentation/pages/auth/login_page.dart';
 import 'presentation/pages/main/shell_page.dart' show ShellPage, loadedTabsProvider, selectedTabProvider;
 import 'presentation/widgets/app_launch_loader.dart';
-import 'presentation/widgets/fifa_trionda_ball_view.dart';
+import 'presentation/widgets/ios_force_update_gate.dart';
+import 'presentation/providers/sale_provider.dart';
+import 'presentation/providers/task_provider.dart';
+import 'presentation/providers/contact_provider.dart';
+import 'presentation/providers/leave_provider.dart';
 
 class CRMApp extends ConsumerStatefulWidget {
   const CRMApp({super.key});
@@ -34,7 +39,7 @@ class CRMApp extends ConsumerStatefulWidget {
 }
 
 class _CRMAppState extends ConsumerState<CRMApp> with WidgetsBindingObserver {
-  static const _minLaunchDuration = Duration(milliseconds: 3000);
+  static const _minLaunchDuration = Duration(milliseconds: 300);
 
   /// [ref.listen] on auth may not run if the user is already authenticated when this widget mounts.
   bool _fcmNotificationBridgeRegistered = false;
@@ -45,9 +50,6 @@ class _CRMAppState extends ConsumerState<CRMApp> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    unawaited(
-      rootBundle.load(FifaTriondaBallView.modelAsset),
-    );
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await Future.wait([
         _runStartup(),
@@ -145,11 +147,20 @@ class _CRMAppState extends ConsumerState<CRMApp> with WidgetsBindingObserver {
         });
       } else if (next.status == AuthStatus.unauthenticated) {
         ref.read(attendanceProvider.notifier).resetForLogout();
+        ref.read(lunchProvider.notifier).clear();
         ref.read(rbacProvider.notifier).clear();
         ref.read(selectedTabProvider.notifier).state = 0;
         ref.read(loadedTabsProvider.notifier).state = {};
         ref.read(companyRepositoryProvider).clearCache();
         ref.read(userRepositoryProvider).clearCache();
+        // Drop prior-user scoped UI state (in-flight responses ignored via gens/clear).
+        ref.invalidate(notificationsProvider);
+        ref.invalidate(dashboardWeatherProvider);
+        ref.invalidate(salesProvider);
+        ref.invalidate(tasksProvider);
+        ref.invalidate(contactsProvider);
+        ref.invalidate(leaveProvider);
+        ref.invalidate(userProfileShiftProvider);
         unawaited(
           Future(() => NotificationService().cancelAttendanceCheckInReminders()),
         );
@@ -213,11 +224,13 @@ class _CRMAppState extends ConsumerState<CRMApp> with WidgetsBindingObserver {
             duration: const Duration(milliseconds: 200),
             curve: Curves.easeOutCubic,
           ),
-          home: showLaunchLoader
-              ? const Scaffold(body: AppLaunchLoader())
-              : authState.status == AuthStatus.authenticated
-              ? const ShellPage()
-              : const LoginPage(),
+          home: IosForceUpdateGate(
+            child: showLaunchLoader
+                ? const Scaffold(body: AppLaunchLoader())
+                : authState.status == AuthStatus.authenticated
+                    ? const ShellPage()
+                    : const LoginPage(),
+          ),
         );
       },
     );

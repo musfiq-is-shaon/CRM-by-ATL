@@ -6,6 +6,15 @@ TimeOfDay lunchEndTimeOfDay(String? raw) {
     return const TimeOfDay(hour: 18, minute: 0);
   }
   final t = raw.trim();
+  // Normalize 12h strings first — DateFormat.jm() is locale-sensitive and can fail.
+  if (t.contains('AM') || t.contains('PM') || t.contains('am') || t.contains('pm')) {
+    final api = lunchEndTimeToApi(t);
+    final parts = api.split(':');
+    return TimeOfDay(
+      hour: int.tryParse(parts.first) ?? 18,
+      minute: int.tryParse(parts.length > 1 ? parts[1] : '0') ?? 0,
+    );
+  }
   try {
     final parsed = DateFormat.jm().parse(t);
     return TimeOfDay(hour: parsed.hour, minute: parsed.minute);
@@ -57,13 +66,27 @@ String lunchEndTimeToApi(String display) {
   try {
     final parsed = DateFormat.jm().parse(t);
     return '${parsed.hour.toString().padLeft(2, '0')}:${parsed.minute.toString().padLeft(2, '0')}';
-  } catch (_) {
-    final parts = t.split(':');
-    if (parts.length >= 2) {
-      final h = int.tryParse(parts[0]) ?? 0;
-      final m = int.tryParse(parts[1]) ?? 0;
-      return '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}';
+  } catch (_) {}
+  // Manual 12h parse: "6:30 PM" / "6:30PM" / "06:30 am"
+  final ampm = RegExp(
+    r'^(\d{1,2}):(\d{2})\s*([AaPp][Mm])$',
+  ).firstMatch(t);
+  if (ampm != null) {
+    var h = int.tryParse(ampm.group(1)!) ?? 0;
+    final m = int.tryParse(ampm.group(2)!) ?? 0;
+    final period = ampm.group(3)!.toUpperCase();
+    if (period == 'AM') {
+      if (h == 12) h = 0;
+    } else {
+      if (h != 12) h += 12;
     }
+    return '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}';
+  }
+  final parts = t.split(':');
+  if (parts.length >= 2) {
+    final h = int.tryParse(parts[0]) ?? 0;
+    final m = int.tryParse(parts[1].replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+    return '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}';
   }
   return t;
 }
@@ -110,19 +133,7 @@ String? preferPollEndTime({
   final bOk = viable(b);
   if (aOk && !bOk) return a;
   if (bOk && !aOk) return b;
-  if (!aOk && !bOk) return b;
-
-  final now = DateTime.now();
-  final today = DateTime(now.year, now.month, now.day);
-  final pollDay = pollDate == null
-      ? today
-      : DateTime(pollDate.year, pollDate.month, pollDate.day);
-  final base = pollDay.isBefore(today) ? today : pollDay;
-  final da = lunchPollEndDateTime(base, a);
-  final db = lunchPollEndDateTime(base, b);
-  if (da != null && db != null) {
-    return da.isAfter(db) ? a : b;
-  }
+  // Prefer incoming/server end time when both (or neither) are viable.
   return b;
 }
 

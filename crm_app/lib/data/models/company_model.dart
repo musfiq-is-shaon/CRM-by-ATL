@@ -27,16 +27,26 @@ class Company {
   });
 
   factory Company.fromJson(Map<String, dynamic> json) {
+    final kamRaw = json['kamUser'];
+    final currencyRaw = json['currency'];
     return Company(
       id: json['id']?.toString() ?? json['_id']?.toString() ?? '',
       name: json['name']?.toString() ?? '',
-      location: json['location'],
-      country: json['country'],
-      kamUserId: json['kamUserId']?.toString(),
-      kamUser: json['kamUser'] != null ? User.fromJson(json['kamUser']) : null,
-      currencyId: json['currencyId']?.toString(),
-      currency: json['currency'] != null
-          ? Currency.fromJson(json['currency'])
+      location: json['location']?.toString(),
+      country: json['country']?.toString(),
+      kamUserId: json['kamUserId']?.toString() ??
+          (kamRaw is Map
+              ? (kamRaw['id'] ?? kamRaw['_id'])?.toString()
+              : kamRaw?.toString()),
+      kamUser: kamRaw is Map
+          ? User.fromJson(Map<String, dynamic>.from(kamRaw))
+          : null,
+      currencyId: json['currencyId']?.toString() ??
+          (currencyRaw is Map
+              ? (currencyRaw['id'] ?? currencyRaw['_id'])?.toString()
+              : currencyRaw?.toString()),
+      currency: currencyRaw is Map
+          ? Currency.fromJson(Map<String, dynamic>.from(currencyRaw))
           : null,
       createdAt: json['createdAt'] != null
           ? DateTime.tryParse(json['createdAt'].toString())

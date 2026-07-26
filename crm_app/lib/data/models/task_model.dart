@@ -37,24 +37,39 @@ class Task {
   factory Task.fromJson(Map<String, dynamic> json) {
     return Task(
       id: json['id']?.toString() ?? '',
-      title: json['title'] ?? '',
-      note: json['note'],
-      companyId: json['companyId']?.toString(),
-      company: json['company'] != null
-          ? Company.fromJson(json['company'])
+      title: json['title']?.toString() ?? '',
+      note: json['note']?.toString(),
+      companyId: json['companyId']?.toString() ??
+          (json['company'] is Map
+              ? (json['company']['id'] ?? json['company']['_id'])?.toString()
+              : json['company']?.toString()),
+      company: json['company'] is Map
+          ? Company.fromJson(Map<String, dynamic>.from(json['company'] as Map))
           : null,
       dueDatetime: json['dueDatetime'] != null
           ? DateTime.tryParse(json['dueDatetime'].toString())
           : null,
-      assignByUserId: json['assignByUserId']?.toString(),
-      assignByUser: json['assignByUser'] != null
-          ? User.fromJson(json['assignByUser'])
+      assignByUserId: json['assignByUserId']?.toString() ??
+          (json['assignByUser'] is Map
+              ? (json['assignByUser']['id'] ?? json['assignByUser']['_id'])
+                  ?.toString()
+              : json['assignByUser']?.toString()),
+      assignByUser: json['assignByUser'] is Map
+          ? User.fromJson(
+              Map<String, dynamic>.from(json['assignByUser'] as Map),
+            )
           : null,
-      assignToUserId: json['assignToUserId']?.toString(),
-      assignToUser: json['assignToUser'] != null
-          ? User.fromJson(json['assignToUser'])
+      assignToUserId: json['assignToUserId']?.toString() ??
+          (json['assignToUser'] is Map
+              ? (json['assignToUser']['id'] ?? json['assignToUser']['_id'])
+                  ?.toString()
+              : json['assignToUser']?.toString()),
+      assignToUser: json['assignToUser'] is Map
+          ? User.fromJson(
+              Map<String, dynamic>.from(json['assignToUser'] as Map),
+            )
           : null,
-      status: json['status'] ?? 'pending',
+      status: json['status']?.toString() ?? 'pending',
       actorUserId: json['actorUserId']?.toString(),
       createdAt: json['createdAt'] != null
           ? DateTime.tryParse(json['createdAt'].toString())

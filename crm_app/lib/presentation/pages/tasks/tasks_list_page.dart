@@ -30,6 +30,7 @@ class _TasksListPageState extends ConsumerState<TasksListPage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
 
   @override
   void initState() {
@@ -43,9 +44,22 @@ class _TasksListPageState extends ConsumerState<TasksListPage>
 
   @override
   void dispose() {
+    _searchFocusNode.unfocus();
     _tabController.dispose();
     _searchController.dispose();
+    _searchFocusNode.dispose();
     super.dispose();
+  }
+
+  void _dismissKeyboard() {
+    _searchFocusNode.unfocus();
+    FocusManager.instance.primaryFocus?.unfocus();
+  }
+
+  Future<void> _openPage(Widget page) async {
+    _dismissKeyboard();
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => page));
+    if (mounted) _dismissKeyboard();
   }
 
   @override
@@ -70,6 +84,7 @@ class _TasksListPageState extends ConsumerState<TasksListPage>
             children: [
               AppSearchFilterBar(
                 controller: _searchController,
+                focusNode: _searchFocusNode,
                 hintText: 'Search tasks...',
                 onChanged: (value) {
                   setState(() {});
@@ -143,12 +158,7 @@ class _TasksListPageState extends ConsumerState<TasksListPage>
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const TaskFormPage()),
-          );
-        },
+        onPressed: () => _openPage(const TaskFormPage()),
         child: const Icon(Icons.add),
       ),
     );
@@ -248,12 +258,7 @@ class _TasksListPageState extends ConsumerState<TasksListPage>
             : 'Create your first task',
         icon: Icons.task_alt,
         buttonText: 'Add Task',
-        onButtonPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const TaskFormPage()),
-          );
-        },
+        onButtonPressed: () => _openPage(const TaskFormPage()),
       );
     }
 
@@ -268,14 +273,7 @@ class _TasksListPageState extends ConsumerState<TasksListPage>
           return Padding(
             padding: AppThemeColors.cardListItemMargin,
             child: CRMCard(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => TaskDetailPage(taskId: task.id),
-                  ),
-                );
-              },
+              onTap: () => _openPage(TaskDetailPage(taskId: task.id)),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [

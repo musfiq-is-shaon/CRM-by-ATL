@@ -6,9 +6,13 @@ import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 
 import '../../data/models/weather_model.dart';
+import '../config/crm_env_config.dart';
 import 'location_service.dart';
 
-/// Free weather via [Open-Meteo](https://open-meteo.com/) — no API key required.
+/// WeatherAPI forecast client.
+///
+/// One `/v1/forecast.json` call returns location, current conditions, hourly
+/// forecast, daily forecast, astronomy and government alerts.
 class WeatherService {
   WeatherService({LocationService? locationService})
       : _locationService = locationService ?? LocationService();
@@ -16,23 +20,36 @@ class WeatherService {
   final LocationService _locationService;
   DashboardWeather? _cache;
   DateTime? _cacheAt;
-  static const _cacheTtl = Duration(minutes: 20);
+  Position? _cachePosition;
+  static const _cacheTtl = Duration(minutes: 12);
+  /// Invalidate cache if the device has moved this far since last fetch.
+  static const _cacheMoveInvalidateMeters = 2500.0;
 
   Future<DashboardWeather?> fetchCurrentWeather({bool forceRefresh = false}) async {
+    final position = await _resolvePosition();
+    if (position == null) return forceRefresh ? null : _cache;
+
     if (!forceRefresh &&
         _cache != null &&
         _cacheAt != null &&
+        _cachePosition != null &&
         DateTime.now().difference(_cacheAt!) < _cacheTtl) {
-      return _cache;
+      final moved = Geolocator.distanceBetween(
+        _cachePosition!.latitude,
+        _cachePosition!.longitude,
+        position.latitude,
+        position.longitude,
+      );
+      if (moved < _cacheMoveInvalidateMeters) {
+        return _cache;
+      }
     }
 
-    final position = await _resolvePosition();
-    if (position == null) return _cache;
-
     try {
-      final weather = await _fetchOpenMeteo(position);
+      final weather = await _fetchWeatherApi(position);
       _cache = weather;
       _cacheAt = DateTime.now();
+      _cachePosition = position;
       return weather;
     } catch (e) {
       if (kDebugMode) debugPrint('WeatherService.fetchCurrentWeather: $e');
@@ -40,177 +57,210 @@ class WeatherService {
     }
   }
 
-  Future<DashboardWeather> _fetchOpenMeteo(Position position) async {
-    final weatherUri = Uri.https(
-      'api.open-meteo.com',
-      '/v1/forecast',
-      {
-        'latitude': '${position.latitude}',
-        'longitude': '${position.longitude}',
-        'current': [
-          'temperature_2m',
-          'apparent_temperature',
-          'weather_code',
-          'relative_humidity_2m',
-          'is_day',
-          'wind_speed_10m',
-        ].join(','),
-        'daily': [
-          'weather_code',
-          'temperature_2m_max',
-          'temperature_2m_min',
-          'precipitation_probability_max',
-        ].join(','),
-        'hourly': [
-          'temperature_2m',
-          'weather_code',
-          'precipitation_probability',
-          'is_day',
-        ].join(','),
-        'forecast_days': '7',
-        'timezone': 'auto',
-      },
-    );
-    final geoUri = Uri.https(
-      'geocoding-api.open-meteo.com',
-      '/v1/reverse',
-      {
-        'latitude': '${position.latitude}',
-        'longitude': '${position.longitude}',
-        'language': 'en',
-        'count': '1',
-      },
-    );
-
-    final responses = await Future.wait([
-      http.get(weatherUri).timeout(const Duration(seconds: 12)),
-      http.get(geoUri).timeout(const Duration(seconds: 8)),
-    ]);
-
-    if (responses[0].statusCode != 200) {
-      throw Exception('Open-Meteo forecast failed (${responses[0].statusCode})');
+  Future<DashboardWeather> _fetchWeatherApi(Position position) async {
+    final key = CrmEnvConfig.weatherApiKey;
+    if (key.isEmpty) {
+      throw StateError('WEATHER_API_KEY is not configured');
     }
 
-    final weatherJson = jsonDecode(responses[0].body) as Map<String, dynamic>;
-    final current = weatherJson['current'] as Map<String, dynamic>?;
-    if (current == null) throw Exception('Open-Meteo missing current block');
+    // Keep enough decimals so WeatherAPI does not snap to a distant city.
+    final lat = position.latitude.toStringAsFixed(5);
+    final lon = position.longitude.toStringAsFixed(5);
+    final uri = Uri.https('api.weatherapi.com', '/v1/forecast.json', {
+      'key': key,
+      'q': '$lat,$lon',
+      // WeatherAPI free plan supports the next three forecast days.
+      'days': '3',
+      'aqi': 'no',
+      'alerts': 'yes',
+    });
+    final response =
+        await http.get(uri).timeout(const Duration(seconds: 12));
+    final decoded = jsonDecode(response.body);
+    if (response.statusCode != 200) {
+      final map = decoded is Map ? Map<String, dynamic>.from(decoded) : const {};
+      final error = map['error'];
+      final message = error is Map ? error['message']?.toString() : null;
+      throw Exception(
+        message?.trim().isNotEmpty == true
+            ? message
+            : 'WeatherAPI request failed (${response.statusCode})',
+      );
+    }
+    if (decoded is! Map) {
+      throw const FormatException('WeatherAPI returned an invalid response');
+    }
 
-    final code = (current['weather_code'] as num?)?.toInt() ?? 0;
-    final dailyPoints = _parseDailyPoints(weatherJson['daily']);
-    final hourly = _parseHourlyPoints(weatherJson['hourly'], limit: 24);
+    final placeLabel = await LocationService.placeLabelFromCoordinateString(
+      LocationService.formatCoordinatesForStorage(
+        position.latitude,
+        position.longitude,
+      ),
+    );
 
-    var locationLabel = '';
-    if (responses[1].statusCode == 200) {
-      final geoJson = jsonDecode(responses[1].body) as Map<String, dynamic>;
-      final results = geoJson['results'] as List<dynamic>?;
-      if (results != null && results.isNotEmpty) {
-        final place = results.first as Map<String, dynamic>;
-        locationLabel = _formatPlace(place);
+    return parseWeatherApiResponse(
+      Map<String, dynamic>.from(decoded),
+      requestLatitude: position.latitude,
+      requestLongitude: position.longitude,
+      locationLabelOverride: placeLabel.isEmpty ? null : placeLabel,
+    );
+  }
+
+  @visibleForTesting
+  static DashboardWeather parseWeatherApiResponse(
+    Map<String, dynamic> json, {
+    DateTime? now,
+    double? requestLatitude,
+    double? requestLongitude,
+    String? locationLabelOverride,
+  }) {
+    final location = _map(json['location']);
+    final current = _map(json['current']);
+    final condition = _map(current['condition']);
+    if (current.isEmpty || condition.isEmpty) {
+      throw const FormatException('WeatherAPI response is missing current data');
+    }
+
+    final code = _int(condition['code']);
+    final daysRaw = _map(json['forecast'])['forecastday'];
+    final dayMaps = daysRaw is List
+        ? daysRaw.whereType<Map>().map((e) => Map<String, dynamic>.from(e))
+        : const Iterable<Map<String, dynamic>>.empty();
+    final daily = <WeatherDailyPoint>[];
+    final allHours = <Map<String, dynamic>>[];
+
+    for (final entry in dayMaps) {
+      final date = _dateFromEpochOrText(entry['date_epoch'], entry['date']);
+      final day = _map(entry['day']);
+      final dayCondition = _map(day['condition']);
+      final astro = _map(entry['astro']);
+      final dayCode = _int(dayCondition['code']);
+      if (date != null) {
+        daily.add(
+          WeatherDailyPoint(
+            date: date,
+            highC: _double(day['maxtemp_c']),
+            lowC: _double(day['mintemp_c']),
+            averageC: _nullableDouble(day['avgtemp_c']),
+            maxWindKmh: _nullableDouble(day['maxwind_kph']),
+            averageHumidity: _nullableInt(day['avghumidity']),
+            totalPrecipitationMm: _nullableDouble(day['totalprecip_mm']),
+            kind: DashboardWeather.kindFromWeatherApiCode(dayCode),
+            weatherCode: dayCode,
+            conditionText: _text(dayCondition['text']),
+            precipitationChance: _nullableInt(day['daily_chance_of_rain']),
+            sunrise: _text(astro['sunrise']),
+            sunset: _text(astro['sunset']),
+          ),
+        );
+      }
+      final hours = entry['hour'];
+      if (hours is List) {
+        allHours.addAll(
+          hours.whereType<Map>().map((e) => Map<String, dynamic>.from(e)),
+        );
       }
     }
-    if (locationLabel.isEmpty) {
-      locationLabel = await LocationService.placeLabelFromCoordinateString(
-        LocationService.formatCoordinatesForStorage(
-          position.latitude,
-          position.longitude,
+
+    // Prefer the location's local clock for hourly filtering so forecasts stay
+    // aligned with the place being queried (not a mismatched device TZ).
+    final referenceNow = now ??
+        _dateFromEpochOrText(
+          location['localtime_epoch'],
+          location['localtime'],
+        ) ??
+        DateTime.now();
+    final hourly = <WeatherHourlyPoint>[];
+    for (final hour in allHours) {
+      final time = _dateFromEpochOrText(hour['time_epoch'], hour['time']);
+      if (time == null ||
+          time.isBefore(referenceNow.subtract(const Duration(minutes: 30)))) {
+        continue;
+      }
+      final hourCondition = _map(hour['condition']);
+      final hourCode = _int(hourCondition['code']);
+      hourly.add(
+        WeatherHourlyPoint(
+          time: time,
+          temperatureC: _double(hour['temp_c']),
+          feelsLikeC: _nullableDouble(hour['feelslike_c']),
+          humidity: _nullableInt(hour['humidity']),
+          windSpeedKmh: _nullableDouble(hour['wind_kph']),
+          kind: DashboardWeather.kindFromWeatherApiCode(hourCode),
+          weatherCode: hourCode,
+          conditionText: _text(hourCondition['text']),
+          precipitationChance: _nullableInt(hour['chance_of_rain']),
+          isDay: _int(hour['is_day'], fallback: 1) == 1,
         ),
       );
+      if (hourly.length >= 24) break;
     }
-    if (locationLabel.isEmpty) locationLabel = 'Your location';
 
+    final alertsRaw = _map(json['alerts'])['alert'];
+    final alerts = <WeatherAlert>[];
+    if (alertsRaw is List) {
+      for (final raw in alertsRaw.whereType<Map>()) {
+        final alert = Map<String, dynamic>.from(raw);
+        final headline = _text(alert['headline']);
+        if (headline.isEmpty) continue;
+        alerts.add(
+          WeatherAlert(
+            headline: headline,
+            event: _textOrNull(alert['event']),
+            severity: _textOrNull(alert['severity']),
+            urgency: _textOrNull(alert['urgency']),
+            areas: _textOrNull(alert['areas']),
+            effective: DateTime.tryParse(_text(alert['effective'])),
+            expires: DateTime.tryParse(_text(alert['expires'])),
+            description: _textOrNull(alert['desc']),
+            instruction: _textOrNull(alert['instruction']),
+          ),
+        );
+      }
+    }
+
+    final today = daily.isNotEmpty ? daily.first : null;
+    final locationLabel = _resolveLocationLabel(
+      location: location,
+      requestLatitude: requestLatitude,
+      requestLongitude: requestLongitude,
+      locationLabelOverride: locationLabelOverride,
+    );
     return DashboardWeather(
-      temperatureC: (current['temperature_2m'] as num?)?.toDouble() ?? 0,
-      kind: DashboardWeather.kindFromWmoCode(code),
+      temperatureC: _double(current['temp_c']),
+      feelsLikeC: _nullableDouble(current['feelslike_c']),
+      kind: DashboardWeather.kindFromWeatherApiCode(code),
       locationLabel: locationLabel,
       weatherCode: code,
-      conditionText: DashboardWeather.labelFromWmoCode(code),
-      dataSourceLabel: 'Open-Meteo',
-      feelsLikeC: (current['apparent_temperature'] as num?)?.toDouble(),
-      humidity: (current['relative_humidity_2m'] as num?)?.toInt(),
-      highC: dailyPoints.isNotEmpty ? dailyPoints.first.highC : null,
-      lowC: dailyPoints.isNotEmpty ? dailyPoints.first.lowC : null,
-      isDay: (current['is_day'] as num?)?.toInt() == 1,
-      windSpeedKmh: (current['wind_speed_10m'] as num?)?.toDouble(),
+      conditionText: _text(condition['text']),
+      dataSourceLabel: 'WeatherAPI.com',
+      humidity: _nullableInt(current['humidity']),
+      highC: today?.highC,
+      lowC: today?.lowC,
+      isDay: _int(current['is_day'], fallback: 1) == 1,
+      windSpeedKmh: _nullableDouble(current['wind_kph']),
+      windDirection: _textOrNull(current['wind_dir']),
+      windGustKmh: _nullableDouble(current['gust_kph']),
+      pressureMb: _nullableDouble(current['pressure_mb']),
+      precipitationMm: _nullableDouble(current['precip_mm']),
+      visibilityKm: _nullableDouble(current['vis_km']),
+      cloudCover: _nullableInt(current['cloud']),
+      uvIndex: _nullableDouble(current['uv']),
+      lastUpdated: _dateFromEpochOrText(
+        current['last_updated_epoch'],
+        current['last_updated'],
+      ),
+      sunrise: today?.sunrise,
+      sunset: today?.sunset,
       hourly: hourly,
-      daily: dailyPoints,
+      daily: daily,
+      alerts: alerts,
     );
   }
 
-  static List<WeatherHourlyPoint> _parseHourlyPoints(
-    dynamic raw, {
-    int limit = 24,
-  }) {
-    if (raw is! Map<String, dynamic>) return const [];
-
-    final times = raw['time'] as List<dynamic>?;
-    final temps = raw['temperature_2m'] as List<dynamic>?;
-    final codes = raw['weather_code'] as List<dynamic>?;
-    final precip = raw['precipitation_probability'] as List<dynamic>?;
-    final isDayList = raw['is_day'] as List<dynamic>?;
-    if (times == null || temps == null || codes == null) return const [];
-
-    final now = DateTime.now();
-    final points = <WeatherHourlyPoint>[];
-    for (var i = 0; i < times.length; i++) {
-      final parsed = DateTime.tryParse(times[i].toString());
-      if (parsed == null) continue;
-      if (parsed.isBefore(now.subtract(const Duration(minutes: 30)))) continue;
-
-      final wmo = (codes[i] as num?)?.toInt() ?? 0;
-      points.add(
-        WeatherHourlyPoint(
-          time: parsed.toLocal(),
-          temperatureC: (temps[i] as num?)?.toDouble() ?? 0,
-          kind: DashboardWeather.kindFromWmoCode(wmo),
-          weatherCode: wmo,
-          conditionText: DashboardWeather.labelFromWmoCode(wmo),
-          precipitationChance: (precip != null && i < precip.length)
-              ? (precip[i] as num?)?.toInt()
-              : null,
-          isDay: isDayList != null && i < isDayList.length
-              ? (isDayList[i] as num?)?.toInt() == 1
-              : true,
-        ),
-      );
-      if (points.length >= limit) break;
-    }
-    return points;
-  }
-
-  static List<WeatherDailyPoint> _parseDailyPoints(dynamic raw) {
-    if (raw is! Map<String, dynamic>) return const [];
-
-    final dates = raw['time'] as List<dynamic>?;
-    final highs = raw['temperature_2m_max'] as List<dynamic>?;
-    final lows = raw['temperature_2m_min'] as List<dynamic>?;
-    final codes = raw['weather_code'] as List<dynamic>?;
-    final precip = raw['precipitation_probability_max'] as List<dynamic>?;
-    if (dates == null || highs == null || lows == null || codes == null) {
-      return const [];
-    }
-
-    final points = <WeatherDailyPoint>[];
-    for (var i = 0; i < dates.length; i++) {
-      final parsed = DateTime.tryParse(dates[i].toString());
-      if (parsed == null) continue;
-      final wmo = (codes[i] as num?)?.toInt() ?? 0;
-      points.add(
-        WeatherDailyPoint(
-          date: parsed.toLocal(),
-          highC: (highs[i] as num?)?.toDouble() ?? 0,
-          lowC: (lows[i] as num?)?.toDouble() ?? 0,
-          kind: DashboardWeather.kindFromWmoCode(wmo),
-          weatherCode: wmo,
-          conditionText: DashboardWeather.labelFromWmoCode(wmo),
-          precipitationChance: (precip != null && i < precip.length)
-              ? (precip[i] as num?)?.toInt()
-              : null,
-        ),
-      );
-    }
-    return points;
-  }
-
+  /// Prefer a fresh high-accuracy fix (same path as attendance). Only fall back
+  /// to last-known when it is recent and accurate enough — stale fused caches
+  /// were returning cities hundreds of km away.
   Future<Position?> _resolvePosition() async {
     try {
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
@@ -225,24 +275,146 @@ class WeatherService {
         return null;
       }
 
-      final last = await Geolocator.getLastKnownPosition();
-      if (last != null) return last;
+      final fresh = await _locationService.fetchHighAccuracyPosition();
+      if (fresh != null && _isUsableFix(fresh, maxAge: const Duration(minutes: 3))) {
+        return fresh;
+      }
 
-      return _locationService.fetchHighAccuracyPosition();
+      final last = await Geolocator.getLastKnownPosition();
+      if (last != null &&
+          _isUsableFix(
+            last,
+            maxAge: const Duration(minutes: 10),
+            maxAccuracyMeters: 800,
+          )) {
+        return last;
+      }
+
+      // Fresh fix may still be usable even if accuracy is poor.
+      if (fresh != null && _isUsableFix(fresh, maxAge: const Duration(minutes: 5), maxAccuracyMeters: 5000)) {
+        return fresh;
+      }
+      if (last != null &&
+          _isUsableFix(
+            last,
+            maxAge: const Duration(minutes: 20),
+            maxAccuracyMeters: 5000,
+          )) {
+        return last;
+      }
+      return null;
     } catch (_) {
       return null;
     }
   }
 
-  static String _formatPlace(Map<String, dynamic> place) {
-    final name = (place['name'] as String?)?.trim() ?? '';
-    final admin1 = (place['admin1'] as String?)?.trim() ?? '';
-    final country = (place['country'] as String?)?.trim() ?? '';
-    if (name.isNotEmpty && admin1.isNotEmpty && name != admin1) {
-      return '$name, $admin1';
+  static bool _isUsableFix(
+    Position position, {
+    required Duration maxAge,
+    double maxAccuracyMeters = 1500,
+  }) {
+    final age = DateTime.now().difference(position.timestamp);
+    if (age.isNegative) return true;
+    if (age > maxAge) return false;
+    // accuracy <= 0 means unknown on some platforms — allow it.
+    if (position.accuracy > 0 && position.accuracy > maxAccuracyMeters) {
+      return false;
+    }
+    if (position.latitude.abs() < 0.01 && position.longitude.abs() < 0.01) {
+      // (0,0) / null-island style junk.
+      return false;
+    }
+    return true;
+  }
+
+  static String _resolveLocationLabel({
+    required Map<String, dynamic> location,
+    double? requestLatitude,
+    double? requestLongitude,
+    String? locationLabelOverride,
+  }) {
+    final override = locationLabelOverride?.trim() ?? '';
+    if (override.isNotEmpty) return override;
+
+    final apiLat = _nullableDouble(location['lat']);
+    final apiLon = _nullableDouble(location['lon']);
+    if (requestLatitude != null &&
+        requestLongitude != null &&
+        apiLat != null &&
+        apiLon != null) {
+      final distanceKm = Geolocator.distanceBetween(
+            requestLatitude,
+            requestLongitude,
+            apiLat,
+            apiLon,
+          ) /
+          1000.0;
+      // WeatherAPI often snaps the place name to a distant station city.
+      if (distanceKm > 25) {
+        return 'Near you';
+      }
+    }
+
+    final apiLabel = _weatherApiLocationLabel(location);
+    return apiLabel.isEmpty ? 'Your location' : apiLabel;
+  }
+
+  static Map<String, dynamic> _map(dynamic raw) {
+    if (raw is Map) return Map<String, dynamic>.from(raw);
+    return const {};
+  }
+
+  static String _text(dynamic raw) => raw?.toString().trim() ?? '';
+
+  static String? _textOrNull(dynamic raw) {
+    final value = _text(raw);
+    return value.isEmpty ? null : value;
+  }
+
+  static int _int(dynamic raw, {int fallback = 0}) {
+    if (raw is num) return raw.toInt();
+    return int.tryParse(raw?.toString() ?? '') ?? fallback;
+  }
+
+  static int? _nullableInt(dynamic raw) {
+    if (raw == null) return null;
+    if (raw is num) return raw.toInt();
+    return int.tryParse(raw.toString());
+  }
+
+  static double _double(dynamic raw) {
+    if (raw is num) return raw.toDouble();
+    return double.tryParse(raw?.toString() ?? '') ?? 0;
+  }
+
+  static double? _nullableDouble(dynamic raw) {
+    if (raw == null) return null;
+    if (raw is num) return raw.toDouble();
+    return double.tryParse(raw.toString());
+  }
+
+  static DateTime? _dateFromEpochOrText(dynamic epoch, dynamic text) {
+    final seconds = _nullableInt(epoch);
+    if (seconds != null && seconds > 0) {
+      // Absolute unix instant → device local for comparisons within one payload.
+      return DateTime.fromMillisecondsSinceEpoch(
+        seconds * 1000,
+        isUtc: true,
+      ).toLocal();
+    }
+    final parsed = DateTime.tryParse(_text(text));
+    return parsed;
+  }
+
+  static String _weatherApiLocationLabel(Map<String, dynamic> location) {
+    final name = _text(location['name']);
+    final region = _text(location['region']);
+    final country = _text(location['country']);
+    if (name.isNotEmpty && region.isNotEmpty && name != region) {
+      return '$name, $region';
     }
     if (name.isNotEmpty && country.isNotEmpty) return '$name, $country';
-    return name.isNotEmpty ? name : admin1;
+    return name.isNotEmpty ? name : region;
   }
 }
 

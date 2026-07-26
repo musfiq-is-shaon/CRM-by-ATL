@@ -78,4 +78,9 @@ abstract final class CrmEnvConfig {
   static String get nanonetsSetupHint =>
       'Add NANONETS_API_KEY to .env or run: '
       'flutter run --dart-define-from-file=.env';
+
+  /// WeatherAPI key. Priority: `--dart-define` → bundled `.env`.
+  static String get weatherApiKey => _read('WEATHER_API_KEY');
+
+  static bool get isWeatherApiConfigured => weatherApiKey.isNotEmpty;
 }

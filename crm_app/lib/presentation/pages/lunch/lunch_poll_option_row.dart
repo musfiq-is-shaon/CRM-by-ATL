@@ -78,7 +78,7 @@ class LunchPollOptionCard extends StatelessWidget {
     final checkIcon = compact ? 13.0 : 16.0;
 
     return Padding(
-      padding: EdgeInsets.only(bottom: compact ? 6 : 10),
+      padding: EdgeInsets.only(bottom: compact ? 10 : 12),
       child: Opacity(
         opacity: inactive ? 0.52 : 1,
         child: Material(
@@ -86,151 +86,160 @@ class LunchPollOptionCard extends StatelessWidget {
           child: InkWell(
             onTap: enabled ? onTap : null,
             borderRadius: BorderRadius.circular(radius),
-            child: Container(
-              padding: cardPad,
-              decoration: BoxDecoration(
-                color: bgColor,
-                borderRadius: BorderRadius.circular(radius),
-                border: Border.all(
-                  color: borderColor,
-                  width: selected ? (compact ? 1.5 : 2) : 1,
-                ),
-                boxShadow: compact || inactive
-                    ? null
-                    : [
-                        BoxShadow(
-                          color: cs.shadow.withValues(alpha: 0.04),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        width: iconSize,
-                        height: iconSize,
-                        decoration: BoxDecoration(
-                          color: iconBg,
-                          borderRadius: BorderRadius.circular(compact ? 8 : 10),
-                        ),
-                        child: Icon(
-                          lunchOptionKindIcon(kind),
-                          size: iconGlyph,
-                          color: iconFg,
-                        ),
-                      ),
-                      SizedBox(width: compact ? 8 : 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Wrap(
-                              spacing: compact ? 4 : 6,
-                              runSpacing: compact ? 2 : 4,
-                              crossAxisAlignment: WrapCrossAlignment.center,
-                              children: [
-                                Text(
-                                  option.label,
-                                  style: TextStyle(
-                                    fontSize: labelSize,
-                                    fontWeight: FontWeight.w700,
-                                    color: labelColor,
-                                    height: 1.15,
-                                  ),
-                                ),
-                              if (selected)
-                                Container(
-                                  padding: EdgeInsets.symmetric(
-                                    horizontal: compact ? 6 : 8,
-                                    vertical: compact ? 1 : 2,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: lunchBrandOrange,
-                                    borderRadius: BorderRadius.circular(5),
-                                  ),
-                                  child: Text(
-                                    'YOUR VOTE',
-                                    style: TextStyle(
-                                      fontSize: compact ? 8 : 9,
-                                      fontWeight: FontWeight.w800,
-                                      color: Colors.white,
-                                      letterSpacing: 0.3,
-                                    ),
-                                  ),
-                                ),
-                              lunchOptionTypeBadge(
-                                option.optionType,
-                                fontSize: compact ? 8 : 9,
-                                shortLabel: true,
-                              ),
-                            ],
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: compact ? 52 : 60),
+              child: Container(
+                padding: cardPad,
+                decoration: BoxDecoration(
+                  color: bgColor,
+                  borderRadius: BorderRadius.circular(radius),
+                  border: Border.all(
+                    color: borderColor,
+                    width: selected ? (compact ? 1.5 : 2) : 1,
+                  ),
+                  boxShadow: compact || inactive
+                      ? null
+                      : [
+                          BoxShadow(
+                            color: cs.shadow.withValues(alpha: 0.04),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
                           ),
-                          if (option.voters.isNotEmpty || count > 0) ...[
-                            SizedBox(height: compact ? 4 : 8),
-                            Row(
-                              children: [
-                                if (option.voters.isNotEmpty)
-                                  Expanded(
-                                    child: LunchVoterAvatarStack(
-                                      voters: option.voters,
-                                      compact: compact,
+                        ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          width: iconSize,
+                          height: iconSize,
+                          decoration: BoxDecoration(
+                            color: iconBg,
+                            borderRadius:
+                                BorderRadius.circular(compact ? 8 : 10),
+                          ),
+                          child: Icon(
+                            lunchOptionKindIcon(kind),
+                            size: iconGlyph,
+                            color: iconFg,
+                          ),
+                        ),
+                        SizedBox(width: compact ? 8 : 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              MediaQuery.withClampedTextScaling(
+                                minScaleFactor: 0.85,
+                                maxScaleFactor: 1.25,
+                                child: Wrap(
+                                  spacing: compact ? 4 : 6,
+                                  runSpacing: compact ? 2 : 4,
+                                  crossAxisAlignment: WrapCrossAlignment.center,
+                                  children: [
+                                    Text(
+                                      option.label,
+                                      style: TextStyle(
+                                        fontSize: labelSize,
+                                        fontWeight: FontWeight.w700,
+                                        color: labelColor,
+                                        height: 1.15,
+                                      ),
                                     ),
-                                  )
-                                else
-                                  const Spacer(),
-                                Text(
-                                  '$count ${count == 1 ? 'vote' : 'votes'}',
-                                  style: TextStyle(
-                                    fontSize: compact ? 10 : 12,
-                                    fontWeight: FontWeight.w500,
-                                    color: textSecondary,
-                                  ),
+                                    if (selected)
+                                      Container(
+                                        padding: EdgeInsets.symmetric(
+                                          horizontal: compact ? 6 : 8,
+                                          vertical: compact ? 1 : 2,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: lunchBrandOrange,
+                                          borderRadius: BorderRadius.circular(5),
+                                        ),
+                                        child: Text(
+                                          'YOUR VOTE',
+                                          style: TextStyle(
+                                            fontSize: compact ? 8 : 9,
+                                            fontWeight: FontWeight.w800,
+                                            color: Colors.white,
+                                            letterSpacing: 0.3,
+                                          ),
+                                        ),
+                                      ),
+                                    lunchOptionTypeBadge(
+                                      option.optionType,
+                                      fontSize: compact ? 8 : 9,
+                                      shortLabel: true,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              if (option.voters.isNotEmpty || count > 0) ...[
+                                SizedBox(height: compact ? 4 : 8),
+                                Row(
+                                  children: [
+                                    if (option.voters.isNotEmpty)
+                                      Expanded(
+                                        child: LunchVoterAvatarStack(
+                                          voters: option.voters,
+                                          compact: compact,
+                                        ),
+                                      )
+                                    else
+                                      const Spacer(),
+                                    Text(
+                                      '$count ${count == 1 ? 'vote' : 'votes'}',
+                                      style: TextStyle(
+                                        fontSize: compact ? 10 : 12,
+                                        fontWeight: FontWeight.w500,
+                                        color: textSecondary,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ],
+                            ],
+                          ),
+                        ),
+                        if (selected) ...[
+                          SizedBox(width: compact ? 4 : 6),
+                          Container(
+                            width: checkSize,
+                            height: checkSize,
+                            decoration: const BoxDecoration(
+                              color: lunchBrandOrange,
+                              shape: BoxShape.circle,
                             ),
-                          ],
+                            child: Icon(
+                              Icons.check_rounded,
+                              size: checkIcon,
+                              color: Colors.white,
+                            ),
+                          ),
                         ],
+                      ],
+                    ),
+                    SizedBox(height: gap),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(3),
+                      child: LinearProgressIndicator(
+                        value: fraction.clamp(0.0, 1.0),
+                        minHeight: compact ? 3 : 5,
+                        backgroundColor: progressBg,
+                        color: progressFg,
                       ),
                     ),
-                    if (selected) ...[
-                      SizedBox(width: compact ? 4 : 6),
-                      Container(
-                        width: checkSize,
-                        height: checkSize,
-                        decoration: const BoxDecoration(
-                          color: lunchBrandOrange,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          Icons.check_rounded,
-                          size: checkIcon,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ],
                   ],
                 ),
-                SizedBox(height: gap),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(3),
-                  child: LinearProgressIndicator(
-                    value: fraction.clamp(0.0, 1.0),
-                    minHeight: compact ? 3 : 5,
-                    backgroundColor: progressBg,
-                    color: progressFg,
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
         ),
       ),
-    ),
     );
   }
 }
@@ -274,7 +283,7 @@ class LunchPollOptionRow extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: onTap,
+        onTap: enabled ? onTap : null,
         borderRadius: BorderRadius.circular(AppRadius.sm),
         child: Opacity(
           opacity: enabled ? 1 : 0.55,

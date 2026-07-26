@@ -17,6 +17,9 @@ class WeatherHourlyPoint {
     this.conditionText,
     this.precipitationChance,
     this.isDay = true,
+    this.feelsLikeC,
+    this.humidity,
+    this.windSpeedKmh,
   });
 
   final DateTime time;
@@ -26,9 +29,12 @@ class WeatherHourlyPoint {
   final String? conditionText;
   final int? precipitationChance;
   final bool isDay;
+  final double? feelsLikeC;
+  final int? humidity;
+  final double? windSpeedKmh;
 
   String get conditionLabel =>
-      conditionText ?? DashboardWeather.labelFromWmoCode(weatherCode);
+      conditionText ?? DashboardWeather.labelFromWeatherApiCode(weatherCode);
 }
 
 class WeatherDailyPoint {
@@ -40,6 +46,12 @@ class WeatherDailyPoint {
     required this.weatherCode,
     this.conditionText,
     this.precipitationChance,
+    this.averageC,
+    this.maxWindKmh,
+    this.averageHumidity,
+    this.totalPrecipitationMm,
+    this.sunrise,
+    this.sunset,
   });
 
   final DateTime date;
@@ -49,9 +61,39 @@ class WeatherDailyPoint {
   final int weatherCode;
   final String? conditionText;
   final int? precipitationChance;
+  final double? averageC;
+  final double? maxWindKmh;
+  final int? averageHumidity;
+  final double? totalPrecipitationMm;
+  final String? sunrise;
+  final String? sunset;
 
   String get conditionLabel =>
-      conditionText ?? DashboardWeather.labelFromWmoCode(weatherCode);
+      conditionText ?? DashboardWeather.labelFromWeatherApiCode(weatherCode);
+}
+
+class WeatherAlert {
+  const WeatherAlert({
+    required this.headline,
+    this.event,
+    this.severity,
+    this.urgency,
+    this.areas,
+    this.effective,
+    this.expires,
+    this.description,
+    this.instruction,
+  });
+
+  final String headline;
+  final String? event;
+  final String? severity;
+  final String? urgency;
+  final String? areas;
+  final DateTime? effective;
+  final DateTime? expires;
+  final String? description;
+  final String? instruction;
 }
 
 class DashboardWeather {
@@ -68,8 +110,19 @@ class DashboardWeather {
     this.lowC,
     this.isDay = true,
     this.windSpeedKmh,
+    this.windDirection,
+    this.windGustKmh,
+    this.pressureMb,
+    this.precipitationMm,
+    this.visibilityKm,
+    this.cloudCover,
+    this.uvIndex,
+    this.lastUpdated,
+    this.sunrise,
+    this.sunset,
     this.hourly = const [],
     this.daily = const [],
+    this.alerts = const [],
   });
 
   final double temperatureC;
@@ -84,56 +137,87 @@ class DashboardWeather {
   final double? lowC;
   final bool isDay;
   final double? windSpeedKmh;
+  final String? windDirection;
+  final double? windGustKmh;
+  final double? pressureMb;
+  final double? precipitationMm;
+  final double? visibilityKm;
+  final int? cloudCover;
+  final double? uvIndex;
+  final DateTime? lastUpdated;
+  final String? sunrise;
+  final String? sunset;
   final List<WeatherHourlyPoint> hourly;
   final List<WeatherDailyPoint> daily;
+  final List<WeatherAlert> alerts;
 
   String get conditionLabel =>
-      conditionText ?? labelFromWmoCode(weatherCode);
+      conditionText ?? labelFromWeatherApiCode(weatherCode);
 
-  static String labelFromWmoCode(int code) {
-    return switch (code) {
-      0 => 'Clear sky',
-      1 => 'Mainly clear',
-      2 => 'Partly cloudy',
-      3 => 'Overcast',
-      45 => 'Fog',
-      48 => 'Depositing rime fog',
-      51 => 'Light drizzle',
-      53 => 'Drizzle',
-      55 => 'Dense drizzle',
-      56 => 'Freezing drizzle',
-      57 => 'Dense freezing drizzle',
-      61 => 'Slight rain',
-      63 => 'Rain',
-      65 => 'Heavy rain',
-      66 => 'Freezing rain',
-      67 => 'Heavy freezing rain',
-      71 => 'Slight snow',
-      73 => 'Snow',
-      75 => 'Heavy snow',
-      77 => 'Snow grains',
-      80 => 'Rain showers',
-      81 => 'Moderate showers',
-      82 => 'Violent showers',
-      85 => 'Snow showers',
-      86 => 'Heavy snow showers',
-      95 => 'Thunderstorm',
-      96 => 'Thunderstorm with hail',
-      99 => 'Thunderstorm with heavy hail',
-      _ => 'Cloudy',
-    };
+  String get smartSummary {
+    if (alerts.isNotEmpty) return alerts.first.headline;
+    WeatherHourlyPoint? nextRain;
+    for (final point in hourly) {
+      if ((point.precipitationChance ?? 0) >= 55) {
+        nextRain = point;
+        break;
+      }
+    }
+    if (nextRain != null) {
+      final hour = nextRain.time.hour;
+      final period = hour >= 12 ? 'PM' : 'AM';
+      final hour12 = hour % 12 == 0 ? 12 : hour % 12;
+      return 'Rain possible around $hour12 $period';
+    }
+    if ((uvIndex ?? 0) >= 6 && isDay) return 'High UV — use sun protection';
+    if ((windGustKmh ?? 0) >= 40) return 'Strong gusts possible';
+    if ((visibilityKm ?? 99) < 3) return 'Low visibility nearby';
+    return isDay ? 'Current conditions near you' : 'Tonight near you';
   }
 
-  static DashboardWeatherKind kindFromWmoCode(int code) {
-    if (code == 0 || code == 1) return DashboardWeatherKind.sunny;
-    if (code == 2) return DashboardWeatherKind.partlyCloudy;
-    if (code == 3) return DashboardWeatherKind.cloudy;
-    if (code == 45 || code == 48) return DashboardWeatherKind.foggy;
-    if (code >= 51 && code <= 67) return DashboardWeatherKind.rainy;
-    if (code >= 71 && code <= 77) return DashboardWeatherKind.snowy;
-    if (code >= 80 && code <= 82) return DashboardWeatherKind.rainy;
-    if (code >= 85 && code <= 86) return DashboardWeatherKind.snowy;
-    if (code >= 95) return DashboardWeatherKind.stormy;
+  String get uvLabel {
+    final uv = uvIndex ?? 0;
+    if (uv < 3) return 'Low';
+    if (uv < 6) return 'Moderate';
+    if (uv < 8) return 'High';
+    if (uv < 11) return 'Very high';
+    return 'Extreme';
+  }
+
+  /// WeatherAPI condition code mapping:
+  /// https://www.weatherapi.com/docs/weather_conditions.json
+  static DashboardWeatherKind kindFromWeatherApiCode(int code) {
+    if (code == 1000) return DashboardWeatherKind.sunny;
+    if (code == 1003) return DashboardWeatherKind.partlyCloudy;
+    if (code == 1006 || code == 1009) return DashboardWeatherKind.cloudy;
+    if ({1030, 1135, 1147}.contains(code)) return DashboardWeatherKind.foggy;
+    if ({
+      1066, 1069, 1114, 1117, 1204, 1207, 1210, 1213, 1216, 1219,
+      1222, 1225, 1237, 1255, 1258, 1261, 1264,
+    }.contains(code)) {
+      return DashboardWeatherKind.snowy;
+    }
+    if ({1087, 1273, 1276, 1279, 1282}.contains(code)) {
+      return DashboardWeatherKind.stormy;
+    }
+    if ({
+      1063, 1072, 1150, 1153, 1168, 1171, 1180, 1183, 1186, 1189,
+      1192, 1195, 1198, 1201, 1240, 1243, 1246, 1249, 1252,
+    }.contains(code)) {
+      return DashboardWeatherKind.rainy;
+    }
     return DashboardWeatherKind.cloudy;
+  }
+
+  static String labelFromWeatherApiCode(int code) {
+    return switch (kindFromWeatherApiCode(code)) {
+      DashboardWeatherKind.sunny => 'Clear',
+      DashboardWeatherKind.partlyCloudy => 'Partly cloudy',
+      DashboardWeatherKind.cloudy => 'Cloudy',
+      DashboardWeatherKind.rainy => 'Rain',
+      DashboardWeatherKind.stormy => 'Thunderstorm',
+      DashboardWeatherKind.foggy => 'Fog',
+      DashboardWeatherKind.snowy => 'Snow',
+    };
   }
 }

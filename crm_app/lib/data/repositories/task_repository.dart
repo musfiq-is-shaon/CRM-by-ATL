@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/constants/app_constants.dart';
@@ -14,8 +16,48 @@ class TaskRepository {
     return raw;
   }
 
+  static List<dynamic> _asTaskList(dynamic raw) {
+    var current = raw;
+    // Dio sometimes leaves a JSON array as a String.
+    if (current is String) {
+      final trimmed = current.trim();
+      if (trimmed.isEmpty) return const [];
+      try {
+        current = jsonDecode(trimmed);
+      } catch (_) {
+        return const [];
+      }
+    }
+    final u = _unwrap(current);
+    if (u is List) return u;
+    if (u is Map) {
+      for (final key in ['tasks', 'items', 'results', 'records', 'rows', 'data']) {
+        final v = u[key];
+        if (v is List) return v;
+        if (v is String) {
+          try {
+            final decoded = jsonDecode(v.trim());
+            if (decoded is List) return decoded;
+          } catch (_) {}
+        }
+      }
+    }
+    return const [];
+  }
+
+  static Map<String, dynamic> _asTaskMap(dynamic raw) {
+    final u = _unwrap(raw);
+    if (u is Map) return Map<String, dynamic>.from(u);
+    if (u is List && u.isNotEmpty && u.first is Map) {
+      return Map<String, dynamic>.from(u.first as Map);
+    }
+    throw FormatException('Expected task object, got ${raw.runtimeType}');
+  }
+
   /// Task log GET responses sometimes wrap the array (`logs`, `items`, nested `data`).
   static List<dynamic> _taskLogsList(dynamic raw) {
+    final fromTasks = _asTaskList(raw);
+    if (fromTasks.isNotEmpty) return fromTasks;
     final u = _unwrap(raw);
     if (u is List) return u;
     if (u is Map) {
@@ -59,13 +101,16 @@ class TaskRepository {
       AppConstants.tasks,
       queryParameters: queryParams,
     );
-    final List<dynamic> data = response.data;
-    return data.map((json) => Task.fromJson(json)).toList();
+    final data = _asTaskList(response.data);
+    return data
+        .whereType<Map>()
+        .map((json) => Task.fromJson(Map<String, dynamic>.from(json)))
+        .toList();
   }
 
   Future<Task> getTaskById(String id) async {
     final response = await _apiClient.get('${AppConstants.tasks}/$id');
-    return Task.fromJson(response.data);
+    return Task.fromJson(_asTaskMap(response.data));
   }
 
   Future<Task> createTask({
@@ -94,7 +139,7 @@ class TaskRepository {
     }
 
     final response = await _apiClient.post(AppConstants.tasks, data: data);
-    return Task.fromJson(response.data);
+    return Task.fromJson(_asTaskMap(response.data));
   }
 
   Future<Task> updateTask({
@@ -119,7 +164,7 @@ class TaskRepository {
         'actorUserId': actorUserId,
       },
     );
-    return Task.fromJson(response.data);
+    return Task.fromJson(_asTaskMap(response.data));
   }
 
   Future<Task> changeTaskStatus({
@@ -137,7 +182,7 @@ class TaskRepository {
       '${AppConstants.tasks}/$id/status',
       data: data,
     );
-    return Task.fromJson(response.data);
+    return Task.fromJson(_asTaskMap(response.data));
   }
 
   Future<List<TaskLog>> getTaskLogs(String taskId) async {

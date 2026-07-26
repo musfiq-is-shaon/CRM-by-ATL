@@ -3,10 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme_colors.dart';
+import '../../../core/utils/friendly_error_message.dart';
 import '../../providers/lunch_provider.dart';
 import '../../widgets/crm_button.dart';
 import '../../widgets/crm_card.dart';
 import '../../widgets/crm_text_field.dart';
+import '../../widgets/error_widget.dart' as app_widgets;
 import '../../widgets/loading_widget.dart';
 import '../../../data/models/lunch_model.dart';
 
@@ -22,6 +24,7 @@ class _LunchSettingsPageState extends ConsumerState<LunchSettingsPage> {
   bool _allowVoteChange = true;
   bool _loaded = false;
   bool _saving = false;
+  String? _loadError;
 
   @override
   void initState() {
@@ -30,17 +33,36 @@ class _LunchSettingsPageState extends ConsumerState<LunchSettingsPage> {
   }
 
   Future<void> _load() async {
-    await ref.read(lunchProvider.notifier).loadSettings();
-    final s = ref.read(lunchProvider).settings;
-    if (!mounted) return;
-    if (s != null) {
+    setState(() {
+      _loaded = false;
+      _loadError = null;
+    });
+    try {
+      await ref.read(lunchProvider.notifier).loadSettings();
+      if (!mounted) return;
+      final lunch = ref.read(lunchProvider);
+      final s = lunch.settings;
+      if (s == null) {
+        setState(() {
+          _loaded = true;
+          _loadError = friendlyErrorMessage(
+            lunch.error ?? 'Could not load lunch settings.',
+          );
+        });
+        return;
+      }
       setState(() {
         _costCtrl.text = s.defaultCostAmount?.toString() ?? '';
         _allowVoteChange = s.allowVoteChange;
         _loaded = true;
+        _loadError = null;
       });
-    } else {
-      setState(() => _loaded = true);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loaded = true;
+        _loadError = friendlyErrorMessage(e);
+      });
     }
   }
 
@@ -57,10 +79,10 @@ class _LunchSettingsPageState extends ConsumerState<LunchSettingsPage> {
           const SnackBar(content: Text('Settings saved')),
         );
       }
-    } catch (_) {
+    } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not save settings')),
+          SnackBar(content: Text(friendlyErrorMessage(e))),
         );
       }
     } finally {
@@ -80,7 +102,14 @@ class _LunchSettingsPageState extends ConsumerState<LunchSettingsPage> {
     final textSecondary = AppThemeColors.textSecondaryColor(context);
 
     if (!_loaded) {
-      return const LoadingWidget(message: 'Loading settings…');
+      return const SettingsFormSkeleton();
+    }
+
+    if (_loadError != null) {
+      return app_widgets.ErrorWidget(
+        message: _loadError!,
+        onRetry: _load,
+      );
     }
 
     return RefreshIndicator(

@@ -475,7 +475,8 @@ class _ContactFormPageState extends ConsumerState<ContactFormPage> {
       initialName: initialName,
       initialLocation: initialLocation,
     );
-    if (result != null && result.isNotEmpty && mounted) {
+    if (result != null && result.isNotEmpty) {
+      if (!context.mounted) return;
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
       setState(() {
         _selectedCompanyId = result;

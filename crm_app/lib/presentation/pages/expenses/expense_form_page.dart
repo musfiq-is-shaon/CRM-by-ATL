@@ -60,6 +60,7 @@ class _ExpenseFormPageState extends ConsumerState<ExpenseFormPage> {
     _selectedStatus = 'unpaid';
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(companiesProvider.notifier).clearFilters();
       ref.read(companiesProvider.notifier).loadCompanies();
       ref.read(usersProvider.notifier).loadUsers();
       ref.read(currenciesProvider.notifier).loadCurrencies();
@@ -314,33 +315,51 @@ class _ExpenseFormPageState extends ConsumerState<ExpenseFormPage> {
                     Consumer(
                       builder: (context, ref, child) {
                         final companiesState = ref.watch(companiesProvider);
-                        return SearchableDropdown<String>(
-                          items: companiesState.companies.map((c) => c.id).toList(),
-                          value: _selectedCompanyId,
-                          hintText: 'Select a company',
-                          labelText: 'Company *',
-                          itemLabelBuilder: (id) {
-                            final company = companiesState.companies
-                                .where((c) => c.id == id)
-                                .firstOrNull;
-                            return company?.name ?? '';
-                          },
-                          dropdownColor: surfaceColor,
-                          textColor: textPrimary,
-                          hintColor: textSecondary,
-                          required: true,
-                          onChanged: (value) {
-                            setState(() {
-                              _selectedCompanyId = value;
-                            });
-                          },
-                          onAddNew: () => _showCreateCompanyDialog(context),
-                          validator: (value) {
-                            if (value == null || value.isEmpty) {
-                              return 'Company is required';
-                            }
-                            return null;
-                          },
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            CompanyDropdown(
+                              companies: companiesState.companies,
+                              value: _selectedCompanyId,
+                              hintText: 'Select a company',
+                              labelText: 'Company *',
+                              dropdownColor: surfaceColor,
+                              textColor: textPrimary,
+                              hintColor: textSecondary,
+                              required: true,
+                              isLoading: companiesState.isLoading,
+                              onChanged: (value) {
+                                setState(() {
+                                  _selectedCompanyId = value;
+                                });
+                              },
+                              onAddNew: () => _showCreateCompanyDialog(context),
+                              validator: (value) {
+                                if (_selectedCompanyId == null ||
+                                    _selectedCompanyId!.isEmpty) {
+                                  return 'Company is required';
+                                }
+                                return null;
+                              },
+                            ),
+                            if (companiesState.error != null &&
+                                companiesState.companies.isEmpty) ...[
+                              const SizedBox(height: AppSpacing.sm),
+                              Text(
+                                companiesState.error!,
+                                style: TextStyle(
+                                  color: Theme.of(context).colorScheme.error,
+                                  fontSize: 12,
+                                ),
+                              ),
+                              TextButton(
+                                onPressed: () => ref
+                                    .read(companiesProvider.notifier)
+                                    .loadCompanies(refresh: true),
+                                child: const Text('Retry loading companies'),
+                              ),
+                            ],
+                          ],
                         );
                       },
                     ),

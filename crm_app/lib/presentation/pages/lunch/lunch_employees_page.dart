@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme_colors.dart';
+import '../../../core/utils/friendly_error_message.dart';
 import '../../providers/lunch_provider.dart';
 import '../../widgets/app_search_filter_bar.dart';
 import '../../widgets/crm_card.dart';
@@ -190,15 +191,32 @@ class _LunchEmployeesPageState extends ConsumerState<LunchEmployeesPage> {
       ),
     );
 
+    final amountText = amountCtrl.text.trim();
+    final reason = reasonCtrl.text.trim();
+    amountCtrl.dispose();
+    reasonCtrl.dispose();
+
     if (ok != true || !mounted) return;
-    final amount = num.tryParse(amountCtrl.text.trim());
-    if (amount == null) return;
-    await ref.read(lunchProvider.notifier).adjustBalance(
-      userId: row.userId,
-      amount: amount,
-      reason: reasonCtrl.text.trim(),
-    );
-    await _load();
+    final amount = num.tryParse(amountText);
+    if (amount == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Enter a valid amount')),
+      );
+      return;
+    }
+    try {
+      await ref.read(lunchProvider.notifier).adjustBalance(
+        userId: row.userId,
+        amount: amount,
+        reason: reason,
+      );
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(friendlyErrorMessage(e))),
+      );
+    }
   }
 
   @override
@@ -212,7 +230,13 @@ class _LunchEmployeesPageState extends ConsumerState<LunchEmployeesPage> {
       if (_search.isEmpty) return true;
       return r.userName.toLowerCase().contains(_search.toLowerCase());
     }).toList();
-    final loading = state.employeeBalancesLoading || !_rangeMatchesLoaded(state);
+    final rangeLoaded = _rangeMatchesLoaded(state);
+    final loading = state.employeeBalancesLoading ||
+        (!rangeLoaded && state.employeeBalancesError == null);
+    final loadFailed = rangeLoaded &&
+        !state.employeeBalancesLoading &&
+        state.employeeBalancesError != null &&
+        state.employeeBalances.isEmpty;
 
     return RefreshIndicator(
       onRefresh: _load,
@@ -241,6 +265,23 @@ class _LunchEmployeesPageState extends ConsumerState<LunchEmployeesPage> {
           ),
           if (loading)
             const TableSkeleton(rowCount: 6)
+          else if (loadFailed)
+            CRMCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    friendlyErrorMessage(state.employeeBalancesError),
+                    style: TextStyle(color: textSecondary),
+                  ),
+                  const SizedBox(height: 8),
+                  TextButton(
+                    onPressed: _load,
+                    child: const Text('Retry'),
+                  ),
+                ],
+              ),
+            )
           else if (rows.isEmpty)
             CRMCard(
               child: Text(

@@ -95,7 +95,7 @@ class _LunchPollFormSheetState extends ConsumerState<LunchPollFormSheet> {
       ]);
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(lunchProvider.notifier).loadSettings();
+      ref.read(lunchProvider.notifier).loadSettings(silent: true);
     });
   }
 
@@ -343,7 +343,9 @@ class _LunchPollFormSheetState extends ConsumerState<LunchPollFormSheet> {
         await ref.read(lunchProvider.notifier).loadSettings();
         settings = ref.read(lunchProvider).settings;
       }
-      final cost = settings?.defaultCostAmount ?? widget.existing?.costAmount;
+      final cost = widget.existing != null
+          ? (_serverSnapshot?.costAmount ?? widget.existing!.costAmount)
+          : settings?.defaultCostAmount;
       final hasOfficeMenu =
           options.any((o) => o.optionType == lunchOptionKindApiValue(LunchOptionKind.officeMenu));
       if (hasOfficeMenu && cost == null && widget.existing == null) {
@@ -435,6 +437,10 @@ class _LunchPollFormSheetState extends ConsumerState<LunchPollFormSheet> {
     final isAdmin = ref.watch(lunchAdminProvider);
     final lunchState = ref.watch(lunchProvider);
     final dateLabel = formatLunchPollDate(_date);
+    final now = DateTime.now();
+    final isToday = _date.year == now.year &&
+        _date.month == now.month &&
+        _date.day == now.day;
     final settings = lunchState.settings;
     final existingPoll = widget.existing;
     LunchPoll? livePoll;
@@ -502,13 +508,14 @@ class _LunchPollFormSheetState extends ConsumerState<LunchPollFormSheet> {
                 Text('Poll date', style: TextStyle(fontSize: 12, color: textSecondary)),
                 const SizedBox(height: 4),
                 Text(
-                  '$dateLabel (today)',
+                  isToday ? '$dateLabel (today)' : dateLabel,
                   style: TextStyle(fontWeight: FontWeight.w600, color: textPrimary),
                 ),
                 const SizedBox(height: 14),
                 CRMTextField(
                   controller: _titleCtrl,
                   label: 'Poll title',
+                  enabled: !_loadingPoll && !_saving,
                   validator: (v) =>
                       (v == null || v.trim().isEmpty) ? 'Required' : null,
                 ),
@@ -516,7 +523,7 @@ class _LunchPollFormSheetState extends ConsumerState<LunchPollFormSheet> {
                 Text('Poll end time', style: TextStyle(fontSize: 12, color: textSecondary)),
                 const SizedBox(height: 6),
                 InkWell(
-                  onTap: _pickEndTime,
+                  onTap: _loadingPoll || _saving ? null : _pickEndTime,
                   borderRadius: BorderRadius.circular(AppRadius.sm),
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
@@ -547,22 +554,22 @@ class _LunchPollFormSheetState extends ConsumerState<LunchPollFormSheet> {
                     _DurationChip(
                       label: '15 M',
                       selected: _selectedDurationMinutes == 15,
-                      onTap: () => _addDuration(15),
+                      onTap: _loadingPoll || _saving ? null : () => _addDuration(15),
                     ),
                     _DurationChip(
                       label: '30 M',
                       selected: _selectedDurationMinutes == 30,
-                      onTap: () => _addDuration(30),
+                      onTap: _loadingPoll || _saving ? null : () => _addDuration(30),
                     ),
                     _DurationChip(
                       label: '60 M',
                       selected: _selectedDurationMinutes == 60,
-                      onTap: () => _addDuration(60),
+                      onTap: _loadingPoll || _saving ? null : () => _addDuration(60),
                     ),
                     _DurationChip(
                       label: '2 H',
                       selected: _selectedDurationMinutes == 120,
-                      onTap: () => _addDuration(120),
+                      onTap: _loadingPoll || _saving ? null : () => _addDuration(120),
                     ),
                   ],
                 ),
@@ -625,7 +632,9 @@ class _LunchPollFormSheetState extends ConsumerState<LunchPollFormSheet> {
               value: _allowVoteChange,
               activeTrackColor: lunchBrandGreen.withValues(alpha: 0.4),
               activeThumbColor: lunchBrandGreen,
-              onChanged: (v) => setState(() => _allowVoteChange = v),
+              onChanged: _loadingPoll || _saving
+                  ? null
+                  : (v) => setState(() => _allowVoteChange = v),
             ),
           ),
           const SizedBox(height: 16),
@@ -661,8 +670,6 @@ class _LunchPollFormSheetState extends ConsumerState<LunchPollFormSheet> {
                     children: [
                       Row(
                         children: [
-                          Icon(Icons.drag_handle, color: textSecondary, size: 20),
-                          const SizedBox(width: 8),
                           Expanded(
                             child: TextField(
                               controller: row.labelCtrl,
@@ -806,31 +813,35 @@ class _DurationChip extends StatelessWidget {
   });
 
   final String label;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
   final bool selected;
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(6),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: selected
-              ? lunchBrandGreen.withValues(alpha: 0.15)
-              : Theme.of(context).colorScheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(
-            color: selected ? lunchBrandGreen : Colors.transparent,
+    final enabled = onTap != null;
+    return Opacity(
+      opacity: enabled ? 1 : 0.45,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(6),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: selected
+                ? lunchBrandGreen.withValues(alpha: 0.15)
+                : Theme.of(context).colorScheme.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(
+              color: selected ? lunchBrandGreen : Colors.transparent,
+            ),
           ),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-            color: selected ? lunchBrandGreen : null,
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: selected ? lunchBrandGreen : null,
+            ),
           ),
         ),
       ),

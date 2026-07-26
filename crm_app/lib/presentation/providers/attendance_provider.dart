@@ -78,6 +78,9 @@ class AttendanceNotifier extends StateNotifier<AttendanceState> {
   /// Last user id we merged local fallbacks for; used to drop stale locals on account switch.
   String? _lastLoadedUserId;
 
+  /// Bumped on logout / each load start so in-flight GETs cannot rewrite after clear.
+  int _sessionGen = 0;
+
   AttendanceNotifier(this._repository, this.ref)
     : super(const AttendanceState()) {
     // Do not call [loadToday] here — it races with [userProfileShiftProvider] (which watches
@@ -98,6 +101,7 @@ class AttendanceNotifier extends StateNotifier<AttendanceState> {
       );
       return;
     }
+    final gen = ++_sessionGen;
     if (showLoadingIndicator) {
       state = state.copyWith(isLoading: true, error: null);
     } else {
@@ -105,6 +109,7 @@ class AttendanceNotifier extends StateNotifier<AttendanceState> {
     }
     try {
       final today = await _repository.getTodayAttendance();
+      if (gen != _sessionGen) return;
 
       final prevDate = state.todayAttendance?.date ?? '';
       final newDate = today.date;
@@ -147,6 +152,7 @@ class AttendanceNotifier extends StateNotifier<AttendanceState> {
           attendanceDatesSameCalendarDay(prev.date, today.date)) {
         mergedToday = today.withAttendanceRowId(keptId);
       }
+      if (gen != _sessionGen) return;
       state = AttendanceState(
         todayAttendance: mergedToday,
         records: state.records,
@@ -158,6 +164,7 @@ class AttendanceNotifier extends StateNotifier<AttendanceState> {
       );
       ref.invalidate(myLeavesForAttendanceProvider);
     } catch (e) {
+      if (gen != _sessionGen) return;
       if (kDebugMode) {
         debugPrint('❌ Attendance load error: $e');
       }
@@ -168,6 +175,7 @@ class AttendanceNotifier extends StateNotifier<AttendanceState> {
   /// Clears in-memory attendance when the session ends so the next user never sees stale rows
   /// and reminder scheduling does not churn on old [todayAttendance] keys.
   void resetForLogout() {
+    _sessionGen++;
     _lastLoadedUserId = null;
     state = const AttendanceState();
   }
@@ -188,15 +196,18 @@ class AttendanceNotifier extends StateNotifier<AttendanceState> {
       );
       return;
     }
+    final gen = ++_sessionGen;
     state = state.copyWith(isLoading: true, error: null);
     try {
       final result = await _repository.getRecords(period: period);
+      if (gen != _sessionGen) return;
       state = state.copyWith(
         records: sortAttendanceRecordsByDateDesc(result.records),
         period: period,
         isLoading: false,
       );
     } catch (e) {
+      if (gen != _sessionGen) return;
       state = state.copyWith(isLoading: false, error: e.toString());
     }
   }
@@ -273,9 +284,11 @@ class AttendanceNotifier extends StateNotifier<AttendanceState> {
         errorMsg = 'Already checked out today';
       }
       state = state.copyWith(error: errorMsg);
-      // Auto clear error after 5 seconds
+      // Auto clear error after 5 seconds — only if still the same message.
       Future.delayed(const Duration(seconds: 5), () {
-        state = state.copyWith(error: null);
+        if (state.error == errorMsg) {
+          state = state.copyWith(error: null);
+        }
       });
     }
   }
@@ -363,9 +376,11 @@ class AttendanceNotifier extends StateNotifier<AttendanceState> {
         errorMsg = 'Already checked out today';
       }
       state = state.copyWith(error: errorMsg);
-      // Auto clear error after 5 seconds
+      // Auto clear error after 5 seconds — only if still the same message.
       Future.delayed(const Duration(seconds: 5), () {
-        state = state.copyWith(error: null);
+        if (state.error == errorMsg) {
+          state = state.copyWith(error: null);
+        }
       });
     }
   }

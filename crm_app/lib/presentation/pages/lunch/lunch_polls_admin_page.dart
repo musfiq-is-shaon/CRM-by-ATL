@@ -159,6 +159,11 @@ class _LunchPollsAdminPageState extends ConsumerState<LunchPollsAdminPage> {
           const SizedBox(height: AppSpacing.md),
           if (_loading && state.adminPolls.isEmpty)
             const ListSkeletonLoader(itemCount: 4, shrinkWrap: true)
+          else if (state.adminPollsError != null && state.adminPolls.isEmpty)
+            app_widgets.ErrorWidget(
+              message: state.adminPollsError!,
+              onRetry: _load,
+            )
           else if (state.adminPolls.isEmpty)
             app_widgets.EmptyStateWidget(
               title: 'No polls yet',

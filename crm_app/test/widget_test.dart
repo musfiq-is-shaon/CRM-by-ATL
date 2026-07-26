@@ -8,6 +8,8 @@ void main() {
       const ProviderScope(child: CRMApp()),
     );
     await tester.pump();
+    // Clear launch-hold delay + attendance reminder debounce timers.
+    await tester.pump(const Duration(seconds: 1));
     expect(find.byType(CRMApp), findsOneWidget);
   });
 }

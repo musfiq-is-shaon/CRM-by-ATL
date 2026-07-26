@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/network/api_client.dart';
@@ -19,8 +21,11 @@ class UserRepository {
     }
 
     final response = await _apiClient.get(AppConstants.users);
-    final List<dynamic> data = response.data;
-    final users = data.map((json) => User.fromJson(json)).toList();
+    final data = _asUserList(response.data);
+    final users = data
+        .whereType<Map>()
+        .map((json) => User.fromJson(Map<String, dynamic>.from(json)))
+        .toList();
 
     // Cache all users
     _cachedUsers = users;
@@ -38,7 +43,7 @@ class UserRepository {
     }
 
     final response = await _apiClient.get('${AppConstants.users}/$id');
-    final user = User.fromJson(response.data);
+    final user = User.fromJson(_unwrapUserMap(response.data));
     _userCache[user.id] = user;
     return user;
   }
@@ -244,6 +249,27 @@ Map<String, dynamic> _unwrapUserMap(dynamic raw) {
     if (!progressed) break;
   }
   return m;
+}
+
+List<dynamic> _asUserList(dynamic raw) {
+  var current = raw;
+  if (current is String) {
+    final trimmed = current.trim();
+    if (trimmed.isEmpty) return const [];
+    try {
+      current = jsonDecode(trimmed);
+    } catch (_) {
+      return const [];
+    }
+  }
+  if (current is List) return current;
+  if (current is Map) {
+    for (final key in ['data', 'users', 'items', 'results', 'records']) {
+      final inner = current[key];
+      if (inner is List) return inner;
+    }
+  }
+  return const [];
 }
 
 final userRepositoryProvider = Provider<UserRepository>((ref) {

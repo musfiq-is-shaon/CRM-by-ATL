@@ -7,6 +7,7 @@ import '../../../../core/services/app_haptics.dart';
 import '../../../../core/theme/app_theme_colors.dart';
 import '../../../../core/theme/design_tokens.dart';
 import '../../../widgets/crm_card.dart';
+import '../../../widgets/loading_widget.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../providers/attendance_provider.dart';
 import '../../../providers/dashboard_live_location_provider.dart';
@@ -153,6 +154,19 @@ class _TodayAttendanceCardWidgetState extends ConsumerState<TodayAttendanceCardW
       (pos) {
         if (!mounted || _appInBackground) return;
         _liveFirstFixTimer?.cancel();
+        final prev = _livePosition;
+        // Skip no-op rebuilds that only change sub-meter noise / same display.
+        if (prev != null &&
+            !_liveWaitingFirstFix &&
+            (prev.latitude - pos.latitude).abs() < 0.00005 &&
+            (prev.longitude - pos.longitude).abs() < 0.00005) {
+          final prevAcc = prev.accuracy.isFinite ? prev.accuracy.round() : null;
+          final nextAcc = pos.accuracy.isFinite ? pos.accuracy.round() : null;
+          if (prevAcc == nextAcc) {
+            _scheduleLiveGeocode(pos);
+            return;
+          }
+        }
         setState(() {
           _livePosition = pos;
           _liveWaitingFirstFix = false;
@@ -201,8 +215,10 @@ class _TodayAttendanceCardWidgetState extends ConsumerState<TodayAttendanceCardW
       );
       final label = await LocationService.placeLabelFromCoordinateString(coords);
       if (!mounted || gen != _liveGeocodeGen) return;
+      final next = label.trim().isNotEmpty ? label.trim() : null;
+      if (next == _liveAddress) return;
       setState(() {
-        _liveAddress = label.trim().isNotEmpty ? label : null;
+        _liveAddress = next;
       });
     });
   }
@@ -319,98 +335,109 @@ class _TodayAttendanceCardWidgetState extends ConsumerState<TodayAttendanceCardW
           color: cs.primary,
         ),
       );
+      primary = 'Locating…';
       secondary = 'Getting your position…';
     }
 
     final hasMapTarget = _livePosition != null;
 
-    return Container(
-      padding: const EdgeInsets.fromLTRB(8, 6, 2, 6),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerHighest.withValues(alpha: 0.55),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: borderColor.withValues(alpha: 0.65)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(top: 2),
-            child: leading ??
-                Icon(Icons.my_location_outlined, size: 18, color: textSecondary),
+    return MediaQuery.withClampedTextScaling(
+      minScaleFactor: 0.85,
+      maxScaleFactor: 1.2,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 58),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(8, 6, 2, 6),
+          decoration: BoxDecoration(
+            color: cs.surfaceContainerHighest.withValues(alpha: 0.55),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: borderColor.withValues(alpha: 0.65)),
           ),
-          const SizedBox(width: 6),
-          Expanded(
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: hasMapTarget ? () => _openLiveMap(context) : null,
-                borderRadius: BorderRadius.circular(8),
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(2, 0, 4, 0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        caption,
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: textSecondary,
-                        ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: leading ??
+                    Icon(
+                      Icons.my_location_outlined,
+                      size: 18,
+                      color: textSecondary,
+                    ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: hasMapTarget ? () => _openLiveMap(context) : null,
+                    borderRadius: BorderRadius.circular(8),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(2, 0, 4, 0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            caption,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              height: 1.15,
+                              color: textSecondary,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            primary ?? ' ',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              height: 1.2,
+                              color: textPrimary,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 1),
+                          Text(
+                            secondary ?? ' ',
+                            style: TextStyle(
+                              fontSize: 11,
+                              height: 1.25,
+                              color: textSecondary,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
                       ),
-                      if (primary != null) ...[
-                        const SizedBox(height: 2),
-                        Text(
-                          primary,
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            height: 1.2,
-                            color: textPrimary,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                      if (secondary != null) ...[
-                        const SizedBox(height: 1),
-                        Text(
-                          secondary,
-                          style: TextStyle(
-                            fontSize: 11,
-                            height: 1.25,
-                            color: textSecondary,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ],
+                    ),
                   ),
                 ),
               ),
-            ),
+              IconButton(
+                tooltip: 'Refresh location',
+                onPressed: _liveRefreshing
+                    ? null
+                    : () => _onRefreshLiveLocation(context, ref),
+                icon: _liveRefreshing
+                    ? SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: cs.primary,
+                        ),
+                      )
+                    : Icon(Icons.refresh, size: 20, color: cs.primary),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+              ),
+            ],
           ),
-          IconButton(
-            tooltip: 'Refresh location',
-            onPressed: _liveRefreshing
-                ? null
-                : () => _onRefreshLiveLocation(context, ref),
-            icon: _liveRefreshing
-                ? SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: cs.primary,
-                    ),
-                  )
-                : Icon(Icons.refresh, size: 20, color: cs.primary),
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -597,6 +624,11 @@ class _TodayAttendanceCardWidgetState extends ConsumerState<TodayAttendanceCardW
         }
       }
     });
+
+    // Initial load — keep card height stable instead of "Not checked in yet".
+    if (state.isLoading && todayAttendance == null) {
+      return const AttendanceCardSkeleton();
+    }
 
     return CRMCard(
       padding: const EdgeInsets.all(AppSpacing.sm),
@@ -1214,8 +1246,8 @@ String _formatLiveClock(DateTime time) {
   final l = time.toLocal();
   final h = l.hour.toString().padLeft(2, '0');
   final m = l.minute.toString().padLeft(2, '0');
-  final s = l.second.toString().padLeft(2, '0');
-  return '$h:$m:$s';
+  // Omit seconds — updating every GPS tick made the meta line jitter.
+  return '$h:$m';
 }
 
 String _formatTime(DateTime time) {
